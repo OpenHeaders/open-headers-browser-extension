@@ -94,9 +94,9 @@ When using dynamic sources, you can format the value with prefixes and suffixes:
 
 For dynamic sources (HTTP requests, files, environment variables), you'll need the Open Headers companion app:
 
-- [macOS Download](https://github.com/OpenHeaders/open-headers-app)
-- [Windows Download](https://github.com/OpenHeaders/open-headers-app)
-- [Linux Download](https://github.com/OpenHeaders/open-headers-app)
+- [macOS Download](https://github.com/OpenHeaders/open-headers-app/releases)
+- [Windows Download](https://github.com/OpenHeaders/open-headers-app/releases)
+- [Linux Download](https://github.com/OpenHeaders/open-headers-app/releases)
 
 ## Examples
 
