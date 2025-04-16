@@ -1,0 +1,709 @@
+/* Overall popup width */
+body {
+    width: 700px;
+    font-family: Arial, sans-serif;
+    margin: 10px;
+    background-color: #f2f2f2;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+    display: flex;
+    flex-direction: column;
+    min-height: 500px; /* Minimum height to ensure footer stays at bottom */
+}
+
+h1 {
+    margin: 0 0 15px 0;
+    font-size: 20px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Status indicator in the header */
+.status-indicator {
+    font-size: 12px;
+    margin-left: 10px;
+    font-weight: normal;
+    transition: color 0.3s ease;
+}
+
+/* Connected status */
+.status-connected {
+    color: #4285F4;
+}
+
+/* Disconnected status */
+.status-disconnected {
+    color: #e64545;
+}
+
+/* Updated status */
+.status-updated {
+    color: #00aa00;
+}
+
+/* Section for input fields and save button */
+.inputSection {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.inputRow {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.label {
+    width: 110px;
+    font-weight: bold;
+    flex-shrink: 0; /* Prevent the label from shrinking */
+}
+
+input[type="text"], select {
+    flex: 1;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    max-width: 100%; /* Ensure inputs don't exceed container width */
+    min-width: 0; /* Allow the input to shrink below its preferred width */
+}
+
+/* Make sure select dropdowns don't break layout */
+select {
+    text-overflow: ellipsis; /* Add ellipsis for long text */
+}
+
+/* Save button */
+#saveButton {
+    width: 100%;
+    padding: 8px;
+    cursor: pointer;
+    background-color: #4285F4;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-top: 5px;
+}
+#saveButton:hover {
+    background-color: #3367D6;
+}
+
+/* Container for the saved entries */
+.entriesContainer {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+    flex: 1; /* Allow entries container to expand */
+    margin-bottom: 10px; /* Reduced space for footer */
+}
+
+/* Column header row for the entries */
+.entriesHeader {
+    display: grid;
+    grid-template-columns: 40px 90px 130px 125px 145px auto;
+    column-gap: 8px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    padding: 0 5px;
+}
+
+#entriesList {
+    margin-top: 5px;
+    max-height: 300px; /* Reduced slightly to make room for footer */
+    overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+}
+
+/* Each saved entry in a row matching the columns above */
+.entryItem {
+    display: grid;
+    grid-template-columns: 40px 90px 130px 125px 145px auto;
+    column-gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 6px;
+    background-color: #fafafa;
+    border-radius: 4px;
+    min-width: 0; /* Allow grid items to shrink below their content size */
+}
+
+/* Type indicator */
+.type-indicator {
+    font-weight: bold;
+    text-align: center;
+    border-radius: 4px;
+    padding: 2px 0;
+    font-size: 12px;
+}
+
+.type-static {
+    background-color: #e7f4ff;
+    color: #0066cc;
+}
+
+.type-dynamic {
+    background-color: #e6ffe6;
+    color: #006600;
+}
+
+/* Truncated text styling */
+.truncated {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis; /* Add ellipsis for overflowing text */
+    min-width: 0; /* Allow the element to shrink below its content size */
+}
+
+/* Source details styling */
+.source-details {
+    font-size: 12px;
+    color: #666;
+    min-width: 0; /* Allow shrinking */
+}
+
+/* Legacy support for old class name */
+.location-details {
+    font-size: 12px;
+    color: #666;
+    min-width: 0; /* Allow shrinking */
+}
+
+/* Header value styling - limit width and add ellipsis */
+.header-value {
+    min-width: 0; /* Allow shrinking */
+}
+
+/* Long content handling for tooltips */
+[title] {
+    position: relative;
+    cursor: help;
+}
+
+/* Remove button for each entry */
+.removeBtn {
+    background-color: #ff4f4f;
+    color: #fff;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 4px;
+    justify-self: end;
+    flex-shrink: 0; /* Prevent the button from shrinking */
+}
+.removeBtn:hover {
+    background-color: #e64545;
+}
+
+/* Animation for value updates */
+@keyframes highlight-update {
+    0% { background-color: transparent; }
+    30% { background-color: #e6ffe6; }
+    70% { background-color: #e6ffe6; }
+    100% { background-color: transparent; }
+}
+
+.highlight-update {
+    animation: highlight-update 2s ease-in-out;
+}
+
+/* Add a small indicator for the updated value */
+.header-value::after {
+    content: '';
+    display: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #00aa00;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+.recently-updated::after {
+    display: inline-block;
+}
+
+/* Notification system */
+.notification-container {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 300px;
+    z-index: 1000;
+}
+
+.notification {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    position: relative;
+    animation: slide-in 0.3s ease-out;
+    font-size: 14px;
+}
+
+.notification-info {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196F3;
+    color: #0d47a1;
+}
+
+.notification-error {
+    background-color: #ffebee;
+    border-left: 4px solid #f44336;
+    color: #b71c1c;
+}
+
+.notification-close {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    color: #555;
+}
+
+.notification-fade {
+    animation: fade-out 0.5s ease-out forwards;
+}
+
+/* Style for option groups in the location select */
+optgroup {
+    font-weight: bold;
+    color: #333;
+}
+
+option {
+    padding: 5px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+/* Make sure the select dropdown options don't cause horizontal scrolling */
+select option {
+    max-width: 500px; /* Limit the dropdown width */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Footer styling - more compact version */
+.footer {
+    margin-top: auto; /* Push footer to bottom */
+    background-color: #fff;
+    border-top: 1px solid #eaeaea;
+    padding: 8px 10px;
+    border-radius: 0 0 6px 6px;
+    text-align: center;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.05);
+}
+
+/* App info section */
+.app-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    border-left: 3px solid #4285F4;
+    font-size: 12px;
+    position: relative;
+}
+
+/* Features text */
+.app-features {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    flex: 1;
+}
+
+.feature-text {
+    color: #333;
+    line-height: 1.3;
+}
+
+/* Connecting arrow */
+.connecting-arrow {
+    display: flex;
+    align-items: center;
+    margin: 0 15px;
+    color: #4285F4;
+    animation: pulse 2s infinite;
+}
+
+.connecting-arrow i {
+    font-size: 18px;
+}
+
+@keyframes pulse {
+    0% { transform: translateX(0); opacity: 0.6; }
+    50% { transform: translateX(3px); opacity: 1; }
+    100% { transform: translateX(0); opacity: 0.6; }
+}
+
+/* Download section */
+.download-section {
+    display: flex;
+    align-items: center;
+}
+
+.download-label {
+    margin-right: 8px;
+    color: #555;
+    font-weight: bold;
+}
+
+.download-links {
+    display: flex;
+    gap: 10px;
+}
+
+.download-links a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #4285F4;
+    height: 26px;
+    width: 26px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    background: white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.download-links a:hover {
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.download-links a:hover i.fa-apple {
+    background-color: #000000;
+}
+
+.download-links a:hover i.fa-windows {
+    background-color: #0078D6;
+}
+
+.download-links a:hover i.fa-linux {
+    background-color: #FCC624;
+    color: #000;
+}
+
+.download-links i {
+    font-size: 16px;
+    padding: 5px;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+/* Footer bottom section */
+.footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 6px;
+}
+
+.social-links {
+    display: flex;
+    gap: 12px;
+}
+
+.social-links a {
+    color: #4285F4;
+    font-size: 18px;
+    transition: color 0.3s ease, transform 0.2s ease;
+}
+
+.social-links a:hover {
+    color: #3367D6;
+    transform: scale(1.2);
+}
+
+.footer-text {
+    font-size: 11px;
+    color: #666;
+}
+
+@keyframes slide-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fade-out {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+/* Config Import/Export Buttons */
+.actionButtons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.actionButtons button {
+    flex: 1;
+    padding: 8px;
+    cursor: pointer;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.actionButtons button:hover {
+    background-color: #f1f3f4;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.actionButtons button i {
+    margin-right: 5px;
+}
+
+#exportConfigButton {
+    color: #1a73e8;
+    border-color: #d2e3fc;
+}
+
+#exportConfigButton:hover {
+    background-color: #d2e3fc;
+}
+
+#importConfigButton {
+    color: #188038;
+    border-color: #ceead6;
+}
+
+#importConfigButton:hover {
+    background-color: #ceead6;
+}
+
+/* Animation for import/export success */
+@keyframes button-success {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.button-success {
+    animation: button-success 0.4s ease-in-out;
+}
+
+/* Domain tag input container */
+.domainInputContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.tagInput {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-height: 34px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 2px 4px;
+    background-color: #fff;
+    flex: 1;
+}
+
+#domainInput {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 4px;
+    min-width: 60px;
+}
+
+.tagContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    margin: 2px;
+}
+
+.domainTag {
+    display: flex;
+    align-items: center;
+    background-color: #e3f2fd;
+    border: 1px solid #2196F3;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 1px 0;
+    font-size: 12px;
+}
+
+.domainTagText {
+    margin-right: 4px;
+    color: #0d47a1;
+}
+
+.removeTagBtn {
+    background: none;
+    border: none;
+    color: #f44336;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+}
+
+.removeTagBtn:hover {
+    color: #d32f2f;
+}
+
+.domainHelp {
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+    color: #777;
+    margin-top: 4px;
+    padding-left: 2px;
+}
+
+.domainHelp i {
+    margin-right: 4px;
+    color: #2196F3;
+}
+
+/* Domain tags display in entries */
+.domain-tags {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.domain-tag-small {
+    font-size: 11px;
+    background-color: #e3f2fd;
+    border-radius: 3px;
+    padding: 1px 4px;
+    color: #0d47a1;
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.domain-count {
+    font-size: 10px;
+    color: #666;
+    font-style: italic;
+    text-align: right;
+}
+
+/* Prefix/Suffix container */
+.prefixSuffixContainer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.prefixInputWrapper, .suffixInputWrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+}
+
+.inputLabel {
+    font-size: 12px;
+    color: #555;
+    min-width: 40px;
+}
+
+#prefixInput, #suffixInput {
+    flex: 1;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    min-width: 0;
+}
+
+.dynamicValueIndicator {
+    background-color: #f0f7ff;
+    border: 1px dashed #2196F3;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: #0d47a1;
+    white-space: nowrap;
+}
+
+/* Update to show/hide prefix/suffix row with value type changes */
+#valueTypeSelect[value="dynamic"] ~ #dynamicPrefixSuffixRow {
+    display: flex;
+}
+
+/* Style for missing sources */
+.missing-source {
+    color: #e65100;
+    font-style: italic;
+}
+
+.missing-source-indicator {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffccbc;
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 11px;
+}
+
+/* Add a utility button for entries with missing sources */
+.entryItem[data-source-missing="true"] .removeBtn {
+    background-color: #f57c00;
+}
+
+.entryItem[data-source-missing="true"] {
+    background-color: #fff8e1;
+    border-left: 3px solid #ffa000;
+}
+
+/* Animation for missing source warning */
+@keyframes pulse-warning {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { opacity: 0.7; }
+}
+
+.missing-source-indicator {
+    animation: pulse-warning 2s infinite;
+}
