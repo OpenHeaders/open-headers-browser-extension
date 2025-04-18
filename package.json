@@ -1,6 +1,6 @@
 {
   "name": "open-headers",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A Chrome extension to view and manage HTTP headers",
   "scripts": {
     "build": "webpack --config webpack.config.js",

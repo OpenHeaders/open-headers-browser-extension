@@ -62,6 +62,11 @@ export function loadEntries(entriesList) {
  * @param {Object} data - Data objects containing header entries
  */
 export function renderEntries(entriesList, data) {
+    if (!entriesList) {
+        console.error('entriesList is null or undefined');
+        return;
+    }
+
     entriesList.innerHTML = '';
     for (const id in data) {
         const { headerName, headerValue, domain, domains, isDynamic, sourceId, locationId, prefix, suffix } = data[id];
@@ -88,6 +93,67 @@ export function renderEntries(entriesList, data) {
         );
         entriesList.appendChild(entryDiv);
     }
+}
+
+/**
+ * Display UI for missing sources.
+ * @param {HTMLElement} valueSpan - The value span element
+ * @param {string} sourceId - The source ID
+ */
+function displayMissingSourceUI(valueSpan, sourceId) {
+    valueSpan.textContent = '⚠️ Source unavailable';
+    valueSpan.classList.add('missing-source');
+
+    // Remove any highlight classes that might have been applied
+    valueSpan.classList.remove('highlight-update', 'recently-updated');
+
+    // Add a helpful message in the tooltip
+    valueSpan.title = 'The dynamic source for this header is no longer available.\n\n' +
+        'This can happen if:\n' +
+        '• The source was deleted\n' +
+        '• The companion app is not running\n' +
+        '• The source ID has changed\n\n' +
+        'Options:\n' +
+        '• Start the companion app\n' +
+        '• Remove this header and create a new one\n' +
+        '• Replace this header with a static header';
+}
+
+/**
+ * Display UI for missing source details.
+ * @param {HTMLElement} detailsSpan - The details span element
+ * @param {string} sourceId - The source ID
+ */
+function displayMissingSourceDetailsUI(detailsSpan, sourceId) {
+    detailsSpan.innerHTML = '<span class="missing-source-indicator">❓ Missing Source</span>';
+    detailsSpan.title = `Source with ID ${sourceId} is no longer available`;
+}
+
+/**
+ * Try to load a source from storage.
+ * @param {HTMLElement} valueSpan - The value span element
+ * @param {string} sourceId - The source ID
+ * @param {string} prefix - The prefix for the value
+ * @param {string} suffix - The suffix for the value
+ * @param {HTMLElement} entryDiv - The entry div element
+ */
+function tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv) {
+    chrome.storage.local.get(['dynamicSources'], (result) => {
+        if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
+            const storedSource = result.dynamicSources.find(
+                s => s.sourceId?.toString() === (sourceId || '').toString() ||
+                    s.locationId?.toString() === (sourceId || '').toString()
+            );
+
+            if (storedSource) {
+                // Source found in storage, update the display
+                updateEntryWithSource(valueSpan, storedSource, entryDiv);
+                return;
+            }
+        }
+        // If we get here, source wasn't found in storage either
+        displayMissingSourceUI(valueSpan, sourceId);
+    });
 }
 
 /**
@@ -138,64 +204,57 @@ export function renderEntry(entriesList, id, headerName, headerValue, domains, i
 
     // For dynamic values, show a placeholder and set tooltip with source ID
     if (isDynamic) {
-        const source = getDynamicSources().find(s => s.sourceId?.toString() === (sourceId || '').toString() ||
-            s.locationId?.toString() === (sourceId || '').toString());
-        if (source) {
-            const content = source.sourceContent || source.locationContent || '[Waiting for content]';
+        const sources = getDynamicSources();
+        // Check if we have any sources before trying to find a match
+        const sourceMissing = !sources || sources.length === 0 ||
+            !sources.some(s => s.sourceId?.toString() === (sourceId || '').toString() ||
+                s.locationId?.toString() === (sourceId || '').toString());
 
-            // Apply prefix/suffix to the displayed value
-            const formattedValue = `${prefix || ''}${content}${suffix || ''}`;
-            valueSpan.textContent = truncateText(formattedValue, 20);
+        if (!sourceMissing) {
+            const source = sources.find(s => s.sourceId?.toString() === (sourceId || '').toString() ||
+                s.locationId?.toString() === (sourceId || '').toString());
 
-            // Create a tooltip with proper formatting for large values
-            const contentPreview = source.sourceContent || source.locationContent || 'Waiting for content';
-            const sourceType = source.sourceType || source.locationType || 'unknown';
-            const sourceTag = source.sourceTag || source.locationTag || 'No tag';
-            const sourcePath = source.sourcePath || source.locationPath || 'unknown';
+            if (source) {
+                const content = source.sourceContent || source.locationContent || '[Waiting for content]';
 
-            const prefixSuffixInfo = (prefix || suffix) ?
-                `Format: "${prefix}[dynamic content]${suffix}"\n` : '';
+                // Apply prefix/suffix to the displayed value
+                const formattedValue = `${prefix || ''}${content}${suffix || ''}`;
+                valueSpan.textContent = truncateText(formattedValue, 20);
 
-            const tooltipContent = `${sourceType} - ${sourceTag} - ${sourcePath}\n${prefixSuffixInfo}\nValue (${contentPreview.length} chars):\n${contentPreview}`;
-            valueSpan.title = tooltipContent;
+                // Create a tooltip with proper formatting for large values
+                const contentPreview = source.sourceContent || source.locationContent || 'Waiting for content';
+                const sourceType = source.sourceType || source.locationType || 'unknown';
+                const sourceTag = source.sourceTag || source.locationTag || 'No tag';
+                const sourcePath = source.sourcePath || source.locationPath || 'unknown';
+
+                const prefixSuffixInfo = (prefix || suffix) ?
+                    `Format: "${prefix}[dynamic content]${suffix}"\n` : '';
+
+                const tooltipContent = `${sourceType} - ${sourceTag} - ${sourcePath}\n${prefixSuffixInfo}\nValue (${contentPreview.length} chars):\n${contentPreview}`;
+                valueSpan.title = tooltipContent;
+
+                // Important: Make sure we don't have the missing-source class
+                valueSpan.classList.remove('missing-source');
+                // Also make sure we don't have any highlight classes applied
+                valueSpan.classList.remove('highlight-update', 'recently-updated');
+            } else {
+                // Source wasn't found in memory, but we have sources loaded
+                // Try to check storage once more
+                tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv);
+            }
         } else {
-            // Improved handling for missing sources
-            valueSpan.textContent = '⚠️ Source unavailable';
-            valueSpan.classList.add('missing-source');
-
-            // Add a helpful message in the tooltip
-            valueSpan.title = 'The dynamic source for this header is no longer available.\n\n' +
-                'This can happen if:\n' +
-                '• The source was deleted\n' +
-                '• The companion app is not running\n' +
-                '• The source ID has changed\n\n' +
-                'Options:\n' +
-                '• Start the companion app\n' +
-                '• Remove this header and create a new one\n' +
-                '• Replace this header with a static header';
-
-            // If we still want to try loading from storage, we can keep this part,
-            // but add better visual handling
-            chrome.storage.local.get(['dynamicSources'], (result) => {
-                if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
-                    const storedSource = result.dynamicSources.find(
-                        s => s.sourceId?.toString() === (sourceId || '').toString() ||
-                            s.locationId?.toString() === (sourceId || '').toString()
-                    );
-
-                    if (storedSource) {
-                        // Source found in storage, update the display
-                        // ... existing code to update with stored source ...
-                        return;
-                    }
-                }
-                // If we get here, source wasn't found in storage either
-                // Keep the warning UI we already set up
-            });
+            // No sources loaded at all or source definitely missing
+            // Display missing source UI and check storage as fallback
+            displayMissingSourceUI(valueSpan, sourceId);
+            tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv);
         }
     } else {
         valueSpan.textContent = truncateText(headerValue, 20);
         valueSpan.title = headerValue; // Tooltip with full value
+        // Make sure we don't have the missing-source class for static headers
+        valueSpan.classList.remove('missing-source');
+        // Also make sure we don't have any highlight classes applied
+        valueSpan.classList.remove('highlight-update', 'recently-updated');
     }
 
     // Domains container - shows multiple domains nicely
@@ -211,25 +270,35 @@ export function renderEntry(entriesList, id, headerName, headerValue, domains, i
     const detailsSpan = document.createElement('span');
     detailsSpan.classList.add('truncated', 'source-details');
     if (isDynamic) {
-        const source = getDynamicSources().find(s => s.sourceId?.toString() === (sourceId || '').toString() ||
-            s.locationId?.toString() === (sourceId || '').toString());
-        if (source) {
-            // Existing code for showing source details
-            const sourceTypeMap = {
-                'http': '🌐',
-                'file': '📄',
-                'env': '🔧'
-            };
-            const sourceType = source.sourceType || source.locationType;
-            const typeIcon = sourceTypeMap[sourceType] || '📌';
-            const tag = (source.sourceTag || source.locationTag) ? `[${source.sourceTag || source.locationTag}]` : '';
-            const path = source.sourcePath || source.locationPath;
-            detailsSpan.textContent = `${typeIcon} ${tag} ${truncateText(path, 15)}`;
-            detailsSpan.title = `Type: ${sourceType}\nTag: ${source.sourceTag || source.locationTag || 'None'}\nPath: ${path}`;
+        const sources = getDynamicSources();
+        const sourceMissing = !sources || sources.length === 0 ||
+            !sources.some(s => s.sourceId?.toString() === (sourceId || '').toString() ||
+                s.locationId?.toString() === (sourceId || '').toString());
+
+        if (!sourceMissing) {
+            const source = sources.find(s => s.sourceId?.toString() === (sourceId || '').toString() ||
+                s.locationId?.toString() === (sourceId || '').toString());
+
+            if (source) {
+                // Existing code for showing source details
+                const sourceTypeMap = {
+                    'http': '🌐',
+                    'file': '📄',
+                    'env': '🔧'
+                };
+                const sourceType = source.sourceType || source.locationType;
+                const typeIcon = sourceTypeMap[sourceType] || '📌';
+                const tag = (source.sourceTag || source.locationTag) ? `[${source.sourceTag || source.locationTag}]` : '';
+                const path = source.sourcePath || source.locationPath;
+                detailsSpan.textContent = `${typeIcon} ${tag} ${truncateText(path, 15)}`;
+                detailsSpan.title = `Type: ${sourceType}\nTag: ${source.sourceTag || source.locationTag || 'None'}\nPath: ${path}`;
+            } else {
+                // Source wasn't found, but we have sources
+                displayMissingSourceDetailsUI(detailsSpan, sourceId);
+            }
         } else {
-            // Improved display for missing sources
-            detailsSpan.innerHTML = '<span class="missing-source-indicator">❓ Missing Source</span>';
-            detailsSpan.title = `Source with ID ${sourceId} is no longer available`;
+            // No sources loaded at all or source definitely missing
+            displayMissingSourceDetailsUI(detailsSpan, sourceId);
         }
     } else {
         detailsSpan.textContent = '';
@@ -330,7 +399,14 @@ export function updateDynamicEntryValue(entryId, sourceId) {
     return true;
 }
 
-// Helper function for updating entries with a source
+/**
+ * Helper function for updating entries with a source.
+ * @param {HTMLElement} valueSpan - The value span element
+ * @param {Object} source - The dynamic source data
+ * @param {HTMLElement} entryElem - The entry element
+ * @param {boolean} isLegacy - Whether this is a legacy source format
+ * @returns {void}
+ */
 function updateEntryWithSource(valueSpan, source, entryElem, isLegacy = false) {
     // Get content based on whether it's legacy format or new format
     const content = isLegacy ? source.locationContent : (source.sourceContent || source.locationContent);
@@ -344,6 +420,9 @@ function updateEntryWithSource(valueSpan, source, entryElem, isLegacy = false) {
 
     console.log(`Updating value to: ${formattedContent}`);
     valueSpan.textContent = truncateText(formattedContent, 20);
+
+    // Remove missing source class if present
+    valueSpan.classList.remove('missing-source');
 
     // Updated tooltip with better formatting
     const contentPreview = content || 'Waiting for content';
@@ -371,6 +450,10 @@ function updateEntryWithSource(valueSpan, source, entryElem, isLegacy = false) {
         detailsSpan.textContent = `${typeIcon} ${tag} ${truncateText(sourcePath, 15)}`;
         detailsSpan.title = `Type: ${sourceType}\nTag: ${sourceTag}\nPath: ${sourcePath}`;
     }
+
+    // Remove any existing highlight animation or "recently updated" status
+    // This is only for initial load, not for actual updates
+    valueSpan.classList.remove('highlight-update', 'recently-updated');
 }
 
 /**
@@ -380,6 +463,11 @@ function updateEntryWithSource(valueSpan, source, entryElem, isLegacy = false) {
 export function highlightUpdatedEntry(entryId) {
     const valueElem = document.querySelector(`.entryItem[data-entry-id="${entryId}"] .header-value`);
     if (valueElem) {
+        // Don't apply highlight if it's a missing source
+        if (valueElem.classList.contains('missing-source')) {
+            return;
+        }
+
         // Apply animation
         valueElem.classList.remove('highlight-update');
         // Force reflow to restart animation
@@ -402,6 +490,11 @@ export function highlightUpdatedEntry(entryId) {
  * @param {Array} changedSourceIds - Optional array of source IDs that have changed
  */
 export function refreshEntriesList(entriesList, changedSourceIds = []) {
+    if (!entriesList) {
+        console.error('entriesList is null or undefined');
+        return;
+    }
+
     console.log('Refreshing entries with changed sources:', changedSourceIds);
 
     // Check if we need to completely re-render or can update in place
