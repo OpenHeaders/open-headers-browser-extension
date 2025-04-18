@@ -142,4 +142,5 @@ Contributions are welcome! Please check the DEVELOPER.md file for development se
 
 ## Documentation
 
-For more detailed information, see [DEVELOPER.md](DEVELOPER.md).
+- For more detailed information, see [DEVELOPER.md](DEVELOPER.md).
+- For contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
