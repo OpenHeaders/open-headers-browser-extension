@@ -17,7 +17,8 @@ import {
     saveEntry,
     refreshEntriesList,
     getCurrentSavedData,
-    updateDynamicEntryValue
+    updateDynamicEntryValue,
+    renderEntries
 } from './entry-manager.js';
 import {
     saveDraftInputs,
@@ -35,6 +36,9 @@ import { initializeDomainTagsInput } from './domain-tags-manager.js';
 let isConnected = false;
 // Domain tags manager
 let domainTagsManager = null;
+// Keep reference to DOM elements across functions
+let entriesList = null;
+let dynamicValueSelect = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Force disconnected status immediately, before any other operations
@@ -49,12 +53,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const valueTypeSelect = document.getElementById('valueTypeSelect');
     const staticValueRow = document.getElementById('staticValueRow');
     const dynamicValueRow = document.getElementById('dynamicValueRow');
-    const dynamicValueSelect = document.getElementById('dynamicValueSelect');
+    dynamicValueSelect = document.getElementById('dynamicValueSelect');
     const dynamicPrefixSuffixRow = document.getElementById('dynamicPrefixSuffixRow');
     const prefixInput = document.getElementById('prefixInput');
     const suffixInput = document.getElementById('suffixInput');
     const saveButton = document.getElementById('saveButton');
-    const entriesList = document.getElementById('entriesList');
+    entriesList = document.getElementById('entriesList');
     const headerElem = document.querySelector('h1');
     const appInfo = document.querySelector('.app-info');
 
@@ -254,8 +258,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     updateConnectionStatus(true);
                     updateAppInfoVisibility(true);
 
-                    // Only show visual update indication if we're REALLY connected
-                    showUpdatedStatus(true);
+                    // Only show visual update indication if this is an actual update, not initial load
+                    if (oldSources && oldSources.length > 0) {
+                        showUpdatedStatus(true);
+                    }
                 } else {
                     // If background reports disconnected state, don't show as connected
                     isConnected = false;
@@ -273,13 +279,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateDynamicSelect(sources, dynamicValueSelect);
         }
 
-        // Find changed sources and refresh entries list (if needed)
-        if (sources && Array.isArray(sources) && sources.length > 0) {
-            const changedSourceIds = findChangedSourceIds(oldSources, sources);
-            console.log('Changed source IDs:', changedSourceIds);
+        // Safely handle entry updates using the current saved data
+        updateEntriesFromSources(sources, oldSources);
+    }
 
-            if (changedSourceIds.length > 0) {
-                refreshEntriesList(entriesList, changedSourceIds);
+    // Safer method to update entries with dynamic sources
+    function updateEntriesFromSources(sources, oldSources) {
+        try {
+            if (sources && Array.isArray(sources) && sources.length > 0) {
+                const currentSavedData = getCurrentSavedData();
+
+                // Don't treat reopening as an update that needs highlighting
+                const isReopening = !oldSources || oldSources.length === 0;
+
+                if (isReopening) {
+                    // Instead of directly calling renderEntries, use loadEntries which is already verified to work
+                    loadEntries(entriesList);
+                } else {
+                    // For actual updates, find what changed and highlight those entries
+                    const changedSourceIds = findChangedSourceIds(oldSources, sources);
+                    console.log('Changed source IDs:', changedSourceIds);
+
+                    if (changedSourceIds.length > 0) {
+                        refreshEntriesList(entriesList, changedSourceIds);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error updating entries:', error);
+            // Fallback to simple reload if there's an error
+            try {
+                loadEntries(entriesList);
+            } catch (fallbackError) {
+                console.error('Fallback error:', fallbackError);
             }
         }
     }
@@ -382,32 +414,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 3000);
     }
 
-    // Load dynamic sources from storage
-    function loadDynamicSources() {
-        chrome.storage.local.get(['dynamicSources'], (result) => {
-            if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
-                // First verify connection status before displaying any status indicators
-                chrome.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
-                    if (response && response.connected === true) {
-                        // Only update connection status if we're actually connected
-                        isConnected = true;
-                        updateConnectionStatus(true);
-                        updateAppInfoVisibility(true);
-                    } else {
-                        // Force disconnected state
-                        isConnected = false;
-                        updateConnectionStatus(false);
-                        updateAppInfoVisibility(false);
-                    }
-
-                    // Always update the dropdown without changing connection status
-                    updateDynamicSelect(result.dynamicSources, dynamicValueSelect);
-
-                    // Now also update dynamic entries from storage regardless of connection status
-                    updateDynamicEntriesFromStorage();
-                });
-            }
-        });
+    // Safe function to update dynamic entries from storage
+    function updateDynamicEntriesFromStorage() {
+        try {
+            chrome.storage.local.get(['dynamicSources'], (result) => {
+                if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
+                    // Don't use functions that might not be properly imported
+                    // Instead, just reload entries which is known to work
+                    loadEntries(entriesList);
+                }
+            });
+        } catch (error) {
+            console.error('Error updating from storage:', error);
+        }
     }
 
     // Initialize the popup
@@ -513,22 +532,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    function updateDynamicEntriesFromStorage() {
+    // Load dynamic sources from storage
+    function loadDynamicSources() {
         chrome.storage.local.get(['dynamicSources'], (result) => {
             if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
-                const sources = result.dynamicSources;
-                console.log('Updating entries with sources from storage:', sources.length);
+                // First verify connection status before displaying any status indicators
+                chrome.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
+                    if (response && response.connected === true) {
+                        // Only update connection status if we're actually connected
+                        isConnected = true;
+                        updateConnectionStatus(true);
+                        updateAppInfoVisibility(true);
+                    } else {
+                        // Force disconnected state
+                        isConnected = false;
+                        updateConnectionStatus(false);
+                        updateAppInfoVisibility(false);
+                    }
 
-                // Get the current saved data - this must be after loadEntries has run
-                const savedData = getCurrentSavedData();
+                    // Always update the dropdown without changing connection status
+                    updateDynamicSelect(result.dynamicSources, dynamicValueSelect);
 
-                // When using webpack, direct function calls can sometimes fail due to scope issues
-                // Use refreshEntriesList instead, which is already properly imported and scoped
-                if (sources.length > 0) {
-                    // Get all source IDs to force a full update
-                    const allSourceIds = sources.map(source => (source.sourceId || source.locationId).toString());
-                    refreshEntriesList(entriesList, allSourceIds);
-                }
+                    // Now also reload entries regardless of connection status
+                    // Use the reliable loadEntries function
+                    loadEntries(entriesList);
+                });
             }
         });
     }

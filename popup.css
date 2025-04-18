@@ -202,7 +202,7 @@ select {
     background-color: #e64545;
 }
 
-/* Animation for value updates */
+/* Animation for value updates - fixed to prevent auto-application */
 @keyframes highlight-update {
     0% { background-color: transparent; }
     30% { background-color: #e6ffe6; }
@@ -214,10 +214,10 @@ select {
     animation: highlight-update 2s ease-in-out;
 }
 
-/* Add a small indicator for the updated value */
-.header-value::after {
+/* Add a small indicator for the updated value - fixed to be more specific */
+.header-value.recently-updated::after {
     content: '';
-    display: none;
+    display: inline-block;
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -226,8 +226,31 @@ select {
     vertical-align: middle;
 }
 
-.recently-updated::after {
-    display: inline-block;
+/* Style for missing sources - made more specific to prevent incorrect application */
+.header-value.missing-source {
+    color: #e65100;
+    font-style: italic;
+}
+
+/* Add a utility button for entries with missing sources */
+.entryItem[data-source-missing="true"] .removeBtn {
+    background-color: #f57c00;
+}
+
+/* Make sure the missing source has visual priority */
+.entryItem[data-source-missing="true"] {
+    background-color: #fff8e1;
+    border-left: 3px solid #ffa000;
+}
+
+/* Never apply both styles at once - this was part of the bug */
+.header-value.missing-source.recently-updated::after {
+    display: none;
+}
+
+/* Make sure highlight animations don't apply to missing sources */
+.header-value.missing-source.highlight-update {
+    animation: none;
 }
 
 /* Notification system */
@@ -673,11 +696,6 @@ select option {
 }
 
 /* Style for missing sources */
-.missing-source {
-    color: #e65100;
-    font-style: italic;
-}
-
 .missing-source-indicator {
     background-color: #fff3e0;
     color: #e65100;
@@ -685,16 +703,6 @@ select option {
     border-radius: 4px;
     padding: 1px 4px;
     font-size: 11px;
-}
-
-/* Add a utility button for entries with missing sources */
-.entryItem[data-source-missing="true"] .removeBtn {
-    background-color: #f57c00;
-}
-
-.entryItem[data-source-missing="true"] {
-    background-color: #fff8e1;
-    border-left: 3px solid #ffa000;
 }
 
 /* Animation for missing source warning */
