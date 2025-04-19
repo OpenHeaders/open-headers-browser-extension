@@ -1,7 +1,7 @@
 /**
  * Manages saving and loading draft form inputs
- * Updates to include prefix/suffix handling
  */
+import { storage } from '../shared/browser-api.js';
 
 // Add debounce functionality to prevent excessive storage operations
 let saveTimeout = null;
@@ -23,7 +23,7 @@ export function saveDraftInputs(formData, clear = false, immediate = false) {
 
     // If clearing, do it immediately
     if (clear) {
-        chrome.storage.sync.set({
+        storage.sync.set({
             draftInputs: {
                 headerName: '',
                 headerValue: '',
@@ -44,7 +44,7 @@ export function saveDraftInputs(formData, clear = false, immediate = false) {
             (formData.domain ? [formData.domain] : []);
 
         // Save current state including dynamic selection and domains array
-        chrome.storage.sync.set({
+        storage.sync.set({
             draftInputs: {
                 ...formData,
                 domains,
@@ -70,7 +70,7 @@ export function saveDraftInputs(formData, clear = false, immediate = false) {
  */
 export function loadDraftInputs() {
     return new Promise((resolve) => {
-        chrome.storage.sync.get(['draftInputs'], (result) => {
+        storage.sync.get(['draftInputs'], (result) => {
             const draft = result.draftInputs || {};
 
             // Handle legacy data with different property names

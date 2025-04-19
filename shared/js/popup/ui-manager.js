@@ -2,6 +2,7 @@
  * UI Manager for popup interactions
  */
 import { formatHeaderValue, formatDomainValue } from '../shared/utils.js';
+import { runtime } from '../shared/browser-api.js';
 
 let dynamicSources = [];
 let statusIndicator = null;
@@ -55,7 +56,7 @@ export function showUpdatedStatus(connectedStatus) {
     }
 
     // Double-check the connection is still alive
-    chrome.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
+    runtime.sendMessage({ type: 'checkConnection' }, (response) => {
         // Only show updated if background confirms connected status
         if (response && response.connected === true) {
             statusIndicator.textContent = 'Updated (Dynamic sources)';
@@ -64,7 +65,7 @@ export function showUpdatedStatus(connectedStatus) {
 
             setTimeout(() => {
                 // Check connection again before reverting to "Connected"
-                chrome.runtime.sendMessage({ type: 'checkConnection' }, (connectionResponse) => {
+                runtime.sendMessage({ type: 'checkConnection' }, (connectionResponse) => {
                     if (connectionResponse && connectionResponse.connected === true) {
                         statusIndicator.textContent = 'Connected (Dynamic sources)';
                         statusIndicator.classList.remove('status-updated');

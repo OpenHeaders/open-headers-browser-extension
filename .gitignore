@@ -65,3 +65,4 @@ coverage/
 .env.test.local
 .env.production.local
 .env.local
+/safari/xcode_project/

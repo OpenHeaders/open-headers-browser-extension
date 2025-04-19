@@ -18,7 +18,7 @@ The extension consists of these main components:
 | Module | Description |
 |--------|-------------|
 | `background.js` | Main background service worker that coordinates the extension |
-| `header-manager.js` | Creates and updates Chrome's declarativeNetRequest rules |
+| `header-manager.js` | Creates and updates browser's declarativeNetRequest rules |
 | `websocket.js` | Manages WebSocket connection to the companion app |
 | `rule-validator.js` | Validates and sanitizes header values |
 | `popup.js` | Main popup UI coordinator |
@@ -29,11 +29,13 @@ The extension consists of these main components:
 | `config-manager.js` | Handles configuration import and export |
 | `notification-system.js` | Displays notifications in the popup UI |
 | `utils.js` | Shared utility functions |
+| `browser-api.js` | Browser detection and compatibility layer |
+| `safari-websocket-adapter.js` | Safari-specific WebSocket handling |
 
 ### Data Flow
 
 1. User configures headers in the popup UI
-2. Configurations are saved to Chrome storage
+2. Configurations are saved to browser storage
 3. Background service worker creates declarativeNetRequest rules
 4. When using dynamic sources:
    - WebSocket connection receives source updates
@@ -62,7 +64,22 @@ The extension consists of these main components:
 
 3. Start the development build:
    ```bash
-   npm run build
+   npm run dev           # Watch mode for all browsers
+   # Or for specific browsers:
+   npm run dev:chrome    # Watch mode for Chrome
+   npm run dev:firefox   # Watch mode for Firefox
+   npm run dev:edge      # Watch mode for Edge
+   npm run dev:safari    # Watch mode for Safari
+   ```
+
+4. Build production versions:
+   ```bash
+   npm run build         # Build for all browsers
+   # Or for specific browsers:
+   npm run build:chrome  # Build for Chrome
+   npm run build:firefox # Build for Firefox
+   npm run build:edge    # Build for Edge
+   npm run build:safari  # Build for Safari
    ```
 
 ### Project Structure
@@ -76,7 +93,8 @@ open-headers/
 │   │   ├── background.js # Main background worker logic
 │   │   ├── header-manager.js # Header rule management
 │   │   ├── rule-validator.js # Header validation
-│   │   └── websocket.js # WebSocket client
+│   │   ├── websocket.js # WebSocket client
+│   │   └── safari-websocket-adapter.js # Safari-specific WebSocket handling
 │   ├── popup/           # Popup UI scripts
 │   │   ├── index.js     # Entry point for popup
 │   │   ├── popup.js     # Main popup logic
@@ -87,27 +105,90 @@ open-headers/
 │   │   ├── draft-manager.js # Draft inputs management
 │   │   └── notification-system.js # Notification display
 │   └── shared/          # Shared utilities
-│       └── utils.js     # Common utility functions
-├── manifest.json        # Extension manifest
+│       ├── utils.js     # Common utility functions
+│       └── browser-api.js # Browser detection and compatibility layer
+├── manifest.json        # Chrome/Edge manifest
+├── manifest.firefox.json # Firefox-specific manifest
+├── manifest.safari.json # Safari-specific manifest
 ├── popup.html           # Popup UI HTML
 ├── popup.css            # Popup UI styles
 ├── package.json         # npm package configuration
-└── webpack.config.js    # Webpack configuration
+├── webpack.chrome.js    # Chrome build configuration
+├── webpack.firefox.js   # Firefox build configuration
+├── webpack.edge.js      # Edge build configuration
+├── webpack.safari.js    # Safari build configuration
+└── webpack.config.js    # Common webpack configuration
 ```
 
 ### Development Workflow
 
 1. Make your changes to the source files
-2. Run `npm run build` to create a development build
-3. Load the extension in Chrome using "Load unpacked" and pointing to the `dist` directory
+2. Run browser-specific build commands to test in different browsers:
+   ```bash
+   npm run build:chrome  # For Chrome
+   npm run build:firefox # For Firefox
+   npm run build:edge    # For Edge
+   npm run build:safari  # For Safari
+   ```
+3. Load the extension in the appropriate browser using "Load unpacked" (Chrome/Edge), "Load Temporary Add-on" (Firefox), or the Safari converter
 4. Test your changes
-5. For production build, run `npm run build && npm run obfuscate`
+5. For production build, run `npm run build` to build for all browsers
+
+## Browser Compatibility
+
+Open Headers now supports multiple browsers with specific adaptations for each:
+
+### Cross-Browser Implementation
+
+The extension uses browser detection and compatibility layers to ensure consistent behavior:
+
+- **Manifest Files**: Different manifests for each browser target
+  - Chrome/Edge: Uses manifest v3 with service worker
+  - Firefox: Uses manifest v3 with explicit `browser_specific_settings`
+  - Safari: Uses manifest v3 with special considerations for WebKit
+
+- **WebSocket Connection**: Different implementations for browser security models
+  - Chrome/Edge: Standard WebSocket implementation
+  - Firefox: Special handling for strict security requirements and protocol upgrade
+  - Safari: Adaptation for Safari's unique WebKit security model
+
+- **Storage APIs**: Unified API to handle browser differences
+  - The `browser-api.js` module provides cross-browser abstraction
+
+### Build Configuration
+
+Each browser has its own webpack configuration:
+- `webpack.chrome.js` - Chrome configuration
+- `webpack.firefox.js` - Firefox configuration
+- `webpack.edge.js` - Edge configuration
+- `webpack.safari.js` - Safari configuration
+
+### Testing Cross-Browser
+
+When testing, verify these browser-specific aspects:
+1. **WebSocket Connection**: Ensure proper connection to the companion app 
+2. **Header Injection**: Verify headers are applied consistently
+3. **CSS/UI**: Check that styling works properly in each browser
+4. **Storage**: Confirm settings persist between sessions
+
+### Known Browser Differences
+
+| Feature | Chrome | Firefox | Edge | Safari |
+|---------|--------|---------|------|--------|
+| WebSocket Security | Standard | Strict | Standard | Strictest |
+| CSP Requirements | Moderate | High | Moderate | Very High |
+| Resource Types | All Supported | Limited Set | All Supported | Limited Set |
+| Manifest Support | Full v3 | v3 with limitations | Full v3 | v3 with WebKit specifics |
 
 ## Testing
 
 ### Manual Testing
 
-1. Load the extension in Chrome using Developer Mode
+1. Load the extension in your target browser using the appropriate method:
+   - Chrome/Edge: "Load unpacked" in extensions page
+   - Firefox: "Load Temporary Add-on" in about:debugging
+   - Safari: Run converted app from Xcode
+
 2. Test various header configurations:
    - Static headers with different domain patterns
    - Dynamic headers with prefix/suffix formatting
@@ -115,6 +196,12 @@ open-headers/
    - Import/export functionality
    - Test validation for invalid header values
    - Test with and without the companion app
+
+3. Cross-browser specific tests:
+   - Test WebSocket connection in each browser
+   - Verify that headers are applied to all resource types
+   - Check that UI styling is consistent
+   - Test cache prevention functionality
 
 ### Unit Tests
 
@@ -143,26 +230,48 @@ For testing header injection, use sites like:
 
 ### Production Build
 
-To create a production-ready build:
+To create production-ready builds for all browsers:
 
 ```bash
 npm run build
-npm run obfuscate
 ```
 
 This will:
 1. Bundle all scripts with Webpack
 2. Minify and optimize the code
-3. Obfuscate sensitive parts of the code
-4. Create a `dist` directory with the final extension
+3. Create browser-specific builds in the `dist` directory
 
-### Chrome Web Store Submission
+### Browser Store Submissions
 
-1. Zip the contents of the `dist` directory
+#### Chrome Web Store
+1. Zip the contents of the `dist/chrome` directory
 2. Sign in to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole/)
 3. Upload the zip file
 4. Complete the store listing information
 5. Submit for review
+
+#### Firefox Add-ons
+1. Zip the contents of the `dist/firefox` directory
+2. Sign in to [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/)
+3. Upload the zip file
+4. Complete the listing information
+5. Submit for review
+
+#### Microsoft Edge Add-ons
+1. Zip the contents of the `dist/edge` directory
+2. Sign in to [Microsoft Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/overview)
+3. Upload the zip file
+4. Complete the listing information
+5. Submit for review
+
+#### Safari App Store
+1. Build Safari version: `npm run build:safari`
+2. Convert to Safari app: `npm run safari:convert`
+3. Open the Xcode project
+4. Sign with your Apple Developer account
+5. Archive and upload to App Store Connect
+6. Complete the listing information
+7. Submit for review
 
 ## Implementation Details
 
@@ -174,31 +283,33 @@ Headers can now be applied to multiple domains using the domain-tags-manager.js 
 - Domains are stored as arrays in the header configuration
 - The `header-manager.js` creates separate rules for each domain pattern
 
-### Import/Export Feature
+### Browser Compatibility Layer
 
-Configuration management is handled by the config-manager.js module:
+The browser-api.js module provides a unified interface for browser APIs:
 
-- Export creates a JSON file with the current configuration
-- Import reads a JSON file and applies the configuration
-- The feature uses the File System Access API when available with fallback to classic download
+- Detects the current browser environment
+- Provides consistent API methods that work across browsers
+- Handles Firefox's promisified APIs vs Chrome's callback-based APIs
+- Manages Safari's storage limitations
 
-### Prefix/Suffix Support
+### WebSocket Connection Handling
 
-Dynamic sources can be formatted using prefix and suffix:
+Browser-specific WebSocket handling:
 
-- Added in the UI when "Dynamic" value type is selected
-- Values are stored with each header configuration
-- When header rules are generated, the format is applied: `prefix + dynamicValue + suffix`
-- This allows for easy token formatting like `Bearer {token}` or other common patterns
+- **Firefox**: Uses direct WebSocket URL construction with security checks
+- **Chrome/Edge**: Uses standard WebSocket implementation
+- **Safari**: Uses adapter for WebKit security model
+- Implements auto-reconnection with browser-specific error handling
+- Detects removed sources and updates header configurations accordingly
 
-### WebSocket Integration
+### Cache Prevention for Headers
 
-The real-time connection to the companion app:
+To ensure headers are applied consistently:
 
-- Uses a WebSocket connection to localhost:59210
-- Includes pre-checking to avoid connection errors
-- Implements automatic reconnection with exponential backoff
-- Persists dynamic sources to storage for offline access
+- Adds Cache-Control and other cache-related headers to prevent browsers from using cached responses
+- Implements different resource type handling for Firefox vs Chrome/Edge
+- Creates separate rules for main_frame and other resource types
+- Uses debouncing and hash-based change detection to prevent unnecessary rule updates
 
 ## Server Component
 
@@ -254,3 +365,4 @@ Contributions are welcome! Please follow these steps:
 - Document functions with JSDoc comments
 - Follow the existing code structure
 - Update documentation when adding new features
+- Test across multiple browsers when making significant changes

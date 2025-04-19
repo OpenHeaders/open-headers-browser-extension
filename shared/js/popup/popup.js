@@ -3,6 +3,7 @@
  */
 import { showNotification } from './notification-system.js';
 import { normalizeHeaderName } from '../shared/utils.js';
+import { runtime, storage } from '../shared/browser-api.js';
 import {
     initializeStatusIndicator,
     updateConnectionStatus,
@@ -252,7 +253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Only update to connected if we have actual sources AND a verified connection
         if (sources && Array.isArray(sources) && sources.length > 0) {
             // Instead of immediately setting isConnected to true, verify connection status first
-            chrome.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
+            runtime.sendMessage({ type: 'checkConnection' }, (response) => {
                 if (response && response.connected === true) {
                     isConnected = true;
                     updateConnectionStatus(true);
@@ -351,7 +352,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     );
 
     // Set up listener for messages from background script
-    chrome.runtime.onMessage.addListener((message) => {
+    runtime.onMessage.addListener((message) => {
         if (message.type === 'sourcesUpdated' && Array.isArray(message.sources)) {
             const oldSources = getDynamicSources();
             handleSourcesUpdated(message.sources, oldSources);
@@ -378,10 +379,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Check connection status every 3 seconds
         setInterval(() => {
             try {
-                chrome.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
+                runtime.sendMessage({ type: 'checkConnection' }, (response) => {
                     // If no response or error, assume disconnected
-                    if (chrome.runtime.lastError) {
-                        console.log('Runtime error checking connection:', chrome.runtime.lastError);
+                    if (runtime.lastError) {
+                        console.log('Runtime error checking connection:', runtime.lastError);
                         if (isConnected) {
                             isConnected = false;
                             updateConnectionStatus(false);
@@ -417,7 +418,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Safe function to update dynamic entries from storage
     function updateDynamicEntriesFromStorage() {
         try {
-            chrome.storage.local.get(['dynamicSources'], (result) => {
+            storage.local.get(['dynamicSources'], (result) => {
                 if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
                     // Don't use functions that might not be properly imported
                     // Instead, just reload entries which is known to work
@@ -502,10 +503,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Let the background script know we're open and ready for updates
         try {
-            chrome.runtime.sendMessage({ type: 'popupOpen' }, (response) => {
+            runtime.sendMessage({ type: 'popupOpen' }, (response) => {
                 // Check for runtime error
-                if (chrome.runtime.lastError) {
-                    console.log('Error notifying background script of popup open:', chrome.runtime.lastError);
+                if (runtime.lastError) {
+                    console.log('Error notifying background script of popup open:', runtime.lastError);
                     return;
                 }
 
@@ -534,10 +535,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load dynamic sources from storage
     function loadDynamicSources() {
-        chrome.storage.local.get(['dynamicSources'], (result) => {
+        storage.local.get(['dynamicSources'], (result) => {
             if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
                 // First verify connection status before displaying any status indicators
-                chrome.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
+                runtime.sendMessage({ type: 'checkConnection' }, (response) => {
                     if (response && response.connected === true) {
                         // Only update connection status if we're actually connected
                         isConnected = true;
