@@ -5,6 +5,7 @@ import { formatHeaderValue, truncateText, normalizeHeaderName, generateUniqueId 
 import { validateHeaderValue } from '../background/rule-validator.js';
 import { showNotification } from './notification-system.js';
 import { getDynamicSources } from './ui-manager.js';
+import { storage, runtime } from '../shared/browser-api.js';
 
 // Keep track of current entries data for easy refreshing
 let currentSavedData = {};
@@ -49,7 +50,7 @@ function formatDomains(domains, maxToShow = 3) {
  */
 export function loadEntries(entriesList) {
     currentEntriesList = entriesList;
-    chrome.storage.sync.get(['savedData'], (result) => {
+    storage.sync.get(['savedData'], (result) => {
         const savedData = result.savedData || {};
         currentSavedData = savedData; // Store for later refreshes
         renderEntries(entriesList, savedData);
@@ -138,7 +139,7 @@ function displayMissingSourceDetailsUI(detailsSpan, sourceId) {
  * @param {HTMLElement} entryDiv - The entry div element
  */
 function tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv) {
-    chrome.storage.local.get(['dynamicSources'], (result) => {
+    storage.local.get(['dynamicSources'], (result) => {
         if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
             const storedSource = result.dynamicSources.find(
                 s => s.sourceId?.toString() === (sourceId || '').toString() ||
@@ -352,7 +353,7 @@ export function updateDynamicEntryValue(entryId, sourceId) {
                 s.locationId?.toString() === sourceId.toString());
             if (!source) {
                 // Try to load from storage directly as fallback
-                chrome.storage.local.get(['dynamicSources'], (result) => {
+                storage.local.get(['dynamicSources'], (result) => {
                     if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
                         const storedSource = result.dynamicSources.find(
                             s => s.sourceId?.toString() === sourceId.toString() ||
@@ -379,7 +380,7 @@ export function updateDynamicEntryValue(entryId, sourceId) {
         s.locationId?.toString() === sourceId.toString());
     if (!source) {
         // Try to load from storage directly as fallback
-        chrome.storage.local.get(['dynamicSources'], (result) => {
+        storage.local.get(['dynamicSources'], (result) => {
             if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
                 const storedSource = result.dynamicSources.find(
                     s => s.sourceId?.toString() === sourceId.toString() ||
@@ -548,7 +549,7 @@ export function refreshEntriesList(entriesList, changedSourceIds = []) {
  * @param {Function} clearFormFn - Function to clear form fields after save
  */
 export function saveEntry(formData, entriesList, clearFormFn) {
-    // Store normalized header name to match Chrome's behavior
+    // Store normalized header name to match browser's behavior
     const headerName = normalizeHeaderName(formData.headerName);
     const headerValue = formData.headerValue;
 
@@ -579,7 +580,7 @@ export function saveEntry(formData, entriesList, clearFormFn) {
 
     const uniqueId = generateUniqueId();
 
-    chrome.storage.sync.get(['savedData'], (result) => {
+    storage.sync.get(['savedData'], (result) => {
         const savedData = result.savedData || {};
         savedData[uniqueId] = {
             headerName, // Store normalized header name
@@ -591,7 +592,7 @@ export function saveEntry(formData, entriesList, clearFormFn) {
             suffix  // Store suffix
         };
 
-        chrome.storage.sync.set({ savedData }, () => {
+        storage.sync.set({ savedData }, () => {
             // Update our stored data
             currentSavedData = savedData;
 
@@ -613,14 +614,14 @@ export function saveEntry(formData, entriesList, clearFormFn) {
  * @param {HTMLElement} entriesList - The container with all entries
  */
 export function removeEntry(id, entriesList) {
-    chrome.storage.sync.get(['savedData'], (result) => {
+    storage.sync.get(['savedData'], (result) => {
         const savedData = result.savedData || {};
         delete savedData[id];
 
         // Update our stored data
         currentSavedData = savedData;
 
-        chrome.storage.sync.set({ savedData }, () => {
+        storage.sync.set({ savedData }, () => {
             // Re-render the entries list
             renderEntries(entriesList, savedData);
         });

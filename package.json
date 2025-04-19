@@ -1,16 +1,26 @@
 {
   "name": "open-headers",
-  "version": "1.0.1",
-  "description": "A Chrome extension to view and manage HTTP headers",
+  "version": "1.1.0",
+  "description": "A browser extension to view and manage HTTP headers",
   "scripts": {
-    "build": "webpack --config webpack.config.js",
-    "obfuscate": "node build.js"
+    "build": "npm run build:chrome && npm run build:firefox && npm run build:edge && npm run build:safari",
+    "build:chrome": "webpack --config webpack.chrome.js",
+    "build:firefox": "webpack --config webpack.firefox.js",
+    "build:edge": "webpack --config webpack.edge.js",
+    "build:safari": "webpack --config webpack.safari.js",
+    "dev": "webpack --config webpack.dev.js --watch",
+    "dev:chrome": "webpack --config webpack.chrome.js --watch",
+    "dev:firefox": "webpack --config webpack.firefox.js --watch",
+    "dev:edge": "webpack --config webpack.edge.js --watch",
+    "dev:safari": "webpack --config webpack.safari.js --watch",
+    "safari:convert": "mkdir -p safari/xcode_project && xcrun safari-web-extension-converter ./dist/safari --app-name \"Open Headers\" --bundle-identifier \"com.openheaders.safari\" --copy-resources --project-location ./safari/xcode_project"
   },
   "devDependencies": {
     "copy-webpack-plugin": "^11.0.0",
     "javascript-obfuscator": "^4.1.0",
     "terser-webpack-plugin": "^5.3.9",
     "webpack": "^5.88.2",
-    "webpack-cli": "^5.1.4"
+    "webpack-cli": "^5.1.4",
+    "webpack-merge": "^5.10.0"
   }
 }

@@ -3,6 +3,7 @@
  */
 import { isValidHeaderValue, sanitizeHeaderValue } from './rule-validator.js';
 import { normalizeHeaderName } from '../shared/utils.js';
+import { storage, declarativeNetRequest, runtime } from '../shared/browser-api.js';
 
 /**
  * Updates the network request rules based on saved data and dynamic sources.
@@ -10,7 +11,7 @@ import { normalizeHeaderName } from '../shared/utils.js';
  */
 export function updateNetworkRules(dynamicSources) {
     // Get all saved headers
-    chrome.storage.sync.get(['savedData'], (result) => {
+    storage.sync.get(['savedData'], (result) => {
         const savedData = result.savedData || {};
 
         // Create rules array for declarativeNetRequest
@@ -36,37 +37,15 @@ export function updateNetworkRules(dynamicSources) {
 
                     // Combine prefix + dynamic content + suffix
                     headerValue = `${prefix}${dynamicContent}${suffix}`;
-
-                    // Optionally store last known good value for fallback
-                    // savedData[id].lastKnownValue = headerValue;
                 } else {
-                    // Source not found - we have a few options here:
-
-                    // Option 1: Skip this rule entirely (safer approach)
+                    // Source not found - skip this rule
                     console.log(`Info: Skipping rule for ${entry.headerName} - dynamic source ${entry.sourceId} not found`);
-
-                    // Mark this entry as having a missing source
                     invalidHeaderEntries.push(id);
-
-                    // Skip this rule since we have no value to use
                     continue;
-
-                    // Option 2 (alternative): Use a placeholder value or last known value
-                    // If you want to implement this instead, you could store the last known
-                    // value in the entry itself when updating the header values
-                    /*
-                    if (entry.lastKnownValue) {
-                        headerValue = entry.lastKnownValue;
-                        console.log(`Info: Using last known value for ${entry.headerName} since source ${entry.sourceId} is missing`);
-                    } else {
-                        console.log(`Info: Skipping rule for ${entry.headerName} - dynamic source ${entry.sourceId} not found and no fallback available`);
-                        continue;
-                    }
-                    */
                 }
             }
 
-            // Validate the header value for Chrome's API
+            // Validate the header value for browser's API
             if (!isValidHeaderValue(headerValue)) {
                 // Keep track of invalid entries
                 invalidHeaderEntries.push(id);
@@ -96,31 +75,64 @@ export function updateNetworkRules(dynamicSources) {
             }
 
             // Create a request header modification object to be used in each rule
-            const requestHeaderModification = {
-                // Use the normalized header name to match Chrome's behavior
+            const customHeaderModification = {
+                // Use the normalized header name to match browser's behavior
                 header: normalizeHeaderName(entry.headerName),
                 operation: 'set',
                 value: headerValue
             };
 
+            // Define cache prevention headers - this helps ensure our headers are always applied
+            // by preventing the browser from using cached responses
+            const preventCacheHeaders = [
+                {
+                    header: 'Cache-Control',
+                    operation: 'set',
+                    value: 'no-cache, no-store, must-revalidate'
+                },
+                {
+                    header: 'Pragma',
+                    operation: 'set',
+                    value: 'no-cache'
+                }
+            ];
+
+            // Combine the custom header and cache prevention headers
+            const allHeaderModifications = [customHeaderModification, ...preventCacheHeaders];
+
             // Create a separate rule for each domain
             domains.forEach(domain => {
                 if (!domain || domain.trim() === '') return;
 
+                // Create the main rule for the main_frame (the page itself)
+                rules.push({
+                    id: ruleId++,
+                    priority: 2, // Higher priority for main page
+                    action: {
+                        type: 'modifyHeaders',
+                        requestHeaders: allHeaderModifications
+                    },
+                    condition: {
+                        urlFilter: domain.trim(),
+                        resourceTypes: ['main_frame']
+                    }
+                });
+
+                // Create a second rule for all other resources (images, scripts, etc.)
                 rules.push({
                     id: ruleId++,
                     priority: 1,
                     action: {
                         type: 'modifyHeaders',
-                        requestHeaders: [requestHeaderModification]
+                        requestHeaders: allHeaderModifications
                     },
                     condition: {
                         urlFilter: domain.trim(),
-                        resourceTypes: ['main_frame', 'sub_frame', 'stylesheet', 'script', 'image',
-                            'font', 'object', 'xmlhttprequest', 'ping', 'csp_report',
-                            'media', 'websocket', 'other']
+                        resourceTypes: ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'other']
                     }
                 });
+
+                console.log(`Info: Created rules for ${entry.headerName} on ${domain.trim()} with cache prevention`);
             });
         }
 
@@ -156,23 +168,22 @@ export function updateNetworkRules(dynamicSources) {
             }
 
             // Update storage with sanitized values and missing source flags
-            chrome.storage.sync.set({ savedData: updatedData });
+            storage.sync.set({ savedData: updatedData });
         }
 
         // Update the dynamic rules
-        chrome.declarativeNetRequest.updateDynamicRules({
+        declarativeNetRequest.updateDynamicRules({
             removeRuleIds: Array.from({ length: 1000 }, (_, i) => i + 1), // Remove all existing rules (up to 1000)
             addRules: rules
         }).then(() => {
             console.log('Info: Updated network rules:', rules.length);
-
-            // This helps keep the service worker alive by doing some work
+            if (rules.length > 0) {
+                console.log('Info: Example rule:', JSON.stringify(rules[0].condition));
+            }
             return new Promise(resolve => setTimeout(resolve, 50));
         }).catch(e => {
             console.log('Info: Rule update issue:', e.message || 'Unknown error');
-
-            // Notify popup of the issue
-            chrome.runtime.sendMessage({
+            runtime.sendMessage({
                 type: 'ruleUpdateError',
                 error: e.message || 'Unknown error'
             }).catch(() => {

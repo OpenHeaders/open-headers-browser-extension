@@ -4,6 +4,7 @@
 import { getCurrentSavedData } from './entry-manager.js';
 import { getDynamicSources } from './ui-manager.js';
 import { showNotification } from './notification-system.js';
+import { storage, runtime } from '../shared/browser-api.js';
 
 /**
  * Exports the current configuration to a JSON file.
@@ -111,7 +112,21 @@ export async function importConfiguration(file) {
                     }
 
                     // Store the header entries
-                    await chrome.storage.sync.set({ savedData: configuration.headerEntries });
+                    await new Promise((resolveStorage) => {
+                        storage.sync.set({ savedData: configuration.headerEntries }, () => {
+                            resolveStorage();
+                        });
+                    });
+
+                    // Notify background script about the imported configuration
+                    await new Promise((resolveNotify) => {
+                        runtime.sendMessage({
+                            type: 'configurationImported',
+                            dynamicSources: configuration.dynamicSources || []
+                        }, (response) => {
+                            resolveNotify();
+                        });
+                    });
 
                     // Show success notification
                     showNotification('Configuration imported successfully');

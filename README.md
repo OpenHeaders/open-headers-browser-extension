@@ -2,13 +2,14 @@
 
 ![Open Headers Logo](./images/icon128.png)
 
-A Chrome extension for managing HTTP headers with static and dynamic sources. Modify request headers for specific domains with values from HTTP requests, environment variables, files, and more.
+A browser extension for managing HTTP headers with static and dynamic sources. Modify request headers for specific domains with values from HTTP requests, environment variables, files, and more.
 
 ## Features
 
 - 🔄 **Dynamic Sources**: Pull header values from HTTP requests, environment variables, and local files
+- 🌐 **Cross-Browser Support**: Works on Chrome, Firefox, Edge, and Safari
 - 🔌 **Live Updates**: Values automatically refresh when source content changes
-- 🌐 **Multiple Domain Targeting**: Apply headers to specific domains using URL patterns
+- 🎯 **Multiple Domain Targeting**: Apply headers to specific domains using URL patterns
 - 🛡️ **Header Validation**: Automatic validation and sanitization of header values
 - 💾 **Persistent Settings**: Header configurations are saved and restored automatically
 - 📋 **Import/Export**: Share header configurations across devices or save backups
@@ -26,19 +27,38 @@ The extension works with the Open Headers companion app (optional) to access loc
 
 ## Installation
 
-### From Chrome Web Store
+### From Browser Web Stores
 
-1. Visit the [Open Headers page](https://github.com/OpenHeaders/open-headers-browser-extension) on the Chrome Web Store
-2. Click "Add to Chrome"
-3. Grant the required permissions
+- **Chrome**: Visit the [Chrome Web Store](https://github.com/OpenHeaders/open-headers-browser-extension)
+- **Firefox**: Visit [Firefox Add-ons](https://github.com/OpenHeaders/open-headers-browser-extension)
+- **Edge**: Visit [Microsoft Edge Add-ons](https://github.com/OpenHeaders/open-headers-browser-extension)
+- **Safari**: Currently only available via manual installation (requires macOS)
 
 ### Manual Installation (Developer Mode)
 
+#### Chrome, Edge
 1. Download and unzip the latest release from GitHub
-2. Open Chrome and navigate to `chrome://extensions/`
+2. Open the browser and navigate to the extensions page
+   - Chrome: `chrome://extensions/`
+   - Edge: `edge://extensions/`
 3. Enable "Developer mode" using the toggle in the top-right corner
 4. Click "Load unpacked" and select the extension directory
 5. The extension should appear in your toolbar
+
+#### Firefox
+1. Download and unzip the latest release from GitHub
+2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`
+3. Click "Load Temporary Add-on" 
+4. Select the `manifest.json` file in the extension directory
+5. The extension should appear in your toolbar
+
+#### Safari (macOS only)
+1. Build the Safari version: `npm run build:safari`
+2. Convert to Safari extension: `npm run safari:convert`
+3. Open the generated Xcode project in `safari/xcode_project`
+4. Sign the app with your Apple ID in Xcode
+5. Run the app in Xcode
+6. Enable the extension in Safari under Settings → Extensions
 
 ## Usage
 
@@ -122,25 +142,42 @@ For dynamic sources (HTTP requests, files, environment variables), you'll need t
 - Source: Local file containing `true` or `false`
 - Domains: `dev.myapp.com/*`, `staging.myapp.com/*`
 
+## Browser-Specific Notes
+
+### Chrome & Edge
+- Full support for all features
+- Most efficient WebSocket connection handling
+
+### Firefox
+- Requires specific permissions for WebSocket connections
+- Has limitations on some resource types
+- More strict Content Security Policy enforcement
+
+### Safari
+- Requires macOS for installation
+- Must be packaged as a macOS app using Xcode
+- Most strict security model, especially for WebSocket connections
+
 ## Troubleshooting
 
 - **Header Not Applied**: Ensure the domain pattern matches the URL you're visiting
 - **Dynamic Source Missing**: Check that the companion app is running
 - **Value Not Updating**: The companion app may have lost track of the source; restart it
 - **Invalid Header**: Some header values may be sanitized if they contain invalid characters
+- **Firefox Connection Issues**: Ensure the host permissions include the correct WebSocket URL
+- **Safari Connection Issues**: Safari may require additional permissions for WebSocket connections
 
 ## Contributing
 
-Contributions are welcome! Please check the DEVELOPER.md file for development setup instructions.
+Contributions are welcome! Please check the [DEVELOPER.md](DEVELOPER.md) file for development setup instructions.
 
 ## Acknowledgments
 
 - All contributors and users of Open Headers
-- The Chrome Extensions team for the powerful extensions API
+- The browser extension teams for the powerful extensions APIs
 - Everyone who provided feedback and suggestions
-
 
 ## Documentation
 
-- For more detailed information, see [DEVELOPER.md](DEVELOPER.md).
-- For contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
+- For more detailed information, see [DEVELOPER.md](DEVELOPER.md)
+- For contributing, see [CONTRIBUTING.md](CONTRIBUTING.md)
