@@ -1,6 +1,6 @@
 # Open Headers
 
-![Open Headers Logo](./images/icon128.png)
+![Open Headers Logo](./shared/images/icon128.png)
 
 A browser extension for managing HTTP headers with static and dynamic sources. Modify request headers for specific domains with values from HTTP requests, environment variables, files, and more.
 
@@ -55,7 +55,7 @@ The extension works with the Open Headers companion app (optional) to access loc
 #### Safari (macOS only)
 1. Build the Safari version: `npm run build:safari`
 2. Convert to Safari extension: `npm run safari:convert`
-3. Open the generated Xcode project in `safari/xcode_project`
+3. Open the generated Xcode project in `manifests/safari/xcode_project`
 4. Sign the app with your Apple ID in Xcode
 5. Run the app in Xcode
 6. Enable the extension in Safari under Settings → Extensions
@@ -169,7 +169,7 @@ For dynamic sources (HTTP requests, files, environment variables), you'll need t
 
 ## Contributing
 
-Contributions are welcome! Please check the [DEVELOPER.md](DEVELOPER.md) file for development setup instructions.
+Contributions are welcome! Please check the [DEVELOPER.md](docs/DEVELOPER.md) file for development setup instructions.
 
 ## Acknowledgments
 
@@ -179,5 +179,6 @@ Contributions are welcome! Please check the [DEVELOPER.md](DEVELOPER.md) file fo
 
 ## Documentation
 
-- For more detailed information, see [DEVELOPER.md](DEVELOPER.md)
-- For contributing, see [CONTRIBUTING.md](CONTRIBUTING.md)
+- For more detailed information, see [DEVELOPER.md](docs/DEVELOPER.md)
+- For contributing, see [CONTRIBUTING.md](docs/CONTRIBUTING.md)
+- For privacy information, see [PRIVACY.md](docs/PRIVACY.md)

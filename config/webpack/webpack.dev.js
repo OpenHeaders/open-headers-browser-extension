@@ -4,18 +4,21 @@ const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = merge(common, {
-    mode: 'production',
+    mode: 'development',  // Use development mode instead of production
+    devtool: 'inline-source-map',
+    optimization: {
+        minimize: false     // Disable minimization
+    },
     output: {
-        path: path.resolve(__dirname, 'dist/safari'),
+        path: path.resolve(__dirname, '../../dist/dev'),
     },
     plugins: [
         new CopyPlugin({
             patterns: [
+                { from: 'chrome/manifest.json' },
                 { from: 'shared/popup.html' },
                 { from: 'shared/popup.css' },
-                { from: 'shared/images', to: 'images' },
-                { from: 'safari/manifest.json' },
-                { from: 'safari/SafariAPIs.js', to: 'js/safari/SafariAPIs.js' }
+                { from: 'shared/images', to: 'images' }
             ]
         })
     ]

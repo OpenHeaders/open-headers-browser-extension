@@ -84,6 +84,35 @@ We expect all contributors to follow our Code of Conduct. Please be respectful a
 6. **Push your branch** to your fork
 7. **Create a pull request** to the main repository
 
+## Project Structure
+
+Please familiarize yourself with our project structure:
+
+```
+open-headers/
+├── shared/              # Shared code and resources
+│   ├── js/             # JavaScript sources
+│   ├── popup.html      # Popup UI HTML
+│   ├── popup.css       # Popup UI styles
+│   └── images/         # Icons and images
+│
+├── manifests/          # Browser-specific manifest files
+│   ├── chrome/
+│   ├── firefox/
+│   ├── edge/
+│   └── safari/
+│
+├── config/             # Configuration files
+│   ├── webpack/        # Webpack configurations
+│   └── scripts/        # Build and utility scripts
+│
+├── docs/               # Documentation
+│
+├── dist/               # Build output (gitignored)
+│
+├── releases/           # Release packages (gitignored)
+```
+
 ## Branching Strategy
 
 We use a feature-based branching strategy. All branches should be created from the `main` branch.
@@ -231,7 +260,7 @@ When adding features or making significant changes, please update the relevant d
    - Document browser-specific differences
    - Add examples for new functionality
 
-3. **DEVELOPER.md**:
+3. **docs/DEVELOPER.md**:
    - Update technical details for developers
    - Document browser compatibility issues and solutions
 
@@ -271,8 +300,12 @@ Our release process follows these steps:
    ```bash
    npm run build
    ```
-5. **Create a GitHub release** with the version tag and release notes
-6. **Submit to browser stores** (Chrome Web Store, Firefox Add-ons, Microsoft Edge Add-ons)
+5. **Create release packages**:
+   ```bash
+   npm run release
+   ```
+6. **Create a GitHub release** with the version tag and release notes
+7. **Submit to browser stores** (Chrome Web Store, Firefox Add-ons, Microsoft Edge Add-ons)
 
 ### Version Numbering
 
@@ -280,6 +313,16 @@ We follow [Semantic Versioning](https://semver.org/):
 - **MAJOR** version for incompatible API changes
 - **MINOR** version for new features in a backward-compatible manner
 - **PATCH** version for backward-compatible bug fixes
+
+## Chrome Web Store Compliance
+
+When working on the codebase, be aware that Chrome Web Store has strict requirements for code readability:
+
+- **No Obfuscation**: Code must not be intentionally obfuscated or made difficult to review
+- **Minification Only**: Standard minification (removing whitespace, shortening variable names) is allowed
+- **Keep Function Names**: Function and class names should be preserved for readability
+
+Our build process is configured to comply with these requirements. Do not add code obfuscation to the build process.
 
 ## Thank You!
 

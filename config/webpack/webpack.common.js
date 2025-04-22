@@ -15,16 +15,21 @@ module.exports = {
         minimizer: [
             new TerserPlugin({
                 terserOptions: {
+                    // Chrome Web Store compliant settings - no obfuscation
                     compress: {
                         drop_console: false,
                         passes: 2
                     },
                     mangle: {
+                        // Only basic variable name minification, not obfuscation
                         reserved: ['chrome', 'browser'] // Prevent mangling of browser API names
                     },
                     format: {
                         comments: false
-                    }
+                    },
+                    // Make sure the code is readable and not obfuscated
+                    keep_classnames: true,
+                    keep_fnames: true
                 },
                 extractComments: false
             })

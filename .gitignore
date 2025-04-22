@@ -18,6 +18,7 @@ yarn.lock
 dist/
 build/
 .tmp/
+releases/
 
 # Environment variables
 .env
@@ -65,4 +66,6 @@ coverage/
 .env.test.local
 .env.production.local
 .env.local
-/safari/xcode_project/
+
+# Safari extension build directory
+/manifests/safari/xcode_project/

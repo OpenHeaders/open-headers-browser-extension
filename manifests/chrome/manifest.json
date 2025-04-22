@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
   "description": "Manage HTTP headers with static and dynamic sources and content auto-refresh. Dynamic sources: requests, env vars, files.",
-  "version": "1.0.1",
+  "version": "1.1.1",
   "manifest_version": 3,
   "action": {
     "default_popup": "popup.html",
@@ -19,7 +19,9 @@
   ],
   "host_permissions": [
     "<all_urls>",
-    "file:///*"
+    "file:///*",
+    "ws://127.0.0.1:59210/*",
+    "http://127.0.0.1:59210/*"
   ],
   "background": {
     "service_worker": "js/background/index.js",
@@ -35,5 +37,8 @@
     "16": "images/icon16.png",
     "48": "images/icon48.png",
     "128": "images/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; connect-src 'self' ws://127.0.0.1:59210 http://127.0.0.1:59210; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com"
   }
 }
