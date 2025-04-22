@@ -4,18 +4,17 @@ const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = merge(common, {
-    mode: 'production',
+    mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
     output: {
-        path: path.resolve(__dirname, 'dist/safari'),
+        path: path.resolve(__dirname, '../../dist/edge'),
     },
     plugins: [
         new CopyPlugin({
             patterns: [
+                { from: 'manifests/edge/manifest.json' },
                 { from: 'shared/popup.html' },
                 { from: 'shared/popup.css' },
-                { from: 'shared/images', to: 'images' },
-                { from: 'safari/manifest.json' },
-                { from: 'safari/SafariAPIs.js', to: 'js/safari/SafariAPIs.js' }
+                { from: 'shared/images', to: 'images' }
             ]
         })
     ]

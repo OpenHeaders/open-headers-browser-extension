@@ -86,38 +86,70 @@ The extension consists of these main components:
 
 ```
 open-headers/
-├── images/              # Extension icons
-├── js/
-│   ├── background/      # Background service worker scripts
-│   │   ├── index.js     # Entry point for background script
-│   │   ├── background.js # Main background worker logic
-│   │   ├── header-manager.js # Header rule management
-│   │   ├── rule-validator.js # Header validation
-│   │   ├── websocket.js # WebSocket client
-│   │   └── safari-websocket-adapter.js # Safari-specific WebSocket handling
-│   ├── popup/           # Popup UI scripts
-│   │   ├── index.js     # Entry point for popup
-│   │   ├── popup.js     # Main popup logic
-│   │   ├── entry-manager.js # Entry management
-│   │   ├── ui-manager.js # UI utilities
-│   │   ├── domain-tags-manager.js # Domain tag input management
-│   │   ├── config-manager.js # Import/export functionality
-│   │   ├── draft-manager.js # Draft inputs management
-│   │   └── notification-system.js # Notification display
-│   └── shared/          # Shared utilities
-│       ├── utils.js     # Common utility functions
-│       └── browser-api.js # Browser detection and compatibility layer
-├── manifest.json        # Chrome/Edge manifest
-├── manifest.firefox.json # Firefox-specific manifest
-├── manifest.safari.json # Safari-specific manifest
-├── popup.html           # Popup UI HTML
-├── popup.css            # Popup UI styles
+├── shared/              # Shared code and resources
+│   ├── js/
+│   │   ├── background/  # Background service worker scripts
+│   │   │   ├── index.js # Entry point for background script
+│   │   │   ├── background.js # Main background worker logic
+│   │   │   ├── header-manager.js # Header rule management
+│   │   │   ├── rule-validator.js # Header validation
+│   │   │   ├── websocket.js # WebSocket client
+│   │   │   └── safari-websocket-adapter.js # Safari-specific WebSocket handling
+│   │   ├── popup/       # Popup UI scripts
+│   │   │   ├── index.js # Entry point for popup
+│   │   │   ├── popup.js # Main popup logic
+│   │   │   ├── entry-manager.js # Entry management
+│   │   │   ├── ui-manager.js # UI utilities
+│   │   │   ├── domain-tags-manager.js # Domain tag input management
+│   │   │   ├── config-manager.js # Import/export functionality
+│   │   │   ├── draft-manager.js # Draft inputs management
+│   │   │   └── notification-system.js # Notification display
+│   │   └── shared/      # Shared utilities
+│   │       ├── utils.js # Common utility functions
+│   │       └── browser-api.js # Browser detection and compatibility layer
+│   ├── popup.html       # Popup UI HTML
+│   ├── popup.css        # Popup UI styles
+│   └── images/          # Icons and images
+│
+├── manifests/           # Browser-specific manifest files
+│   ├── chrome/
+│   │   └── manifest.json # Chrome manifest
+│   ├── firefox/
+│   │   └── manifest.json # Firefox manifest
+│   ├── edge/
+│   │   └── manifest.json # Edge manifest
+│   └── safari/
+│       └── manifest.json # Safari manifest
+│
+├── config/              # Configuration files
+│   ├── webpack/         # Webpack configurations
+│   │   ├── webpack.common.js # Common webpack config
+│   │   ├── webpack.chrome.js # Chrome-specific webpack config
+│   │   ├── webpack.firefox.js # Firefox-specific webpack config
+│   │   ├── webpack.edge.js # Edge-specific webpack config
+│   │   ├── webpack.safari.js # Safari-specific webpack config
+│   │   └── webpack.dev.js # Development webpack config
+│   └── scripts/         # Build and utility scripts
+│       ├── build-utils.js # Post-build processing without obfuscation
+│       └── release.js   # Release script for creating packages
+│
+├── docs/                # Documentation
+│   ├── DEVELOPER.md     # This file
+│   ├── CONTRIBUTING.md  # Contribution guidelines
+│   ├── PRIVACY.md       # Privacy policy
+│   └── chrome-store-compliance.md # Chrome Web Store compliance guide
+│
+├── dist/                # Build output (gitignored)
+│   ├── chrome/
+│   ├── firefox/
+│   ├── edge/
+│   └── safari/
+│
+├── releases/            # Release packages (gitignored)
+│
 ├── package.json         # npm package configuration
-├── webpack.chrome.js    # Chrome build configuration
-├── webpack.firefox.js   # Firefox build configuration
-├── webpack.edge.js      # Edge build configuration
-├── webpack.safari.js    # Safari build configuration
-└── webpack.config.js    # Common webpack configuration
+├── README.md
+└── .gitignore
 ```
 
 ### Development Workflow
@@ -133,10 +165,11 @@ open-headers/
 3. Load the extension in the appropriate browser using "Load unpacked" (Chrome/Edge), "Load Temporary Add-on" (Firefox), or the Safari converter
 4. Test your changes
 5. For production build, run `npm run build` to build for all browsers
+6. Create release packages with `npm run release`
 
 ## Browser Compatibility
 
-Open Headers now supports multiple browsers with specific adaptations for each:
+Open Headers supports multiple browsers with specific adaptations for each:
 
 ### Cross-Browser Implementation
 
@@ -158,10 +191,10 @@ The extension uses browser detection and compatibility layers to ensure consiste
 ### Build Configuration
 
 Each browser has its own webpack configuration:
-- `webpack.chrome.js` - Chrome configuration
-- `webpack.firefox.js` - Firefox configuration
-- `webpack.edge.js` - Edge configuration
-- `webpack.safari.js` - Safari configuration
+- `config/webpack/webpack.chrome.js` - Chrome configuration
+- `config/webpack/webpack.firefox.js` - Firefox configuration
+- `config/webpack/webpack.edge.js` - Edge configuration
+- `config/webpack/webpack.safari.js` - Safari configuration
 
 ### Testing Cross-Browser
 
@@ -238,36 +271,51 @@ npm run build
 
 This will:
 1. Bundle all scripts with Webpack
-2. Minify and optimize the code
+2. Minify (but not obfuscate) the code to comply with Chrome Web Store requirements
 3. Create browser-specific builds in the `dist` directory
+
+### Creating Release Packages
+
+To create zip packages for distribution:
+
+```bash
+npm run release
+```
+
+This will:
+1. Build all browser versions
+2. Create zip packages in the `releases` directory
+3. Display a summary of the created packages
 
 ### Browser Store Submissions
 
 #### Chrome Web Store
-1. Zip the contents of the `dist/chrome` directory
+1. Create a release package using `npm run release`
 2. Sign in to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole/)
-3. Upload the zip file
+3. Upload the Chrome zip file from the `releases` directory
 4. Complete the store listing information
 5. Submit for review
 
+**Important**: Chrome Web Store has strict requirements about code readability. The extension code must not be obfuscated. Our build process is configured to comply with these requirements.
+
 #### Firefox Add-ons
-1. Zip the contents of the `dist/firefox` directory
+1. Create a release package using `npm run release`
 2. Sign in to [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/)
-3. Upload the zip file
+3. Upload the Firefox zip file from the `releases` directory
 4. Complete the listing information
 5. Submit for review
 
 #### Microsoft Edge Add-ons
-1. Zip the contents of the `dist/edge` directory
+1. Create a release package using `npm run release`
 2. Sign in to [Microsoft Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/overview)
-3. Upload the zip file
+3. Upload the Edge zip file from the `releases` directory
 4. Complete the listing information
 5. Submit for review
 
 #### Safari App Store
-1. Build Safari version: `npm run build:safari`
-2. Convert to Safari app: `npm run safari:convert`
-3. Open the Xcode project
+1. Create a release package using `npm run release`
+2. Run `npm run safari:convert` to convert to a Safari app
+3. Open the Xcode project in `safari/xcode_project`
 4. Sign with your Apple Developer account
 5. Archive and upload to App Store Connect
 6. Complete the listing information
@@ -349,20 +397,4 @@ The extension and companion app communicate with JSON messages:
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`npm test`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-### Coding Standards
-
-- Use ES6+ JavaScript features
-- Document functions with JSDoc comments
-- Follow the existing code structure
-- Update documentation when adding new features
-- Test across multiple browsers when making significant changes
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and procedures.

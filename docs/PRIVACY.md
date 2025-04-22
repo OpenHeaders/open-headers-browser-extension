@@ -9,7 +9,7 @@ Open Headers is committed to protecting your privacy and ensuring transparency a
 ## 1. Overview
 
 Open Headers is an open source project consisting of:
-- A Chrome browser extension for managing HTTP headers
+- A browser extension for managing HTTP headers (available for Chrome, Firefox, Edge, and Safari)
 - An optional companion desktop application for accessing local system resources
 
 Both components are available on GitHub under open source licenses, allowing for complete code inspection and verification.
@@ -26,7 +26,7 @@ Both components are available on GitHub under open source licenses, allowing for
 - Any data from your computer
 
 **Local Storage Only:**
-- Your header configurations are stored locally in your browser using Chrome's storage API
+- Your header configurations are stored locally in your browser using the browser's storage API
 - Dynamic header sources accessed through the companion app remain on your local device
 - No data is transmitted to our servers or third parties
 
@@ -94,4 +94,4 @@ As an open source project, we welcome community feedback and contributions to im
 
 By using Open Headers, you consent to this Privacy Policy. As we do not collect any personal information, there is no data to manage or delete.
 
-This Privacy Policy is provided to meet Chrome Web Store requirements and to be transparent about our commitment to privacy and data security.
+This Privacy Policy is provided to meet browser extension store requirements and to be transparent about our commitment to privacy and data security.
