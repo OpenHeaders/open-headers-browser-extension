@@ -5,7 +5,7 @@ const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = merge(common, {
     mode: 'development',  // Use development mode instead of production
-    devtool: 'source-map', // Add source maps for better debugging
+    devtool: 'inline-source-map',
     optimization: {
         minimize: false     // Disable minimization
     },
