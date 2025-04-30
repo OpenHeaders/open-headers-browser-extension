@@ -20,8 +20,8 @@
   "permissions": [
     "storage",
     "alarms",
-    "tabs",
     "declarativeNetRequest"
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>",
