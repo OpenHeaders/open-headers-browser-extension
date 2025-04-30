@@ -15,7 +15,9 @@ module.exports = merge(common, {
                 { from: 'shared/popup.css' },
                 { from: 'shared/images', to: 'images' },
                 { from: 'manifests/safari/manifest.json' },
-                { from: 'manifests/safari/SafariAPIs.js', to: 'js/safari/SafariAPIs.js' }
+                { from: 'manifests/safari/SafariAPIs.js', to: 'js/safari/SafariAPIs.js' },
+                { from: 'shared/welcome.html' },
+                { from: 'shared/js/welcome.js', to: 'js/welcome.js' }
             ]
         })
     ]

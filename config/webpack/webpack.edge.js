@@ -5,8 +5,14 @@ const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = merge(common, {
     mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+    // Explicitly use a source map option that doesn't rely on eval
+    devtool: process.env.NODE_ENV === 'production' ? false : 'inline-source-map',
     output: {
         path: path.resolve(__dirname, '../../dist/edge'),
+    },
+    optimization: {
+        // Ensure we don't use eval in Edge builds
+        minimize: process.env.NODE_ENV === 'production',
     },
     plugins: [
         new CopyPlugin({
@@ -14,7 +20,9 @@ module.exports = merge(common, {
                 { from: 'manifests/edge/manifest.json' },
                 { from: 'shared/popup.html' },
                 { from: 'shared/popup.css' },
-                { from: 'shared/images', to: 'images' }
+                { from: 'shared/images', to: 'images' },
+                { from: 'shared/welcome.html' },
+                { from: 'shared/js/welcome.js', to: 'js/welcome.js' }
             ]
         })
     ]

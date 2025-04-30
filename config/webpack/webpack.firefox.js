@@ -8,13 +8,21 @@ module.exports = merge(common, {
     output: {
         path: path.resolve(__dirname, '../../dist/firefox'),
     },
+    // Add this to prevent webpack from using eval() in development mode
+    devtool: process.env.NODE_ENV === 'production' ? false : 'inline-source-map',
+    optimization: {
+        // Avoid using eval in Firefox builds
+        minimize: process.env.NODE_ENV === 'production',
+    },
     plugins: [
         new CopyPlugin({
             patterns: [
                 { from: 'manifests/firefox/manifest.json' },
                 { from: 'shared/popup.html' },
                 { from: 'shared/popup.css' },
-                { from: 'shared/images', to: 'images' }
+                { from: 'shared/images', to: 'images' },
+                { from: 'shared/welcome.html' },
+                { from: 'shared/js/welcome.js', to: 'js/welcome.js' }
             ]
         })
     ]

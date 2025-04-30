@@ -1,9 +1,8 @@
 {
   "name": "Open Headers",
   "description": "Manage HTTP headers with static and dynamic sources and content auto-refresh. Dynamic sources: requests, env vars, files.",
-  "short_description": "Easily manage HTTP headers across your favorite websites",
   "author": "Open Headers",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "manifest_version": 3,
   "action": {
     "default_popup": "popup.html",
@@ -16,7 +15,8 @@
   "permissions": [
     "storage",
     "alarms",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -28,7 +28,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["*.html", "*.js", "*.css", "js/*.js", "js/**/*.js"],
+      "resources": ["*.html", "*.js", "*.css", "js/*.js", "js/**/*.js", "images/*"],
       "matches": ["<all_urls>"]
     }
   ],
@@ -36,5 +36,8 @@
     "16": "images/icon16.png",
     "48": "images/icon48.png",
     "128": "images/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; connect-src 'self' ws://127.0.0.1:59210 http://127.0.0.1:59210 wss://127.0.0.1:59211 https://127.0.0.1:59211; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com"
   }
 }

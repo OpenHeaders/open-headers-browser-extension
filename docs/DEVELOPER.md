@@ -12,6 +12,7 @@ The extension consists of these main components:
 - **Background Service Worker**: Runs in the background to manage header rules
 - **WebSocket Client**: Connects to the companion app for dynamic sources
 - **Header Rule System**: Applies headers to matching requests
+- **Welcome Page**: Interactive setup guide for new users
 
 ### Modules
 
@@ -31,6 +32,7 @@ The extension consists of these main components:
 | `utils.js` | Shared utility functions |
 | `browser-api.js` | Browser detection and compatibility layer |
 | `safari-websocket-adapter.js` | Safari-specific WebSocket handling |
+| `welcome.js` | Controls the interactive welcome page functionality |
 
 ### Data Flow
 
@@ -109,6 +111,8 @@ open-headers/
 │   │       └── browser-api.js # Browser detection and compatibility layer
 │   ├── popup.html       # Popup UI HTML
 │   ├── popup.css        # Popup UI styles
+│   ├── welcome.html     # Welcome page HTML
+│   ├── js/welcome.js    # Welcome page JavaScript
 │   └── images/          # Icons and images
 │
 ├── manifests/           # Browser-specific manifest files
@@ -182,11 +186,70 @@ The extension uses browser detection and compatibility layers to ensure consiste
 
 - **WebSocket Connection**: Different implementations for browser security models
   - Chrome/Edge: Standard WebSocket implementation
-  - Firefox: Special handling for strict security requirements and protocol upgrade
+  - Firefox: Dual protocol implementation (WSS/WS) with certificate handling
   - Safari: Adaptation for Safari's unique WebKit security model
 
 - **Storage APIs**: Unified API to handle browser differences
   - The `browser-api.js` module provides cross-browser abstraction
+
+### WebSocket Security Implementation (v1.2.0+)
+
+Firefox has stricter security requirements for WebSocket connections. In version 1.2.0, we've implemented:
+
+1. **Dual Protocol Support**:
+   - Secure WebSocket (`wss://`) on port 59211 with proper certificate handling
+   - Fallback to standard WebSocket (`ws://`) on port 59210 if SSL handshake fails
+
+2. **Certificate Handling Flow**:
+   - First-time users are guided through certificate acceptance
+   - The extension detects previous successful connections
+   - Smart protocol selection based on previous successes
+
+3. **Connection Recovery**:
+   - Protocol switching on connection failure
+   - Persistent storage of successful connection methods
+   - Automatic reconnection with appropriate protocol
+
+Implementation details can be found in `websocket.js`:
+```javascript
+// Firefox-specific WebSocket connection handling
+function connectWebSocketFirefox(onSourcesReceived) {
+    // Check for previously accepted certificate
+    storage.local.get(['certificateAccepted'], (result) => {
+        const certificateAccepted = result.certificateAccepted;
+        
+        if (certificateAccepted) {
+            // Use secure WSS endpoint
+            connectFirefoxWss(onSourcesReceived);
+        } else {
+            // Show welcome page for certificate acceptance
+            openFirefoxOnboardingPage();
+            // Try secure connection anyway
+            connectFirefoxWss(onSourcesReceived);
+        }
+    });
+}
+```
+
+### Welcome Page Implementation (v1.2.0+)
+
+The interactive welcome page guides users through the setup process with browser-specific steps:
+
+1. **Components**:
+   - `welcome.html`: Browser-adaptive UI with step-by-step guidance
+   - `welcome.js`: Browser detection and UI flow management
+   - `background.js`: Welcome page invocation logic
+
+2. **Browser-Specific Flows**:
+   - **Chrome/Edge**: Simple connection verification
+   - **Firefox**: Certificate acceptance guidance and verification
+   - **Safari**: Special setup instructions for WebKit environment
+
+3. **Implementation Notes**:
+   - Uses CSS to show/hide browser-specific elements
+   - Detects the browser automatically
+   - Stores setup completion status to prevent repeated displays
+   - Provides helpful troubleshooting options
 
 ### Build Configuration
 
@@ -203,15 +266,17 @@ When testing, verify these browser-specific aspects:
 2. **Header Injection**: Verify headers are applied consistently
 3. **CSS/UI**: Check that styling works properly in each browser
 4. **Storage**: Confirm settings persist between sessions
+5. **Welcome Page**: Test the welcome flow for each browser
 
 ### Known Browser Differences
 
 | Feature | Chrome | Firefox | Edge | Safari |
 |---------|--------|---------|------|--------|
-| WebSocket Security | Standard | Strict | Standard | Strictest |
+| WebSocket Security | Standard | Strict (WSS) | Standard | Strictest |
 | CSP Requirements | Moderate | High | Moderate | Very High |
 | Resource Types | All Supported | Limited Set | All Supported | Limited Set |
 | Manifest Support | Full v3 | v3 with limitations | Full v3 | v3 with WebKit specifics |
+| Welcome Flow | Simple | Certificate-focused | Simple | WebKit-specific |
 
 ## Testing
 
@@ -232,17 +297,28 @@ When testing, verify these browser-specific aspects:
 
 3. Cross-browser specific tests:
    - Test WebSocket connection in each browser
+   - For Firefox, test both WSS and WS connections
+   - Test the welcome page flow for each browser
    - Verify that headers are applied to all resource types
    - Check that UI styling is consistent
    - Test cache prevention functionality
 
-### Unit Tests
+### Welcome Page Testing
 
-Run the test suite:
-
-```bash
-npm test
-```
+Verify the welcome page functions correctly:
+1. Reset the storage to simulate first install:
+   ```javascript
+   // In browser console
+   chrome.storage.local.remove(['setupCompleted', 'certificateAccepted']);
+   // or for Firefox
+   browser.storage.local.remove(['setupCompleted', 'certificateAccepted']);
+   ```
+2. Reload the extension
+3. Verify the welcome page appears automatically
+4. Test each step in the welcome flow
+5. Verify certificate acceptance (Firefox)
+6. Confirm connection verification works properly
+7. Ensure setup state is saved correctly
 
 ### End-to-End Testing
 
@@ -342,13 +418,51 @@ The browser-api.js module provides a unified interface for browser APIs:
 
 ### WebSocket Connection Handling
 
-Browser-specific WebSocket handling:
+Browser-specific WebSocket handling in v1.2.0:
 
-- **Firefox**: Uses direct WebSocket URL construction with security checks
-- **Chrome/Edge**: Uses standard WebSocket implementation
-- **Safari**: Uses adapter for WebKit security model
-- Implements auto-reconnection with browser-specific error handling
-- Detects removed sources and updates header configurations accordingly
+- **Firefox** (Enhanced in v1.2.0): 
+  - Primary: Secure WebSocket (`wss://`) on port 59211
+  - Certificate acceptance via welcome page
+  - Fallback to standard WebSocket (`ws://`) if needed
+  - Smart connection restoration based on previous success
+
+- **Chrome/Edge**: 
+  - Standard WebSocket implementation on port 59210
+  - Simplified connection flow
+
+- **Safari**: 
+  - Uses adapter for WebKit security model
+  - Special handling for Safari's strict security requirements
+
+All browsers implement:
+- Auto-reconnection with browser-specific error handling
+- Detection of removed sources and header configuration updates
+- Connection status persistence across browser sessions
+
+### Welcome Page Implementation
+
+The welcome page (added in v1.2.0):
+
+- **Browser Detection**: Automatically detects browser type
+- **Adaptive UI**: Shows only relevant steps for each browser
+- **Firefox Flow**:
+  1. Check if companion app is running
+  2. Guide through certificate acceptance process
+  3. Verify secure connection
+  
+- **Chrome/Edge/Safari Flow**:
+  1. Check if companion app is running
+  2. Verify connection
+  
+- **Persistence**:
+  - Stores setup completion status
+  - Remembers certificate acceptance for Firefox
+  - Prevents showing welcome page on subsequent launches
+  
+- **Error Handling**:
+  - Provides retry options if connection fails
+  - Shows helpful error messages
+  - Offers links to documentation for troubleshooting
 
 ### Cache Prevention for Headers
 
@@ -361,7 +475,9 @@ To ensure headers are applied consistently:
 
 ## Server Component
 
-The companion app runs a WebSocket server on port 59210 that provides dynamic source values to the extension.
+The companion app runs WebSocket servers on two ports:
+- Standard WebSocket server on port 59210 (ws://)
+- Secure WebSocket server on port 59211 (wss://)
 
 ### Source Types
 

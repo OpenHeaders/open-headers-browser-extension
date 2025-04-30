@@ -29,9 +29,9 @@ The extension works with the Open Headers companion app (optional) to access loc
 
 ### From Browser Web Stores
 
-- **Chrome**: Visit the [Chrome Web Store](https://github.com/OpenHeaders/open-headers-browser-extension)
-- **Firefox**: Visit [Firefox Add-ons](https://github.com/OpenHeaders/open-headers-browser-extension)
-- **Edge**: Visit [Microsoft Edge Add-ons](https://github.com/OpenHeaders/open-headers-browser-extension)
+- **Chrome**: Visit the [Chrome Web Store](https://chromewebstore.google.com/detail/ablaikadpbfblkmhpmbbnbbfjoibeejb?utm_source=item-share-cb)
+- **Firefox**: Visit [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/open-headers/)
+- **Edge**: Visit [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/open-headers/gnbibobkkddlflknjkgcmokdlpddegpo)
 - **Safari**: Currently only available via manual installation (requires macOS)
 
 ### Manual Installation (Developer Mode)
@@ -59,6 +59,16 @@ The extension works with the Open Headers companion app (optional) to access loc
 4. Sign the app with your Apple ID in Xcode
 5. Run the app in Xcode
 6. Enable the extension in Safari under Settings → Extensions
+
+## First-Time Setup
+
+When you first install Open Headers, a welcome page will guide you through the setup process:
+
+1. **Install the Companion App** if you want to use dynamic sources
+2. **Firefox Users**: Accept the security certificate when prompted
+3. **Verify Connection** between the browser extension and companion app
+
+The welcome page adapts to your specific browser, showing only the steps relevant to you.
 
 ## Usage
 
@@ -149,8 +159,8 @@ For dynamic sources (HTTP requests, files, environment variables), you'll need t
 - Most efficient WebSocket connection handling
 
 ### Firefox
-- Requires specific permissions for WebSocket connections
-- Has limitations on some resource types
+- Enhanced secure WebSocket connection support in v1.2.0
+- Interactive certificate acceptance process
 - More strict Content Security Policy enforcement
 
 ### Safari
@@ -164,7 +174,7 @@ For dynamic sources (HTTP requests, files, environment variables), you'll need t
 - **Dynamic Source Missing**: Check that the companion app is running
 - **Value Not Updating**: The companion app may have lost track of the source; restart it
 - **Invalid Header**: Some header values may be sanitized if they contain invalid characters
-- **Firefox Connection Issues**: Ensure the host permissions include the correct WebSocket URL
+- **Firefox Connection Issues**: Use the welcome page to verify certificate acceptance
 - **Safari Connection Issues**: Safari may require additional permissions for WebSocket connections
 
 ## Contributing
