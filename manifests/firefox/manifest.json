@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
   "description": "Manage HTTP headers with static and dynamic sources and content auto-refresh. Dynamic sources: requests, env vars, files.",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "manifest_version": 3,
   "browser_specific_settings": {
     "gecko": {
@@ -20,14 +20,12 @@
   "permissions": [
     "storage",
     "alarms",
-    "scripting",
+    "tabs",
     "declarativeNetRequest"
   ],
   "host_permissions": [
     "<all_urls>",
-    "file:///*",
-    "ws://127.0.0.1:59210/*",
-    "http://127.0.0.1:59210/*"
+    "file:///*"
   ],
   "background": {
     "scripts": ["js/background/index.js"],
@@ -35,7 +33,14 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["*.html", "*.js", "*.css", "js/*.js", "js/**/*.js"],
+      "resources": [
+        "*.html",
+        "*.js",
+        "*.css",
+        "js/*.js",
+        "js/**/*.js",
+        "images/*"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
@@ -45,6 +50,6 @@
     "128": "images/icon128.png"
   },
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; connect-src 'self' ws://127.0.0.1:59210 http://127.0.0.1:59210; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com"
+    "extension_pages": "default-src 'self'; connect-src 'self' ws://127.0.0.1:59210 http://127.0.0.1:59210 wss://127.0.0.1:59211 https://127.0.0.1:59211; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com"
   }
 }

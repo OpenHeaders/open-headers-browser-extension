@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const headerElem = document.querySelector('h1');
     const appInfo = document.querySelector('.app-info');
 
+    const footerBottomSection = document.querySelector('.footer-bottom');
+    let welcomeButton = null;
+
     // Create the status indicator in the header
     const statusIndicator = initializeStatusIndicator(headerElem);
 
@@ -120,6 +123,50 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         });
+    }
+
+    function addWelcomeButton() {
+        // Only add the button if the footer-bottom section exists
+        if (footerBottomSection) {
+            // Create the welcome button
+            welcomeButton = document.createElement('a');
+            welcomeButton.href = '#';
+            welcomeButton.id = 'welcomeButton';
+            welcomeButton.title = 'Open Setup Guide';
+            welcomeButton.innerHTML = '<i class="fas fa-book-open"></i>';
+            welcomeButton.style.color = '#4285F4';
+            welcomeButton.style.marginLeft = '8px';
+            welcomeButton.style.fontSize = '16px';
+            welcomeButton.style.transition = 'all 0.2s ease';
+
+            // Add hover effect
+            welcomeButton.addEventListener('mouseenter', () => {
+                welcomeButton.style.transform = 'scale(1.2)';
+            });
+
+            welcomeButton.addEventListener('mouseleave', () => {
+                welcomeButton.style.transform = 'scale(1)';
+            });
+
+            // Add click handler to open the welcome page
+            welcomeButton.addEventListener('click', (e) => {
+                e.preventDefault();
+
+                // Send a message to the background script to open the welcome page
+                runtime.sendMessage({ type: 'openWelcomePage' }, (response) => {
+                    // Close the popup after sending the message
+                    window.close();
+                });
+            });
+
+            // Add to the social-links div if it exists, otherwise to the footer-bottom
+            const socialLinks = footerBottomSection.querySelector('.social-links');
+            if (socialLinks) {
+                socialLinks.appendChild(welcomeButton);
+            } else {
+                footerBottomSection.appendChild(welcomeButton);
+            }
+        }
     }
 
     // Function to update the app info visibility based on connection status
@@ -443,6 +490,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         isConnected = false;
         updateConnectionStatus(false);
         updateAppInfoVisibility(false);
+
+        addWelcomeButton();
 
         // Load entries first - this populates currentSavedData
         loadEntries(entriesList);

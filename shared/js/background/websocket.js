@@ -7,7 +7,11 @@ import { updateNetworkRules } from './header-manager.js';
 
 // Configuration
 const WS_SERVER_URL = 'ws://127.0.0.1:59210';
+const WSS_SERVER_URL = 'wss://127.0.0.1:59211'; // Secure endpoint for Firefox
 const RECONNECT_DELAY_MS = 5000;
+
+// Certificate fingerprint that matches the hardcoded certificate
+const EXPECTED_CERT_FINGERPRINT = "53:64:0A:FA:73:44:F3:14:DA:9D:C9:5E:F1:93:1F:82:45:62:B5:5E";
 
 // State variables
 let socket = null;
@@ -15,6 +19,7 @@ let reconnectTimer = null;
 let isConnecting = false;
 let isConnected = false;
 let allSources = [];
+let welcomePageOpenedBySocket = false;
 
 /**
  * Function to generate a simple hash of sources to detect changes
@@ -50,6 +55,55 @@ function broadcastConnectionStatus() {
             console.log("Info: Could not send connection status - no listeners");
         }
     });
+}
+
+/**
+ * Opens the Firefox welcome/onboarding page instead of directly showing the certificate error
+ */
+function openFirefoxOnboardingPage() {
+    console.log('Info: Opening Firefox welcome page');
+
+    try {
+        if (typeof browser !== 'undefined' && browser.tabs && browser.tabs.create) {
+            const welcomePageUrl = browser.runtime.getURL('welcome.html');
+            console.log('Info: Welcome page URL:', welcomePageUrl);
+
+            browser.tabs.create({
+                url: welcomePageUrl,
+                active: true
+            }).then(tab => {
+                console.log('Info: Opened Firefox welcome tab:', tab.id);
+            }).catch(err => {
+                console.log('Info: Failed to open welcome page:', err.message);
+                // Fallback to direct method if welcome page fails
+                tryDirectCertificateHelp();
+            });
+        } else {
+            console.log('Info: Cannot open welcome page - missing permissions');
+            tryDirectCertificateHelp();
+        }
+    } catch (e) {
+        console.log('Info: Error opening welcome page:', e.message);
+        tryDirectCertificateHelp();
+    }
+}
+
+/**
+ * Fallback method to directly open certificate page if welcome page fails
+ */
+function tryDirectCertificateHelp() {
+    try {
+        if (typeof browser !== 'undefined' && browser.tabs && browser.tabs.create) {
+            browser.tabs.create({
+                url: 'https://127.0.0.1:59211/ping',
+                active: true
+            }).catch(err => {
+                console.log('Info: Failed to open certificate page directly:', err.message);
+            });
+        }
+    } catch (e) {
+        console.log('Info: Error with direct certificate help:', e.message);
+    }
 }
 
 /**
@@ -121,11 +175,11 @@ export async function connectWebSocket(onSourcesReceived) {
         }
     }
 
-    // For Firefox, use a different approach to avoid console errors
+    // For Firefox, use the specialized approach
     if (isFirefox) {
         console.log('Info: Using Firefox-specific connection approach');
 
-        // First check server availability with fetch to avoid WebSocket errors
+        // First check server availability with Firefox-specific check
         const isServerAvailable = await checkServerAvailabilityForFirefox();
         if (!isServerAvailable) {
             console.log('Info: Server not available for Firefox, skipping connection');
@@ -133,7 +187,7 @@ export async function connectWebSocket(onSourcesReceived) {
             return;
         }
 
-        // Use a modified approach for Firefox
+        // Use Firefox-specific connection logic
         connectWebSocketFirefox(onSourcesReceived);
         return;
     }
@@ -294,36 +348,90 @@ export async function connectWebSocket(onSourcesReceived) {
 }
 
 /**
- * Creates a WebSocket directly bypassing Firefox security restrictions
- * This approach uses a workaround to force the ws:// protocol
- */
-function createFirefoxWebSocket() {
-    console.log('Info: Creating WebSocket with direct constructor bypass');
-
-    try {
-        // Force the connection to use non-secure WebSocket
-        // We use a JavaScript trick to prevent Firefox from upgrading to wss://
-        const wsConstructor = WebSocket;
-        const wsUrl = 'ws://127.0.0.1:59210';
-
-        // Log the actual URL we're connecting to
-        console.log('Info: Constructing WebSocket with URL:', wsUrl);
-
-        // Create the socket using the native constructor directly
-        // This can sometimes bypass Firefox's automatic protocol upgrading
-        return new wsConstructor(wsUrl);
-    } catch (error) {
-        console.error('Info: WebSocket creation error:', error.message || 'Unknown error');
-        throw error;
-    }
-}
-
-/**
  * Firefox-specific implementation for WebSocket connection
+ * Uses smart selection between WS and WSS based on previous success
  * @param {Function} onSourcesReceived - Callback when sources are received
  */
 function connectWebSocketFirefox(onSourcesReceived) {
-    console.log('Info: Starting Firefox WebSocket connection (direct bypass)');
+    storage.local.get(['lastSuccessfulConnection', 'certificateAccepted', 'setupCompleted'], (result) => {
+        // Check if we've successfully used WS in the past
+        const lastConnection = result.lastSuccessfulConnection;
+        const certificateAccepted = result.certificateAccepted;
+        const setupCompleted = result.setupCompleted;
+
+        // If certificate is already accepted or setup is completed, don't show welcome page
+        if (certificateAccepted || setupCompleted) {
+            console.log('Info: Certificate already accepted or setup completed, skipping welcome page');
+
+            // If the last successful connection was WS, try that first
+            if (lastConnection && lastConnection.type === 'ws-fallback' &&
+                Date.now() - lastConnection.timestamp < 86400000) { // Last 24 hours
+                console.log('Info: Using previous successful WS connection');
+                connectFirefoxWs(onSourcesReceived);
+            } else {
+                // Try WSS with accepted certificate
+                connectFirefoxWss(onSourcesReceived);
+            }
+        } else if (!certificateAccepted && !welcomePageOpenedBySocket) {
+            // First time user - show welcome page (but only once) and try WSS
+            welcomePageOpenedBySocket = true;
+            console.log('Info: First time user detected, showing welcome page');
+
+            // Check if a welcome page is already open before creating a new one
+            if (typeof browser !== 'undefined' && browser.tabs && browser.tabs.query) {
+                const welcomePageUrl = browser.runtime.getURL('welcome.html');
+
+                browser.tabs.query({}).then(tabs => {
+                    const welcomeTabs = tabs.filter(tab =>
+                        tab.url === welcomePageUrl ||
+                        tab.url.startsWith(welcomePageUrl)
+                    );
+
+                    if (welcomeTabs.length > 0) {
+                        // Welcome page is already open, just focus it
+                        console.log('Info: Welcome page already exists, focusing it');
+                        browser.tabs.update(welcomeTabs[0].id, {active: true}).catch(err => {
+                            console.log('Info: Error focusing existing welcome tab:', err.message);
+                        });
+                    } else {
+                        // Only open a new welcome page if one doesn't exist
+                        console.log('Info: Opening Firefox welcome page');
+                        browser.tabs.create({
+                            url: welcomePageUrl,
+                            active: true
+                        }).then(tab => {
+                            console.log('Info: Opened Firefox welcome tab:', tab.id);
+                        }).catch(err => {
+                            console.log('Info: Failed to open welcome page:', err.message);
+                        });
+                    }
+                }).catch(err => {
+                    console.log('Info: Error checking for existing welcome tabs:', err.message);
+                });
+            }
+
+            // Connect to WSS endpoint
+            connectFirefoxWss(onSourcesReceived);
+        } else {
+            // Existing logic for connection attempts
+            if (lastConnection && lastConnection.type === 'ws-fallback' &&
+                Date.now() - lastConnection.timestamp < 86400000) { // Last 24 hours
+                console.log('Info: Using previous successful WS connection');
+                connectFirefoxWs(onSourcesReceived);
+            } else {
+                // Try WSS with accepted certificate
+                connectFirefoxWss(onSourcesReceived);
+            }
+        }
+    });
+}
+
+/**
+ * Connect to WSS endpoint for Firefox
+ * @param {Function} onSourcesReceived - Callback when sources are received
+ */
+function connectFirefoxWss(onSourcesReceived) {
+    console.log('Info: Starting Firefox WebSocket connection using WSS');
 
     try {
         const connectionTimeout = setTimeout(() => {
@@ -332,18 +440,28 @@ function connectWebSocketFirefox(onSourcesReceived) {
         }, 3000);
 
         try {
-            // Use our special bypass method instead of direct WebSocket constructor
-            socket = createFirefoxWebSocket();
+            // Connect to the secure WSS endpoint
+            console.log('Info: Connecting to secure endpoint:', WSS_SERVER_URL);
+            socket = new WebSocket(WSS_SERVER_URL);
 
-            // Check if the socket was created successfully
-            console.log('Info: WebSocket created, readyState:', socket.readyState);
+            // Log connection status
+            console.log('Info: Firefox WSS connection created, readyState:', socket.readyState);
 
             socket.onopen = () => {
                 clearTimeout(connectionTimeout);
-                console.log('Info: Firefox WebSocket connection opened successfully!');
+                console.log('Info: Firefox secure WebSocket connection opened successfully!');
                 isConnecting = false;
                 isConnected = true;
                 broadcastConnectionStatus();
+
+                // Record successful connection in storage
+                storage.local.set({
+                    lastSuccessfulConnection: {
+                        timestamp: Date.now(),
+                        type: 'wss'
+                    },
+                    certificateAccepted: true
+                });
             };
 
             socket.onmessage = (event) => {
@@ -392,7 +510,6 @@ function connectWebSocketFirefox(onSourcesReceived) {
                                     if (entry.isDynamic && removedSourceIds.includes(entry.sourceId?.toString())) {
                                         console.log(`Info: Header "${entry.headerName}" was using removed source ${entry.sourceId}`);
 
-                                        // Option 1: Mark the header as having a missing source
                                         updatedSavedData[id] = {
                                             ...entry,
                                             sourceMissing: true
@@ -405,9 +522,7 @@ function connectWebSocketFirefox(onSourcesReceived) {
                                 // Update storage if needed
                                 if (headersNeedUpdate) {
                                     console.log('Info: Updating header configuration to reflect removed sources');
-                                    storage.sync.set({ savedData: updatedSavedData }, () => {
-                                        console.log('Info: Header configuration updated');
-                                    });
+                                    storage.sync.set({ savedData: updatedSavedData });
                                 }
                             });
                         }
@@ -436,10 +551,7 @@ function connectWebSocketFirefox(onSourcesReceived) {
                                 sources: allSources,
                                 timestamp: Date.now(),
                                 removedSourceIds: removedSourceIds.length > 0 ? removedSourceIds : undefined
-                            })
-                                .catch(() => {
-                                    console.log('Info: No Firefox popup listening');
-                                });
+                            }).catch(() => {});
                         });
                     }
                 } catch (err) {
@@ -449,117 +561,263 @@ function connectWebSocketFirefox(onSourcesReceived) {
 
             socket.onclose = () => {
                 clearTimeout(connectionTimeout);
-                console.log('Info: Firefox WebSocket closed');
-                handleConnectionFailure();
+                console.log('Info: Firefox WSS connection closed');
+
+                // If onopen was never called, this might be a certificate issue
+                if (isConnecting) {
+                    console.log('Info: WSS connection failed, trying WS fallback');
+                    connectFirefoxWs(onSourcesReceived);
+                } else {
+                    handleConnectionFailure();
+                }
             };
 
             socket.onerror = (error) => {
                 clearTimeout(connectionTimeout);
-                console.log('Info: Firefox WebSocket error:', error.message || 'Unknown error');
-                handleConnectionFailure();
-            };
+                console.log('Info: Firefox WSS connection error:', error.message || 'Unknown error');
 
+                // Try WS as fallback
+                connectFirefoxWs(onSourcesReceived);
+            };
         } catch (e) {
             clearTimeout(connectionTimeout);
-            console.log('Info: Firefox WebSocket creation error:', e.message || 'Unknown error');
-            handleConnectionFailure();
+            console.log('Info: Error creating Firefox WSS connection:', e.message || 'Unknown error');
+
+            // Fall back to regular WS
+            connectFirefoxWs(onSourcesReceived);
         }
     } catch (e) {
-        console.log('Info: Firefox WebSocket setup error:', e.message || 'Unknown error');
+        console.log('Info: Firefox WSS setup error:', e.message || 'Unknown error');
         handleConnectionFailure();
     }
 }
 
 /**
- * Modified server pre-check for Firefox that properly handles 426 responses
+ * Connect to WS endpoint for Firefox (fallback)
+ * @param {Function} onSourcesReceived - Callback when sources are received
+ */
+function connectFirefoxWs(onSourcesReceived) {
+    console.log('Info: Trying standard WS connection as fallback in Firefox');
+
+    try {
+        // Use standard WS instead of WSS as a fallback
+        const wsUrl = 'ws://127.0.0.1:59210';
+
+        console.log('Info: Connecting to fallback endpoint:', wsUrl);
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+            console.log('Info: Firefox fallback WebSocket connection opened successfully!');
+            isConnecting = false;
+            isConnected = true;
+            broadcastConnectionStatus();
+
+            // Record successful fallback connection
+            storage.local.set({
+                lastSuccessfulConnection: {
+                    timestamp: Date.now(),
+                    type: 'ws-fallback'
+                }
+            });
+        };
+
+        // Set up the same message handler as the main connection
+        socket.onmessage = (event) => {
+            try {
+                const parsed = JSON.parse(event.data);
+                if ((parsed.type === 'sourcesInitial' || parsed.type === 'sourcesUpdated') && Array.isArray(parsed.sources)) {
+                    allSources = parsed.sources;
+                    console.log('Info: Firefox fallback received sources:', allSources.length);
+
+                    // Save sources and update rules
+                    storage.local.set({ dynamicSources: allSources }, () => {
+                        // Update network rules with the new sources
+                        if (onSourcesReceived && typeof onSourcesReceived === 'function') {
+                            onSourcesReceived(allSources);
+                        }
+
+                        // Record the hash to prevent redundant updates
+                        lastSourcesHash = generateSourcesHash(allSources);
+                        lastRulesUpdateTime = Date.now();
+
+                        // Notify popups
+                        runtime.sendMessage({
+                            type: 'sourcesUpdated',
+                            sources: allSources,
+                            timestamp: Date.now()
+                        }).catch(() => {});
+                    });
+                }
+            } catch (err) {
+                console.log('Info: Error parsing fallback message:', err.message || 'Unknown error');
+            }
+        };
+
+        socket.onclose = () => {
+            console.log('Info: Firefox fallback WebSocket closed');
+            handleConnectionFailure();
+        };
+
+        socket.onerror = (error) => {
+            console.log('Info: Firefox fallback WebSocket error:', error.message || 'Unknown error');
+            handleConnectionFailure();
+        };
+
+    } catch (e) {
+        console.log('Info: Fallback connection failed:', e.message || 'Unknown error');
+        handleConnectionFailure();
+    }
+}
+
+/**
+ * Modified server pre-check for Firefox that checks both WS and WSS endpoints
  */
 async function checkServerAvailabilityForFirefox() {
-    console.log('Info: Running enhanced Firefox server availability check');
+    console.log('Info: Running Firefox server availability check for both WS and WSS...');
 
     return new Promise(resolve => {
         try {
-            // Create a standard XMLHttpRequest for better error handling than fetch()
-            const xhr = new XMLHttpRequest();
-            xhr.open('HEAD', 'http://127.0.0.1:59210/ping', true);
+            // First check last successful connection type
+            storage.local.get(['lastSuccessfulConnection', 'certificateAccepted'], (result) => {
+                const lastConnection = result.lastSuccessfulConnection;
+                const certificateAccepted = result.certificateAccepted;
 
-            // Set a timeout
-            xhr.timeout = 1000;
+                // If we've accepted the certificate, check WSS first
+                if (certificateAccepted) {
+                    console.log('Info: Certificate previously accepted, checking WSS first');
 
-            xhr.onload = function() {
-                // Any response means the server is running
-                console.log('Info: Server response status:', xhr.status);
+                    checkWssEndpoint().then(wssAvailable => {
+                        if (wssAvailable) {
+                            console.log('Info: WSS endpoint available for Firefox');
+                            resolve(true);
+                            return;
+                        }
 
-                // 426 Upgrade Required is actually a success for our purposes!
-                // It means the server is running and wants a WebSocket connection
-                if (xhr.status === 426) {
-                    console.log('Info: Server is available (426 response)');
-                    resolve(true);
-                    return;
+                        // Fall back to checking the WS endpoint
+                        console.log('Info: WSS endpoint not available, checking WS endpoint');
+                        checkWsEndpoint().then(wsAvailable => {
+                            console.log('Info: WS endpoint availability:', wsAvailable);
+                            resolve(wsAvailable);
+                        });
+                    });
                 }
+                // If we had a recent successful WS fallback connection, check that first
+                else if (lastConnection && lastConnection.type === 'ws-fallback' &&
+                    Date.now() - lastConnection.timestamp < 86400000) { // Last 24 hours
+                    console.log('Info: Using previous successful WS fallback connection type');
 
-                // Any 2xx status means the server is running
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    console.log('Info: Server is available (200 response)');
-                    resolve(true);
-                    return;
+                    // Try WS first
+                    checkWsEndpoint().then(wsAvailable => {
+                        if (wsAvailable) {
+                            console.log('Info: WS endpoint available for Firefox');
+                            resolve(true);
+                            return;
+                        }
+
+                        // Try WSS as a fallback if WS fails
+                        console.log('Info: WS endpoint not available, checking WSS endpoint');
+                        checkWssEndpoint().then(wssAvailable => {
+                            console.log('Info: WSS endpoint availability:', wssAvailable);
+                            resolve(wssAvailable);
+                        });
+                    });
+                } else {
+                    // Default to trying WSS first, then WS as fallback
+                    checkWssEndpoint().then(wssAvailable => {
+                        if (wssAvailable) {
+                            console.log('Info: WSS endpoint available for Firefox');
+                            resolve(true);
+                            return;
+                        }
+
+                        // Fall back to checking the WS endpoint
+                        console.log('Info: WSS endpoint not available, checking WS endpoint');
+                        checkWsEndpoint().then(wsAvailable => {
+                            console.log('Info: WS endpoint availability:', wsAvailable);
+                            resolve(wsAvailable);
+                        });
+                    });
                 }
-
-                // Other status codes might be problematic
-                console.log('Info: Server responded with status:', xhr.status);
-                resolve(true);  // Still consider server available
-            };
-
-            xhr.onerror = function(e) {
-                // Most errors mean the server isn't available
-                // But we need to check the error type
-                console.log('Info: Server check error:', e.type);
-
-                // Network errors usually mean server isn't running
-                resolve(false);
-            };
-
-            xhr.ontimeout = function() {
-                console.log('Info: Server check timed out');
-                resolve(false);
-            };
-
-            // Send the request
-            xhr.send();
-
+            });
         } catch (e) {
-            console.log('Info: Server check failed with exception:', e.message || 'Unknown error');
+            console.log('Info: Server check failed:', e.message);
             resolve(false);
         }
     });
 }
 
 /**
- * Special check for Firefox to avoid console errors
- * @returns {Promise<boolean>} - Whether server is available
+ * Check if the WSS endpoint is available
+ * @returns {Promise<boolean>}
  */
-async function checkServerAvailabilityForFirefoxOriginal() {
+function checkWssEndpoint() {
     return new Promise(resolve => {
         try {
-            // Use a more reliable method than WebSocket for checking
+            // Use fetch to check if the WSS endpoint responds
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 1000);
 
-            // Use fetch with very short timeout
-            fetch('http://127.0.0.1:59210/ping', {
+            fetch('https://127.0.0.1:59211/ping', {
+                method: 'HEAD',
                 mode: 'no-cors',
-                signal: controller.signal,
-                method: 'HEAD' // Use HEAD request for minimal traffic
+                signal: controller.signal
             })
                 .then(() => {
                     clearTimeout(timeoutId);
+                    console.log('Info: WSS endpoint responded to fetch check');
+
+                    // Mark the certificate as accepted since we made a successful request
+                    storage.local.set({ certificateAccepted: true });
+
                     resolve(true);
                 })
-                .catch(() => {
+                .catch(error => {
                     clearTimeout(timeoutId);
-                    // Any error means server is not available
+                    console.log('Info: WSS endpoint check failed:', error.message);
                     resolve(false);
                 });
         } catch (e) {
+            console.log('Info: WSS check exception:', e.message);
+            resolve(false);
+        }
+    });
+}
+
+/**
+ * Check if the WS endpoint is available
+ * @returns {Promise<boolean>}
+ */
+function checkWsEndpoint() {
+    return new Promise(resolve => {
+        try {
+            // Create a standard XMLHttpRequest
+            const xhr = new XMLHttpRequest();
+            xhr.open('HEAD', 'http://127.0.0.1:59210/ping', true);
+            xhr.timeout = 1000;
+
+            xhr.onload = function() {
+                console.log('Info: WS server response status:', xhr.status);
+                // 426 Upgrade Required means the server is running
+                if (xhr.status === 426 || (xhr.status >= 200 && xhr.status < 300)) {
+                    resolve(true);
+                    return;
+                }
+                resolve(false);
+            };
+
+            xhr.onerror = function() {
+                console.log('Info: WS server check error');
+                resolve(false);
+            };
+
+            xhr.ontimeout = function() {
+                console.log('Info: WS server check timed out');
+                resolve(false);
+            };
+
+            xhr.send();
+        } catch (e) {
+            console.log('Info: WS check exception:', e.message);
             resolve(false);
         }
     });

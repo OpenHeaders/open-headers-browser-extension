@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Open Headers</title>
+    <style>
+        :root {
+            --primary-color: #4285F4;
+            --secondary-color: #34A853;
+            --text-color: #333333;
+            --background-color: #F8F9FA;
+            --panel-background: #FFFFFF;
+            --border-color: #E0E0E0;
+            --success-color: #34A853;
+            --warning-color: #FBBC05;
+            --error-color: #EA4335;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.5;
+            max-width: 100vw;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 500;
+            margin: 0;
+            color: var(--primary-color);
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #666;
+            margin-top: 8px;
+            font-weight: normal;
+        }
+
+        .card {
+            background-color: var(--panel-background);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Base step styling */
+        .step {
+            display: flex;
+            position: relative;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            margin-right: 16px;
+            font-size: 14px;
+            z-index: 2;
+        }
+
+        .step-content {
+            padding-top: 2px;
+        }
+
+        .step-title {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .step-description {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 12px;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 28px;
+            left: 14px;
+            width: 1px;
+            background-color: var(--primary-color);
+            height: calc(100% - 12px);
+            z-index: 1;
+        }
+
+        .step:last-child .progress-line {
+            display: none;
+        }
+
+        .tick-mark {
+            display: none;
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+            color: white;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            margin-right: 16px;
+            font-size: 14px;
+            z-index: 2;
+        }
+
+        .step.completed .tick-mark {
+            display: flex;
+        }
+
+        .step.completed .step-number {
+            display: none;
+        }
+
+        .step.active .step-title {
+            color: var(--primary-color);
+        }
+
+        .info-box {
+            background-color: rgba(66, 133, 244, 0.08);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            height: 36px;
+        }
+
+        .button:hover {
+            background-color: #3367D6;
+            transform: translateY(-1px);
+        }
+
+        .button.secondary {
+            background-color: transparent;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .button.secondary:hover {
+            background-color: rgba(66, 133, 244, 0.08);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* For browser-specific content */
+        .firefox-only {
+            display: none;
+        }
+
+        .chrome-only, .edge-only, .safari-only, .non-firefox {
+            display: none;
+        }
+
+        .app-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .app-status.loading .loading-spinner {
+            display: inline-block;
+        }
+
+        .app-status.success .loading-spinner {
+            display: none;
+        }
+
+        .app-status.loading .status-text {
+            color: #666;
+        }
+
+        .app-status.success .status-text {
+            color: var(--success-color);
+        }
+
+        .app-status.success .status-text::before {
+            content: "✓ ";
+            color: var(--success-color);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-connecting .status-dot {
+            background-color: var(--warning-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-connected .status-dot {
+            background-color: var(--success-color);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 24px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <img src="images/icon128.png" alt="Open Headers Logo" class="logo">
+        <h1>Welcome to Open Headers</h1>
+        <div class="subtitle">Get started with custom HTTP headers</div>
+    </header>
+
+    <div class="card">
+        <div class="card-title">Quick Setup</div>
+
+        <div class="info-box firefox-only">
+            Firefox requires a quick one-time setup to enable secure connections between the browser extension and companion app.
+        </div>
+
+        <div class="steps">
+            <!-- Step 1: Install App - Common for all browsers -->
+            <div class="step active" id="step0">
+                <div class="progress-line"></div>
+                <div class="step-number">1</div>
+                <div class="tick-mark">✓</div>
+                <div class="step-content">
+                    <div class="step-title">Install the Companion App</div>
+                    <div class="step-description">
+                        Make sure you have the Open Headers companion app installed and running on your computer.
+                    </div>
+                    <div class="app-actions">
+                        <a href="https://github.com/OpenHeaders/open-headers-app/releases" target="_blank" class="button" id="downloadAppButton">Download App</a>
+                    </div>
+                    <div class="app-status loading" id="appStatus">
+                        <div class="loading-spinner"></div>
+                        <span class="status-text" id="appStatusText">Waiting for app to start...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Certificate Setup - Firefox Only -->
+            <div class="step firefox-only" id="step1">
+                <div class="progress-line"></div>
+                <div class="step-number">2</div>
+                <div class="tick-mark">✓</div>
+                <div class="step-content">
+                    <div class="step-title">Accept the Certificate</div>
+                    <div class="step-description">
+                        Click the button below to open the certificate page, then click "Advanced" and "Accept the Risk and Continue"
+                    </div>
+                    <a href="https://127.0.0.1:59211/accept-cert" target="_blank" class="button" id="openCertButton">Open Certificate Page</a>
+                </div>
+            </div>
+
+            <!-- Step 3: Certificate Verification - Firefox Only -->
+            <div class="step firefox-only" id="step2">
+                <div class="progress-line"></div>
+                <div class="step-number">3</div>
+                <div class="tick-mark">✓</div>
+                <div class="step-content">
+                    <div class="step-title">Certificate Acceptance</div>
+                    <div class="step-description">
+                        After accepting the certificate, close the certificate page. We'll proceed automatically.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Final Step: Connection Verification -->
+            <div class="step" id="step3">
+                <div class="progress-line"></div>
+                <div class="step-number" id="finalStepNumber">2</div>
+                <div class="tick-mark">✓</div>
+                <div class="step-content">
+                    <div class="step-title">Verify Connection</div>
+                    <div class="step-description firefox-only">
+                        We'll check the connection to ensure everything is working properly.
+                    </div>
+                    <div class="step-description non-firefox">
+                        We'll verify the connection to the companion app.
+                    </div>
+
+                    <div class="status-indicator status-connecting" id="connectionStatus">
+                        <div class="status-dot"></div>
+                        <span id="statusText">Checking connection...</span>
+                    </div>
+
+                    <div class="action-buttons hidden" id="completionButtons">
+                        <a href="#" class="button" id="finishButton">Continue</a>
+                        <a href="#" class="button secondary hidden" id="retryButton">Try Again</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Open Headers v1.2.0 | <a href="https://github.com/OpenHeaders/open-headers-browser-extension" target="_blank">GitHub</a></p>
+    </div>
+</div>
+
+<script src="js/welcome.js"></script>
+</body>
+</html>
