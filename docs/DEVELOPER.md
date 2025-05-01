@@ -12,7 +12,7 @@ The extension consists of these main components:
 - **Background Service Worker**: Runs in the background to manage header rules
 - **WebSocket Client**: Connects to the companion app for dynamic sources
 - **Header Rule System**: Applies headers to matching requests
-- **Welcome Page**: Interactive setup guide for new users
+- **Welcome Page**: Interactive multi-step onboarding experience for new users
 
 ### Modules
 
@@ -40,9 +40,9 @@ The extension consists of these main components:
 2. Configurations are saved to browser storage
 3. Background service worker creates declarativeNetRequest rules
 4. When using dynamic sources:
-   - WebSocket connection receives source updates
-   - Header values are updated in real-time
-   - UI refreshes to show current values
+    - WebSocket connection receives source updates
+    - Header values are updated in real-time
+    - UI refreshes to show current values
 
 ## Development
 
@@ -180,35 +180,35 @@ Open Headers supports multiple browsers with specific adaptations for each:
 The extension uses browser detection and compatibility layers to ensure consistent behavior:
 
 - **Manifest Files**: Different manifests for each browser target
-  - Chrome/Edge: Uses manifest v3 with service worker
-  - Firefox: Uses manifest v3 with explicit `browser_specific_settings`
-  - Safari: Uses manifest v3 with special considerations for WebKit
+    - Chrome/Edge: Uses manifest v3 with service worker
+    - Firefox: Uses manifest v3 with explicit `browser_specific_settings`
+    - Safari: Uses manifest v3 with special considerations for WebKit
 
 - **WebSocket Connection**: Different implementations for browser security models
-  - Chrome/Edge: Standard WebSocket implementation
-  - Firefox: Dual protocol implementation (WSS/WS) with certificate handling
-  - Safari: Adaptation for Safari's unique WebKit security model
+    - Chrome/Edge: Standard WebSocket implementation
+    - Firefox: Dual protocol implementation (WSS/WS) with certificate handling
+    - Safari: Adaptation for Safari's unique WebKit security model
 
 - **Storage APIs**: Unified API to handle browser differences
-  - The `browser-api.js` module provides cross-browser abstraction
+    - The `browser-api.js` module provides cross-browser abstraction
 
 ### WebSocket Security Implementation (v1.2.0+)
 
 Firefox has stricter security requirements for WebSocket connections. In version 1.2.0, we've implemented:
 
 1. **Dual Protocol Support**:
-   - Secure WebSocket (`wss://`) on port 59211 with proper certificate handling
-   - Fallback to standard WebSocket (`ws://`) on port 59210 if SSL handshake fails
+    - Secure WebSocket (`wss://`) on port 59211 with proper certificate handling
+    - Fallback to standard WebSocket (`ws://`) on port 59210 if SSL handshake fails
 
 2. **Certificate Handling Flow**:
-   - First-time users are guided through certificate acceptance
-   - The extension detects previous successful connections
-   - Smart protocol selection based on previous successes
+    - First-time users are guided through certificate acceptance
+    - The extension detects previous successful connections
+    - Smart protocol selection based on previous successes
 
 3. **Connection Recovery**:
-   - Protocol switching on connection failure
-   - Persistent storage of successful connection methods
-   - Automatic reconnection with appropriate protocol
+    - Protocol switching on connection failure
+    - Persistent storage of successful connection methods
+    - Automatic reconnection with appropriate protocol
 
 Implementation details can be found in `websocket.js`:
 ```javascript
@@ -231,25 +231,44 @@ function connectWebSocketFirefox(onSourcesReceived) {
 }
 ```
 
-### Welcome Page Implementation (v1.2.0+)
+### Welcome Page Implementation (v1.3.0+)
 
-The interactive welcome page guides users through the setup process with browser-specific steps:
+The interactive welcome page guides users through the setup process with a professional multi-step flow:
 
-1. **Components**:
-   - `welcome.html`: Browser-adaptive UI with step-by-step guidance
-   - `welcome.js`: Browser detection and UI flow management
-   - `background.js`: Welcome page invocation logic
+1. **Modern Multi-Step Design**:
+    - Three-page flow with intuitive navigation
+    - Step indicators for visual progress tracking
+    - Browser-adaptive UI with smooth transitions
+    - Visual illustrations and interactive elements
 
-2. **Browser-Specific Flows**:
-   - **Chrome/Edge**: Simple connection verification
-   - **Firefox**: Certificate acceptance guidance and verification
-   - **Safari**: Special setup instructions for WebKit environment
+2. **Components**:
+    - `welcome.html`: Modern, responsive UI with multi-step design
+    - `welcome.js`: Browser detection, UI flow management, and animation control
+    - `background.js`: Welcome page invocation and state persistence
 
-3. **Implementation Notes**:
-   - Uses CSS to show/hide browser-specific elements
-   - Detects the browser automatically
-   - Stores setup completion status to prevent repeated displays
-   - Provides helpful troubleshooting options
+3. **Browser-Specific Flows**:
+    - **Chrome/Edge**: Simplified two-step process
+        1. Install and connect to companion app
+        2. Learn how to pin the extension
+    - **Firefox**: Enhanced four-step process
+        1. Install companion app
+        2. Certificate acceptance guidance
+        3. Certificate verification
+        4. Connection verification
+    - **Safari**: Custom flow for WebKit environment
+
+4. **Visual Features**:
+    - Browser toolbar visualization with animations
+    - Interactive step completion indicators
+    - Visual explanations of key concepts
+    - Consistent, professional styling across pages
+
+5. **Implementation Notes**:
+    - CSS animations for smooth transitions between steps
+    - Browser-adaptive layout and content
+    - Responsive design that works on various screen sizes
+    - Clear visual status indicators for each step
+    - Content Security Policy compliant JavaScript structure
 
 ### Build Configuration
 
@@ -262,7 +281,7 @@ Each browser has its own webpack configuration:
 ### Testing Cross-Browser
 
 When testing, verify these browser-specific aspects:
-1. **WebSocket Connection**: Ensure proper connection to the companion app 
+1. **WebSocket Connection**: Ensure proper connection to the companion app
 2. **Header Injection**: Verify headers are applied consistently
 3. **CSS/UI**: Check that styling works properly in each browser
 4. **Storage**: Confirm settings persist between sessions
@@ -276,32 +295,32 @@ When testing, verify these browser-specific aspects:
 | CSP Requirements | Moderate | High | Moderate | Very High |
 | Resource Types | All Supported | Limited Set | All Supported | Limited Set |
 | Manifest Support | Full v3 | v3 with limitations | Full v3 | v3 with WebKit specifics |
-| Welcome Flow | Simple | Certificate-focused | Simple | WebKit-specific |
+| Welcome Flow | Two-step | Four-step | Two-step | Two-step with WebKit specifics |
 
 ## Testing
 
 ### Manual Testing
 
 1. Load the extension in your target browser using the appropriate method:
-   - Chrome/Edge: "Load unpacked" in extensions page
-   - Firefox: "Load Temporary Add-on" in about:debugging
-   - Safari: Run converted app from Xcode
+    - Chrome/Edge: "Load unpacked" in extensions page
+    - Firefox: "Load Temporary Add-on" in about:debugging
+    - Safari: Run converted app from Xcode
 
 2. Test various header configurations:
-   - Static headers with different domain patterns
-   - Dynamic headers with prefix/suffix formatting
-   - Multiple domains per header
-   - Import/export functionality
-   - Test validation for invalid header values
-   - Test with and without the companion app
+    - Static headers with different domain patterns
+    - Dynamic headers with prefix/suffix formatting
+    - Multiple domains per header
+    - Import/export functionality
+    - Test validation for invalid header values
+    - Test with and without the companion app
 
 3. Cross-browser specific tests:
-   - Test WebSocket connection in each browser
-   - For Firefox, test both WSS and WS connections
-   - Test the welcome page flow for each browser
-   - Verify that headers are applied to all resource types
-   - Check that UI styling is consistent
-   - Test cache prevention functionality
+    - Test WebSocket connection in each browser
+    - For Firefox, test both WSS and WS connections
+    - Test the welcome page flow for each browser
+    - Verify that headers are applied to all resource types
+    - Check that UI styling is consistent
+    - Test cache prevention functionality
 
 ### Welcome Page Testing
 
@@ -315,10 +334,14 @@ Verify the welcome page functions correctly:
    ```
 2. Reload the extension
 3. Verify the welcome page appears automatically
-4. Test each step in the welcome flow
-5. Verify certificate acceptance (Firefox)
-6. Confirm connection verification works properly
-7. Ensure setup state is saved correctly
+4. Test each step in the welcome flow:
+    - Test page navigation (Next/Back buttons)
+    - Verify step indicators update correctly
+    - Confirm that browser-specific steps are correctly shown/hidden
+5. Verify app connection detection
+6. Verify certificate acceptance (Firefox)
+7. Test connection verification functionality
+8. Ensure proper completion and state saving
 
 ### End-to-End Testing
 
@@ -420,49 +443,63 @@ The browser-api.js module provides a unified interface for browser APIs:
 
 Browser-specific WebSocket handling in v1.2.0:
 
-- **Firefox** (Enhanced in v1.2.0): 
-  - Primary: Secure WebSocket (`wss://`) on port 59211
-  - Certificate acceptance via welcome page
-  - Fallback to standard WebSocket (`ws://`) if needed
-  - Smart connection restoration based on previous success
+- **Firefox** (Enhanced in v1.2.0+):
+    - Primary: Secure WebSocket (`wss://`) on port 59211
+    - Certificate acceptance via welcome page
+    - Fallback to standard WebSocket (`ws://`) if needed
+    - Smart connection restoration based on previous success
 
-- **Chrome/Edge**: 
-  - Standard WebSocket implementation on port 59210
-  - Simplified connection flow
+- **Chrome/Edge**:
+    - Standard WebSocket implementation on port 59210
+    - Simplified connection flow
 
-- **Safari**: 
-  - Uses adapter for WebKit security model
-  - Special handling for Safari's strict security requirements
+- **Safari**:
+    - Uses adapter for WebKit security model
+    - Special handling for Safari's strict security requirements
 
 All browsers implement:
 - Auto-reconnection with browser-specific error handling
 - Detection of removed sources and header configuration updates
 - Connection status persistence across browser sessions
 
-### Welcome Page Implementation
+### Multi-Step Welcome Page Implementation (v1.3.0+)
 
-The welcome page (added in v1.2.0):
+The enhanced welcome page in v1.3.0 features:
 
-- **Browser Detection**: Automatically detects browser type
-- **Adaptive UI**: Shows only relevant steps for each browser
-- **Firefox Flow**:
-  1. Check if companion app is running
-  2. Guide through certificate acceptance process
-  3. Verify secure connection
-  
-- **Chrome/Edge/Safari Flow**:
-  1. Check if companion app is running
-  2. Verify connection
-  
-- **Persistence**:
-  - Stores setup completion status
-  - Remembers certificate acceptance for Firefox
-  - Prevents showing welcome page on subsequent launches
-  
+- **Modern Multi-Step Design**:
+    - Three-page flow with intuitive progression
+    - Step indicators at the top for visual progress tracking
+    - Smooth page transitions between steps
+    - Professional styling similar to industry-standard onboarding flows
+
+- **Browser Detection and Adaptation**:
+    - Automatically detects browser type
+    - Dynamically shows only relevant steps for each browser
+    - Firefox users see all four steps for certificate handling
+    - Chrome/Edge/Safari users see a simplified two-step flow
+
+- **Visual Elements**:
+    - Interactive browser toolbar visualization with animations
+    - Visual representations of headers and browser elements
+    - Pinning instruction visualization with browser-specific guidance
+    - Clear step indicators with active state highlighting
+
+- **Content Organization**:
+    - First page: Introduction with visual representation of HTTP headers
+    - Second page: Setup process with companion app connection
+    - Third page: Extension pinning instructions and completion
+
+- **Responsive Layout**:
+    - Adapts to different screen sizes
+    - Properly sized containers to prevent scrolling
+    - Clear visual hierarchy with proper spacing
+    - Consistent styling throughout the flow
+
 - **Error Handling**:
-  - Provides retry options if connection fails
-  - Shows helpful error messages
-  - Offers links to documentation for troubleshooting
+    - Provides clear visual feedback for connection states
+    - Shows helpful error messages with recovery options
+    - Allows proceeding even if optimal setup isn't achieved
+    - Maintains state between page navigation
 
 ### Cache Prevention for Headers
 
