@@ -14,6 +14,7 @@ A browser extension for managing HTTP headers with static and dynamic sources. M
 - 💾 **Persistent Settings**: Header configurations are saved and restored automatically
 - 📋 **Import/Export**: Share header configurations across devices or save backups
 - 🔧 **Value Formatting**: Customize dynamic values with prefixes and suffixes
+- 🚀 **Intuitive Onboarding**: Streamlined setup process with browser-specific guidance
 
 ## Overview
 
@@ -48,7 +49,7 @@ The extension works with the Open Headers companion app (optional) to access loc
 #### Firefox
 1. Download and unzip the latest release from GitHub
 2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`
-3. Click "Load Temporary Add-on" 
+3. Click "Load Temporary Add-on"
 4. Select the `manifest.json` file in the extension directory
 5. The extension should appear in your toolbar
 
@@ -62,13 +63,19 @@ The extension works with the Open Headers companion app (optional) to access loc
 
 ## First-Time Setup
 
-When you first install Open Headers, a welcome page will guide you through the setup process:
+When you first install Open Headers, an intuitive multi-step welcome experience will guide you through the setup process:
 
-1. **Install the Companion App** if you want to use dynamic sources
-2. **Firefox Users**: Accept the security certificate when prompted
-3. **Verify Connection** between the browser extension and companion app
+1. **Welcome Introduction**: A quick overview of the extension
+2. **Companion App Setup**:
+   - Install and run the companion app if you want to use dynamic sources
+   - The extension automatically detects when the app is running
+   - **Firefox Users**: Accept the security certificate when prompted
+   - The extension verifies connection to the companion app
+3. **Finalize Setup**:
+   - Learn how to pin the extension to your browser toolbar
+   - Get started with managing HTTP headers
 
-The welcome page adapts to your specific browser, showing only the steps relevant to you.
+The welcome experience adapts to your specific browser, showing only relevant steps and providing browser-specific guidance.
 
 ## Usage
 
@@ -157,16 +164,19 @@ For dynamic sources (HTTP requests, files, environment variables), you'll need t
 ### Chrome & Edge
 - Full support for all features
 - Most efficient WebSocket connection handling
+- Streamlined setup experience
 
 ### Firefox
 - Enhanced secure WebSocket connection support in v1.2.0
 - Interactive certificate acceptance process
 - More strict Content Security Policy enforcement
+- Custom welcome experience for certificate handling
 
 ### Safari
 - Requires macOS for installation
 - Must be packaged as a macOS app using Xcode
 - Most strict security model, especially for WebSocket connections
+- Tailored setup flow for WebKit environment
 
 ## Troubleshooting
 
