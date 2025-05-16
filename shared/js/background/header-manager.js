@@ -1,5 +1,5 @@
 /**
- * Header management and rule processing
+ * Enhanced header-manager.js with specialized response header support
  */
 import { isValidHeaderValue, sanitizeHeaderValue } from './rule-validator.js';
 import { normalizeHeaderName } from '../shared/utils.js';
@@ -7,6 +7,7 @@ import { storage, declarativeNetRequest, runtime } from '../shared/browser-api.j
 
 /**
  * Updates the network request rules based on saved data and dynamic sources.
+ * Implements specialized handling for response headers to maximize compatibility.
  * @param {Array} dynamicSources - The current dynamic sources from WebSocket
  */
 export function updateNetworkRules(dynamicSources) {
@@ -17,172 +18,66 @@ export function updateNetworkRules(dynamicSources) {
         // Create rules array for declarativeNetRequest
         const rules = [];
         let ruleId = 1;
-        const invalidHeaderEntries = [];
 
-        // Process each saved header entry
+        // Separate request and response headers for specialized handling
+        const requestEntries = [];
+        const responseEntries = [];
+
+        // First pass - categorize and validate all entries
         for (const id in savedData) {
             const entry = savedData[id];
-            let headerValue = entry.headerValue;
 
-            // If this is a dynamic header, look up the current value
-            if (entry.isDynamic && entry.sourceId) {
-                const source = dynamicSources.find(s => s.sourceId?.toString() === entry.sourceId?.toString() ||
-                    s.locationId?.toString() === entry.sourceId?.toString());
-                if (source) {
-                    const dynamicContent = source.sourceContent || source.locationContent;
-
-                    // Apply prefix and suffix if they exist
-                    const prefix = entry.prefix || '';
-                    const suffix = entry.suffix || '';
-
-                    // Combine prefix + dynamic content + suffix
-                    headerValue = `${prefix}${dynamicContent}${suffix}`;
-                } else {
-                    // Source not found - skip this rule
-                    console.log(`Info: Skipping rule for ${entry.headerName} - dynamic source ${entry.sourceId} not found`);
-                    invalidHeaderEntries.push(id);
-                    continue;
-                }
-            }
-
-            // Validate the header value for browser's API
-            if (!isValidHeaderValue(headerValue)) {
-                // Keep track of invalid entries
-                invalidHeaderEntries.push(id);
-
-                // Try sanitizing the value
-                headerValue = sanitizeHeaderValue(headerValue);
-
-                // Still invalid? Skip this rule
-                if (!isValidHeaderValue(headerValue)) {
-                    console.log(`Info: Skipping invalid header value for ${entry.headerName} on ${entry.domains}`);
-                    continue;
-                }
-            }
-
-            // Check for multiple domains vs single domain
-            let domains = Array.isArray(entry.domains) ? entry.domains : [];
-
-            // Legacy support for single domain stored in domain property
-            if (entry.domain && domains.length === 0) {
-                domains = [entry.domain];
-            }
-
-            // If no domains are specified, skip this rule
-            if (domains.length === 0) {
-                console.log(`Info: Skipping rule for ${entry.headerName} - no domains specified`);
+            // Skip disabled rules
+            if (entry.isEnabled === false) {
+                console.log(`Info: Skipping disabled rule for ${entry.headerName}`);
                 continue;
             }
 
-            // Create a request header modification object to be used in each rule
-            const customHeaderModification = {
-                // Use the normalized header name to match browser's behavior
-                header: normalizeHeaderName(entry.headerName),
-                operation: 'set',
-                value: headerValue
-            };
-
-            // Define cache prevention headers - this helps ensure our headers are always applied
-            // by preventing the browser from using cached responses
-            const preventCacheHeaders = [
-                {
-                    header: 'Cache-Control',
-                    operation: 'set',
-                    value: 'no-cache, no-store, must-revalidate'
-                },
-                {
-                    header: 'Pragma',
-                    operation: 'set',
-                    value: 'no-cache'
-                }
-            ];
-
-            // Combine the custom header and cache prevention headers
-            const allHeaderModifications = [customHeaderModification, ...preventCacheHeaders];
-
-            // Create a separate rule for each domain
-            domains.forEach(domain => {
-                if (!domain || domain.trim() === '') return;
-
-                // Create the main rule for the main_frame (the page itself)
-                rules.push({
-                    id: ruleId++,
-                    priority: 2, // Higher priority for main page
-                    action: {
-                        type: 'modifyHeaders',
-                        requestHeaders: allHeaderModifications
-                    },
-                    condition: {
-                        urlFilter: domain.trim(),
-                        resourceTypes: ['main_frame']
-                    }
-                });
-
-                // Create a second rule for all other resources (images, scripts, etc.)
-                rules.push({
-                    id: ruleId++,
-                    priority: 1,
-                    action: {
-                        type: 'modifyHeaders',
-                        requestHeaders: allHeaderModifications
-                    },
-                    condition: {
-                        urlFilter: domain.trim(),
-                        resourceTypes: ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'other']
-                    }
-                });
-
-                console.log(`Info: Created rules for ${entry.headerName} on ${domain.trim()} with cache prevention`);
-            });
-        }
-
-        // If we found invalid entries, update storage with sanitized values
-        if (invalidHeaderEntries.length > 0) {
-            const updatedData = { ...savedData };
-
-            for (const id of invalidHeaderEntries) {
-                const entry = updatedData[id];
-                if (entry) {
-                    // For entries with missing sources, mark them for UI highlighting
-                    if (entry.isDynamic) {
-                        const source = dynamicSources.find(s => s.sourceId?.toString() === entry.sourceId?.toString() ||
-                            s.locationId?.toString() === entry.sourceId?.toString());
-
-                        if (!source) {
-                            updatedData[id] = {
-                                ...entry,
-                                sourceMissing: true  // Flag to indicate source is missing
-                            };
-                            continue;
-                        }
-                    }
-
-                    // Only update static header values, don't modify dynamic ones
-                    if (!entry.isDynamic) {
-                        updatedData[id] = {
-                            ...entry,
-                            headerValue: sanitizeHeaderValue(entry.headerValue)
-                        };
-                    }
+            // Process entry and add to appropriate array
+            const processedEntry = processEntry(entry, dynamicSources);
+            if (processedEntry) {
+                if (processedEntry.isResponse) {
+                    responseEntries.push(processedEntry);
+                } else {
+                    requestEntries.push(processedEntry);
                 }
             }
+        }
 
-            // Update storage with sanitized values and missing source flags
-            storage.sync.set({ savedData: updatedData });
+        // Process request headers (these work reliably)
+        requestEntries.forEach(entry => {
+            const requestRules = createRequestHeaderRules(entry, ruleId);
+            rules.push(...requestRules);
+            ruleId += requestRules.length;
+        });
+
+        // Process response headers with specialized approach
+        responseEntries.forEach(entry => {
+            const responseRules = createResponseHeaderRules(entry, ruleId);
+            rules.push(...responseRules);
+            ruleId += responseRules.length;
+        });
+
+        // Log response header details for debugging
+        if (responseEntries.length > 0) {
+            console.log(`Info: Creating ${rules.length} total rules (${responseEntries.length} response headers)`);
+            console.log(`Info: Response headers being set:`);
+            responseEntries.forEach(entry => {
+                console.log(`- ${entry.headerName}: "${entry.headerValue}" for domains: ${entry.domains.join(', ')}`);
+            });
         }
 
         // Update the dynamic rules
         declarativeNetRequest.updateDynamicRules({
-            removeRuleIds: Array.from({ length: 1000 }, (_, i) => i + 1), // Remove all existing rules (up to 1000)
+            removeRuleIds: Array.from({ length: 2000 }, (_, i) => i + 1), // Remove all existing rules
             addRules: rules
         }).then(() => {
-            console.log('Info: Updated network rules:', rules.length);
+            console.log(`Info: Successfully updated ${rules.length} network rules`);
             if (rules.length > 0) {
                 console.log('Info: Example rule:', JSON.stringify(rules[0].condition));
             }
-            return new Promise(resolve => setTimeout(resolve, 50));
         }).catch(e => {
-            console.log('Info: Rule update issue:', e.message || 'Unknown error');
+            console.error('Error updating rules:', e.message || 'Unknown error');
             runtime.sendMessage({
                 type: 'ruleUpdateError',
                 error: e.message || 'Unknown error'
@@ -191,4 +86,276 @@ export function updateNetworkRules(dynamicSources) {
             });
         });
     });
+}
+
+/**
+ * Process an entry and determine if it's valid
+ * @param {Object} entry - The header entry
+ * @param {Array} dynamicSources - Available dynamic sources
+ * @returns {Object|null} - Processed entry or null if invalid
+ */
+function processEntry(entry, dynamicSources) {
+    let headerValue = entry.headerValue;
+
+    // Handle dynamic values
+    if (entry.isDynamic && entry.sourceId) {
+        const source = dynamicSources.find(s => s.sourceId?.toString() === entry.sourceId?.toString() ||
+            s.locationId?.toString() === entry.sourceId?.toString());
+
+        if (source) {
+            const dynamicContent = source.sourceContent || source.locationContent;
+            const prefix = entry.prefix || '';
+            const suffix = entry.suffix || '';
+            headerValue = `${prefix}${dynamicContent}${suffix}`;
+        } else {
+            console.log(`Info: Skipping rule for ${entry.headerName} - dynamic source ${entry.sourceId} not found`);
+            return null;
+        }
+    }
+
+    // Validate the header value
+    if (!isValidHeaderValue(headerValue)) {
+        headerValue = sanitizeHeaderValue(headerValue);
+        if (!isValidHeaderValue(headerValue)) {
+            console.log(`Info: Skipping invalid header value for ${entry.headerName}`);
+            return null;
+        }
+    }
+
+    // Process domains
+    const domains = Array.isArray(entry.domains) ? entry.domains :
+        (entry.domain ? [entry.domain] : []);
+
+    if (domains.length === 0) {
+        console.log(`Info: Skipping rule for ${entry.headerName} - no domains specified`);
+        return null;
+    }
+
+    // Return processed entry
+    return {
+        headerName: normalizeHeaderName(entry.headerName),
+        headerValue: headerValue,
+        domains: domains,
+        isResponse: entry.isResponse === true
+    };
+}
+
+/**
+ * Create rules for request headers
+ * @param {Object} entry - Processed entry
+ * @param {number} startId - Starting rule ID
+ * @returns {Array} - Array of rules
+ */
+function createRequestHeaderRules(entry, startId) {
+    const rules = [];
+    let ruleId = startId;
+
+    // Process each domain
+    entry.domains.forEach(domain => {
+        if (!domain || domain.trim() === '') return;
+
+        // Format the URL pattern
+        const urlFilter = formatUrlPattern(domain);
+
+        console.log(`Info: Creating request header rule for ${entry.headerName} with URL filter: ${urlFilter}`);
+
+        // Create main frame rule
+        rules.push({
+            id: ruleId++,
+            priority: 100,
+            action: {
+                type: 'modifyHeaders',
+                requestHeaders: [
+                    {
+                        header: entry.headerName,
+                        operation: 'set',
+                        value: entry.headerValue
+                    },
+                    // Add cache prevention headers
+                    {
+                        header: 'Cache-Control',
+                        operation: 'set',
+                        value: 'no-cache, no-store, must-revalidate'
+                    },
+                    {
+                        header: 'Pragma',
+                        operation: 'set',
+                        value: 'no-cache'
+                    }
+                ]
+            },
+            condition: {
+                urlFilter: urlFilter,
+                resourceTypes: ['main_frame']
+            }
+        });
+
+        // Create sub-resources rule
+        rules.push({
+            id: ruleId++,
+            priority: 90,
+            action: {
+                type: 'modifyHeaders',
+                requestHeaders: [
+                    {
+                        header: entry.headerName,
+                        operation: 'set',
+                        value: entry.headerValue
+                    },
+                    // Add cache prevention headers
+                    {
+                        header: 'Cache-Control',
+                        operation: 'set',
+                        value: 'no-cache, no-store, must-revalidate'
+                    },
+                    {
+                        header: 'Pragma',
+                        operation: 'set',
+                        value: 'no-cache'
+                    }
+                ]
+            },
+            condition: {
+                urlFilter: urlFilter,
+                resourceTypes: ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'other']
+            }
+        });
+    });
+
+    return rules;
+}
+
+/**
+ * Create rules for response headers with maximum compatibility
+ * @param {Object} entry - Processed entry
+ * @param {number} startId - Starting rule ID
+ * @returns {Array} - Array of rules
+ */
+function createResponseHeaderRules(entry, startId) {
+    const rules = [];
+    let ruleId = startId;
+
+    // Process each domain
+    entry.domains.forEach(domain => {
+        if (!domain || domain.trim() === '') return;
+
+        // Format the URL pattern - critical for response headers
+        let urlFilter = formatUrlPattern(domain);
+
+        console.log(`Info: Creating response header rule for ${entry.headerName} with URL filter: ${urlFilter}`);
+
+        // CRITICAL: Try multiple approaches for response headers
+
+        // Approach 1: Ultra-high priority for main document
+        rules.push({
+            id: ruleId++,
+            priority: 1000, // Maximum possible priority
+            action: {
+                type: 'modifyHeaders',
+                responseHeaders: [{
+                    header: entry.headerName,
+                    operation: 'set',
+                    value: entry.headerValue
+                }]
+            },
+            condition: {
+                urlFilter: urlFilter,
+                resourceTypes: ['main_frame']
+            }
+        });
+
+        // Approach 2: Add rules for each individual resource type
+        // This increases chances of the header being visible
+        ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'xmlhttprequest'].forEach(resourceType => {
+            rules.push({
+                id: ruleId++,
+                priority: 950, // Very high priority
+                action: {
+                    type: 'modifyHeaders',
+                    responseHeaders: [{
+                        header: entry.headerName,
+                        operation: 'set',
+                        value: entry.headerValue
+                    }]
+                },
+                condition: {
+                    urlFilter: urlFilter,
+                    resourceTypes: [resourceType]
+                }
+            });
+        });
+
+        // Approach 3: Try with and without exact scheme matching for maximum compatibility
+        if (!urlFilter.startsWith('http')) {
+            // Try with explicit HTTP version as well
+            const httpUrlFilter = 'http://' + domain.trim().replace(/^\*:\/\//, '');
+            const httpsUrlFilter = 'https://' + domain.trim().replace(/^\*:\/\//, '');
+
+            // HTTP explicit rule
+            rules.push({
+                id: ruleId++,
+                priority: 900,
+                action: {
+                    type: 'modifyHeaders',
+                    responseHeaders: [{
+                        header: entry.headerName,
+                        operation: 'set',
+                        value: entry.headerValue
+                    }]
+                },
+                condition: {
+                    urlFilter: httpUrlFilter + '/*',
+                    resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest']
+                }
+            });
+
+            // HTTPS explicit rule
+            rules.push({
+                id: ruleId++,
+                priority: 900,
+                action: {
+                    type: 'modifyHeaders',
+                    responseHeaders: [{
+                        header: entry.headerName,
+                        operation: 'set',
+                        value: entry.headerValue
+                    }]
+                },
+                condition: {
+                    urlFilter: httpsUrlFilter + '/*',
+                    resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest']
+                }
+            });
+        }
+    });
+
+    return rules;
+}
+
+/**
+ * Format a domain string into a proper URL pattern for rule matching
+ * @param {string} domain - Domain pattern
+ * @returns {string} - Formatted URL pattern
+ */
+function formatUrlPattern(domain) {
+    let urlFilter = domain.trim();
+
+    // If the domain doesn't include a protocol and doesn't start with *, add * at the beginning
+    if (!urlFilter.includes('://') && !urlFilter.startsWith('*')) {
+        // If it contains a wildcard, ensure proper formatting
+        if (urlFilter.includes('*')) {
+            // Make sure wildcards work correctly with dot notation
+            urlFilter = urlFilter.replace(/\*\./g, '*://');
+        } else {
+            // For exact domains, add *:// prefix to match both http and https
+            urlFilter = '*://' + urlFilter;
+        }
+    }
+
+    // Make sure the pattern includes a path component for proper matching
+    if (!urlFilter.includes('/') && !urlFilter.endsWith('*')) {
+        urlFilter = urlFilter + '/*';
+    }
+
+    return urlFilter;
 }

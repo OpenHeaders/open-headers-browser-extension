@@ -1,6 +1,6 @@
 /* Overall popup width */
 body {
-    width: 700px;
+    width: 750px;
     font-family: Arial, sans-serif;
     margin: 10px;
     background-color: #f2f2f2;
@@ -107,7 +107,7 @@ select {
 /* Column header row for the entries */
 .entriesHeader {
     display: grid;
-    grid-template-columns: 40px 90px 130px 125px 145px auto;
+    grid-template-columns: 50px 60px 90px 130px 125px 125px auto;
     column-gap: 8px;
     font-weight: bold;
     margin-bottom: 5px;
@@ -124,7 +124,7 @@ select {
 /* Each saved entry in a row matching the columns above */
 .entryItem {
     display: grid;
-    grid-template-columns: 40px 90px 130px 125px 145px auto;
+    grid-template-columns: 50px 60px 90px 130px 125px 125px auto;
     column-gap: 8px;
     align-items: center;
     margin-bottom: 8px;
@@ -714,4 +714,97 @@ select option {
 
 .missing-source-indicator {
     animation: pulse-warning 2s infinite;
+}
+
+/* Header Direction toggle */
+.toggle-container {
+    display: flex;
+    align-items: center;
+}
+
+.toggle-container label {
+    margin: 0 12px 0 4px;
+    font-size: 14px;
+    color: var(--text-color);
+}
+
+/* Enable/Disable switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    margin-right: 8px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 20px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #4285F4;
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px #4285F4;
+}
+
+input:checked + .slider:before {
+    transform: translateX(16px);
+}
+
+/* Status column styles */
+.status-enabled, .status-disabled {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.status-enabled {
+    color: #34A853;
+}
+
+.status-disabled {
+    color: #9AA0A6;
+}
+
+/* Style for disabled entries */
+.entryItem.disabled {
+    opacity: 0.6;
+}
+/* Type indicators for Request/Response */
+.type-request {
+    background-color: #e1f5fe;
+    color: #0277bd;
+}
+
+.type-response {
+    background-color: #f1f8e9;
+    color: #558b2f;
 }

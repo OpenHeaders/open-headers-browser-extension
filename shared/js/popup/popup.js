@@ -40,6 +40,25 @@ let domainTagsManager = null;
 // Keep reference to DOM elements across functions
 let entriesList = null;
 let dynamicValueSelect = null;
+// Store global reference to savedData
+let currentSavedData = {};
+
+/**
+ * Refreshes the entries list to reflect the current enabled/disabled status.
+ */
+function refreshEntriesWithCurrentStatus() {
+    storage.sync.get(['savedData'], (result) => {
+        const savedData = result.savedData || {};
+
+        // Update our stored reference
+        currentSavedData = savedData;
+
+        // Re-render all entries
+        if (entriesList) {
+            renderEntries(entriesList, savedData);
+        }
+    });
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Force disconnected status immediately, before any other operations
@@ -63,8 +82,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     const headerElem = document.querySelector('h1');
     const appInfo = document.querySelector('.app-info');
 
+    // Get the request/response radio buttons
+    const requestRadio = document.getElementById('requestHeaderType');
+    const responseRadio = document.getElementById('responseHeaderType');
+
     const footerBottomSection = document.querySelector('.footer-bottom');
     let welcomeButton = null;
+
+    // Add debug verification for enabled/disabled states
+    storage.sync.get(['savedData'], (result) => {
+        if (result.savedData) {
+            // Check for any entries with isEnabled = false
+            const disabledEntries = Object.keys(result.savedData).filter(id =>
+                result.savedData[id].isEnabled === false
+            );
+
+            if (disabledEntries.length > 0) {
+                console.log('Found disabled entries:', disabledEntries.map(id => ({
+                    name: result.savedData[id].headerName,
+                    enabled: result.savedData[id].isEnabled
+                })));
+            }
+        }
+    });
 
     // Create the status indicator in the header
     const statusIndicator = initializeStatusIndicator(headerElem);
@@ -108,12 +148,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     // Import the configuration
                     const config = await importConfiguration(file);
-
-                    // Reload entries list to show imported entries
-                    loadEntries(entriesList);
+                    console.log('Import complete, config:', config);
 
                     // Reset the file input
                     configFileInput.value = null;
+
+                    // Explicitly get the latest data from storage to ensure we have the imported entries
+                    storage.sync.get(['savedData'], (result) => {
+                        if (result.savedData) {
+                            console.log('Loaded imported savedData:',
+                                Object.keys(result.savedData).map(id => ({
+                                    id,
+                                    name: result.savedData[id].headerName
+                                }))
+                            );
+
+                            // Update our local reference
+                            currentSavedData = result.savedData;
+
+                            // Now reload entries to show imported data
+                            loadEntries(entriesList);
+
+                            // Also load any imported dynamic sources
+                            storage.local.get(['dynamicSources'], (result) => {
+                                if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
+                                    console.log('Loaded imported dynamic sources:', result.dynamicSources.length);
+                                    updateDynamicSelect(result.dynamicSources, dynamicValueSelect);
+                                }
+                            });
+                        } else {
+                            console.error('No savedData found after import');
+                        }
+                    });
                 } catch (error) {
                     console.error('Import failed:', error);
                     // Error notification is shown in importConfiguration function
@@ -148,12 +214,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 welcomeButton.style.transform = 'scale(1)';
             });
 
-            // Add click handler to open the welcome page
+            // Fix the click handler to open the welcome page
             welcomeButton.addEventListener('click', (e) => {
                 e.preventDefault();
+                e.stopPropagation(); // Prevent event bubbling
 
-                // Send a message to the background script to open the welcome page
-                runtime.sendMessage({ type: 'openWelcomePage' }, (response) => {
+                console.log('Welcome button clicked, forcing welcome page to open');
+
+                // Send a message to FORCE open the welcome page (bypassing the setup check)
+                runtime.sendMessage({
+                    type: 'forceOpenWelcomePage' // New message type to bypass setup checks
+                }, (response) => {
+                    // Check for any errors
+                    if (runtime.lastError) {
+                        console.error('Error opening welcome page:', runtime.lastError);
+                        return;
+                    }
+
+                    console.log('Force-open welcome page request sent, response:', response);
+
                     // Close the popup after sending the message
                     window.close();
                 });
@@ -166,6 +245,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 footerBottomSection.appendChild(welcomeButton);
             }
+
+            // Debug message to confirm button was added
+            console.log('Welcome button added to footer');
         }
     }
 
@@ -182,6 +264,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Function to get current form data
     function getFormData() {
+        // Get the selected header direction (request/response)
+        const isResponse = requestRadio ? !requestRadio.checked : false;
+
         return {
             // Store the normalized header name to match Chrome's behavior
             headerName: headerNameInput.value,
@@ -190,7 +275,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             valueType: valueTypeSelect.value,
             sourceId: dynamicValueSelect.value,
             prefix: prefixInput ? prefixInput.value || '' : '',
-            suffix: suffixInput ? suffixInput.value || '' : ''
+            suffix: suffixInput ? suffixInput.value || '' : '',
+            isResponse: isResponse, // Add response type flag
+            isEnabled: true // New entries are enabled by default
         };
     }
 
@@ -209,6 +296,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         staticValueRow.style.display = 'flex';
         dynamicValueRow.style.display = 'none';
         if (dynamicPrefixSuffixRow) dynamicPrefixSuffixRow.style.display = 'none';
+
+        // Reset request/response radio buttons to default (request)
+        if (requestRadio) requestRadio.checked = true;
+        if (responseRadio) responseRadio.checked = false;
 
         // Also clear the draft data
         saveDraftInputs({}, true, true);
@@ -229,6 +320,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Add event listeners for request/response radio buttons
+    if (requestRadio) {
+        requestRadio.addEventListener('change', () => {
+            saveDraftInputs(getFormData(), false, true);
+        });
+    }
+
+    if (responseRadio) {
+        responseRadio.addEventListener('change', () => {
+            saveDraftInputs(getFormData(), false, true);
+        });
+    }
+
     // Function to handle saving a header
     function handleSaveHeader() {
         // Get normalized header name
@@ -240,6 +344,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const domains = domainTagsManager ? domainTagsManager.getDomains() : [];
 
         const isDynamic = valueTypeSelect.value === 'dynamic';
+
+        // Get the header direction (request/response)
+        const isResponse = requestRadio ? !requestRadio.checked : false;
 
         // Get prefix and suffix for dynamic headers
         const prefix = isDynamic && prefixInput ? prefixInput.value || '' : '';
@@ -286,7 +393,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 isDynamic,
                 sourceId,
                 prefix,
-                suffix
+                suffix,
+                isResponse,     // Pass the response type flag
+                isEnabled: true // New entries are enabled by default
             },
             entriesList,
             clearForm
@@ -343,6 +452,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (isReopening) {
                     // Instead of directly calling renderEntries, use loadEntries which is already verified to work
                     loadEntries(entriesList);
+
+                    // Explicitly refresh to ensure enabled/disabled states are correct
+                    refreshEntriesWithCurrentStatus();
                 } else {
                     // For actual updates, find what changed and highlight those entries
                     const changedSourceIds = findChangedSourceIds(oldSources, sources);
@@ -358,6 +470,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Fallback to simple reload if there's an error
             try {
                 loadEntries(entriesList);
+
+                // Also refresh for enabled/disabled states
+                refreshEntriesWithCurrentStatus();
             } catch (fallbackError) {
                 console.error('Fallback error:', fallbackError);
             }
@@ -470,6 +585,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Don't use functions that might not be properly imported
                     // Instead, just reload entries which is known to work
                     loadEntries(entriesList);
+
+                    // Explicitly refresh for enabled/disabled states
+                    refreshEntriesWithCurrentStatus();
                 }
             });
         } catch (error) {
@@ -496,6 +614,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Load entries first - this populates currentSavedData
         loadEntries(entriesList);
 
+        // Make sure to refresh to ensure enabled/disabled states are correct
+        refreshEntriesWithCurrentStatus();
+
         // Now loadDynamicSources from storage
         loadDynamicSources();
 
@@ -512,6 +633,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Set prefix and suffix from draft
         if (prefixInput) prefixInput.value = draft.prefix || '';
         if (suffixInput) suffixInput.value = draft.suffix || '';
+
+        // Set request/response radio buttons from draft
+        if (requestRadio && responseRadio && draft.isResponse === true) {
+            requestRadio.checked = false;
+            responseRadio.checked = true;
+        }
 
         // Set domains from draft (either array or legacy string)
         if (domainTagsManager) {
@@ -584,9 +711,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load dynamic sources from storage
     function loadDynamicSources() {
+        storage.sync.get(['savedData'], (result) => {
+            // Update our stored reference to ensure we have the latest data
+            currentSavedData = result.savedData || {};
+        });
+
+        // First ensure we get the latest sources from storage
         storage.local.get(['dynamicSources'], (result) => {
             if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
-                // First verify connection status before displaying any status indicators
+                console.log('Loaded dynamic sources from storage:', result.dynamicSources.length);
+
+                // Store the sources for later use
+                const loadedSources = result.dynamicSources;
+
+                // Verify connection status before displaying any status indicators
                 runtime.sendMessage({ type: 'checkConnection' }, (response) => {
                     if (response && response.connected === true) {
                         // Only update connection status if we're actually connected
@@ -600,12 +738,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                         updateAppInfoVisibility(false);
                     }
 
-                    // Always update the dropdown without changing connection status
-                    updateDynamicSelect(result.dynamicSources, dynamicValueSelect);
+                    // Always update the dropdown with our loaded sources
+                    updateDynamicSelect(loadedSources, dynamicValueSelect);
 
-                    // Now also reload entries regardless of connection status
-                    // Use the reliable loadEntries function
+                    // Now also reload entries with these sources
                     loadEntries(entriesList);
+
+                    // Explicitly refresh to ensure enabled/disabled states are correct
+                    refreshEntriesWithCurrentStatus();
+
+                    // Also request fresh sources from the background script
+                    runtime.sendMessage({ type: 'getDynamicSources' }, (response) => {
+                        if (response && response.sources && response.sources.length > 0) {
+                            // Update with the freshest sources if available
+                            console.log('Got fresh sources from background:', response.sources.length);
+                            updateDynamicSelect(response.sources, dynamicValueSelect);
+                            refreshEntriesList(entriesList);
+                        }
+                    });
                 });
             }
         });
