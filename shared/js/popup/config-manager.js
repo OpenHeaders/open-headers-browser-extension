@@ -1,5 +1,6 @@
 /**
- * Configuration import/export functionality
+ * Configuration import/export functionality with fixes for notification timing
+ * and proper data handling
  */
 import { getCurrentSavedData } from './entry-manager.js';
 import { getDynamicSources } from './ui-manager.js';
@@ -7,7 +8,7 @@ import { showNotification } from './notification-system.js';
 import { storage, runtime } from '../shared/browser-api.js';
 
 /**
- * Exports the current configuration to a JSON file.
+ * Exports the current configuration to a JSON file with fixed notification timing.
  * @returns {Promise<void>}
  */
 export async function exportConfiguration() {
@@ -20,7 +21,7 @@ export async function exportConfiguration() {
 
         // Create configuration object
         const configuration = {
-            version: '1.0',
+            version: '1.4.0',
             timestamp: new Date().toISOString(),
             headerEntries,
             dynamicSources
@@ -35,6 +36,9 @@ export async function exportConfiguration() {
         // Default filename
         const suggestedName = `open-headers-config-${new Date().toISOString().slice(0, 10)}.json`;
 
+        // Track if the export was successful
+        let exportSuccessful = false;
+
         // Use the File System Access API if available (modern browsers)
         if ('showSaveFilePicker' in window) {
             try {
@@ -47,21 +51,32 @@ export async function exportConfiguration() {
                 };
 
                 // Show file picker dialog
+                console.log('Showing save file picker...');
                 const fileHandle = await window.showSaveFilePicker(opts);
+
+                console.log('File handle obtained, creating writable...');
                 const writable = await fileHandle.createWritable();
+
+                console.log('Writing data...');
                 await writable.write(blob);
+
+                console.log('Closing writable...');
                 await writable.close();
 
+                console.log('File saved successfully');
+                exportSuccessful = true;
+
+                // Only now show the notification after everything is complete
                 showNotification('Configuration exported successfully');
                 return;
             } catch (pickerError) {
                 // If user cancels the save dialog, this will trigger
-                // Don't show error for cancellation
                 if (pickerError.name !== 'AbortError') {
-                    console.log('File picker failed, falling back to download:', pickerError);
+                    console.error('File picker failed, falling back to download:', pickerError);
                     // Fall through to fallback method
                 } else {
-                    // User cancelled, don't show error
+                    console.log('User cancelled the save dialog');
+                    // User cancelled, don't show error or success
                     return;
                 }
             }
@@ -82,9 +97,11 @@ export async function exportConfiguration() {
         setTimeout(() => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        }, 100);
-
-        showNotification('Configuration exported successfully');
+            // Only show notification after everything is complete
+            if (!exportSuccessful) {
+                showNotification('Configuration exported successfully');
+            }
+        }, 500); // Increased from 100ms to 500ms to ensure download has started
     } catch (error) {
         console.error('Export failed:', error);
         showNotification('Export failed: ' + error.message, true);
@@ -94,7 +111,7 @@ export async function exportConfiguration() {
 /**
  * Imports configuration from a JSON file.
  * @param {File} file - The configuration file to import
- * @returns {Promise<void>}
+ * @returns {Promise<Object>} - The imported configuration
  */
 export async function importConfiguration(file) {
     return new Promise((resolve, reject) => {
@@ -111,20 +128,65 @@ export async function importConfiguration(file) {
                         throw new Error('Invalid configuration file: missing header entries');
                     }
 
-                    // Store the header entries
-                    await new Promise((resolveStorage) => {
-                        storage.sync.set({ savedData: configuration.headerEntries }, () => {
-                            resolveStorage();
+                    console.log('Importing configuration:', configuration);
+
+                    // Process header entries to ensure new fields have default values
+                    const processedEntries = {};
+
+                    // Process each entry to add default values for new fields if they don't exist
+                    Object.entries(configuration.headerEntries).forEach(([id, entry]) => {
+                        processedEntries[id] = {
+                            ...entry,
+                            // Set defaults for new fields if not present
+                            isResponse: entry.isResponse || false,
+                            isEnabled: entry.isEnabled !== undefined ? entry.isEnabled : true
+                        };
+                    });
+
+                    console.log('Processed entries:', processedEntries);
+
+                    // Store the processed header entries - using Promise for better async handling
+                    await new Promise((resolveStorage, rejectStorage) => {
+                        storage.sync.set({ savedData: processedEntries }, () => {
+                            if (runtime.lastError) {
+                                console.error('Storage error:', runtime.lastError);
+                                rejectStorage(runtime.lastError);
+                            } else {
+                                console.log('Saved header entries to storage');
+                                resolveStorage();
+                            }
                         });
                     });
 
+                    // Save dynamic sources if present
+                    if (configuration.dynamicSources && Array.isArray(configuration.dynamicSources)) {
+                        await new Promise((resolveSourcesStorage, rejectSourcesStorage) => {
+                            storage.local.set({ dynamicSources: configuration.dynamicSources }, () => {
+                                if (runtime.lastError) {
+                                    console.error('Storage error:', runtime.lastError);
+                                    rejectSourcesStorage(runtime.lastError);
+                                } else {
+                                    console.log('Saved dynamic sources to storage');
+                                    resolveSourcesStorage();
+                                }
+                            });
+                        });
+                    }
+
                     // Notify background script about the imported configuration
-                    await new Promise((resolveNotify) => {
+                    await new Promise((resolveNotify, rejectNotify) => {
                         runtime.sendMessage({
                             type: 'configurationImported',
-                            dynamicSources: configuration.dynamicSources || []
+                            dynamicSources: configuration.dynamicSources || [],
+                            savedData: processedEntries
                         }, (response) => {
-                            resolveNotify();
+                            if (runtime.lastError) {
+                                console.error('Notification error:', runtime.lastError);
+                                rejectNotify(runtime.lastError);
+                            } else {
+                                console.log('Notified background script of import');
+                                resolveNotify();
+                            }
                         });
                     });
 

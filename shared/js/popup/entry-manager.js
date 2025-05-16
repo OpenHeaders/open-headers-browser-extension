@@ -52,6 +52,16 @@ export function loadEntries(entriesList) {
     currentEntriesList = entriesList;
     storage.sync.get(['savedData'], (result) => {
         const savedData = result.savedData || {};
+
+        // Log the loaded data for debugging
+        console.log('Loaded savedData from storage:',
+            Object.keys(savedData).map(id => ({
+                id,
+                name: savedData[id].headerName,
+                enabled: savedData[id].isEnabled !== false // Show true by default
+            }))
+        );
+
         currentSavedData = savedData; // Store for later refreshes
         renderEntries(entriesList, savedData);
     });
@@ -70,7 +80,20 @@ export function renderEntries(entriesList, data) {
 
     entriesList.innerHTML = '';
     for (const id in data) {
-        const { headerName, headerValue, domain, domains, isDynamic, sourceId, locationId, prefix, suffix } = data[id];
+        const {
+            headerName,
+            headerValue,
+            domain,
+            domains,
+            isDynamic,
+            sourceId,
+            locationId,
+            prefix,
+            suffix,
+            isResponse,
+            isEnabled  // Make sure we get the isEnabled state
+        } = data[id];
+
         // Use sourceId if available, fall back to locationId for backward compatibility
         const effectiveSourceId = sourceId || locationId;
 
@@ -81,6 +104,10 @@ export function renderEntries(entriesList, data) {
         const effectivePrefix = prefix || '';
         const effectiveSuffix = suffix || '';
 
+        // Default values for new fields
+        const effectiveIsResponse = isResponse === true;
+        const effectiveIsEnabled = isEnabled !== false; // Default to true if undefined
+
         const entryDiv = renderEntry(
             entriesList,
             id,
@@ -90,7 +117,9 @@ export function renderEntries(entriesList, data) {
             isDynamic,
             effectiveSourceId,
             effectivePrefix,
-            effectiveSuffix
+            effectiveSuffix,
+            effectiveIsResponse,
+            effectiveIsEnabled // Pass the enabled state to renderEntry
         );
         entriesList.appendChild(entryDiv);
     }
@@ -137,8 +166,9 @@ function displayMissingSourceDetailsUI(detailsSpan, sourceId) {
  * @param {string} prefix - The prefix for the value
  * @param {string} suffix - The suffix for the value
  * @param {HTMLElement} entryDiv - The entry div element
+ * @param {HTMLElement} detailsSpan - The details span element
  */
-function tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv) {
+function tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv, detailsSpan) {
     storage.local.get(['dynamicSources'], (result) => {
         if (result.dynamicSources && Array.isArray(result.dynamicSources)) {
             const storedSource = result.dynamicSources.find(
@@ -148,17 +178,80 @@ function tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv)
 
             if (storedSource) {
                 // Source found in storage, update the display
-                updateEntryWithSource(valueSpan, storedSource, entryDiv);
+                updateEntryWithSource(valueSpan, storedSource, entryDiv, detailsSpan);
                 return;
             }
         }
         // If we get here, source wasn't found in storage either
         displayMissingSourceUI(valueSpan, sourceId);
+
+        // Also update details span to show missing source info
+        if (detailsSpan) {
+            displayMissingSourceDetailsUI(detailsSpan, sourceId);
+        }
     });
 }
 
 /**
- * Renders one entry and returns its container element.
+ * Helper function for updating entries with a source.
+ * @param {HTMLElement} valueSpan - The value span element
+ * @param {Object} source - The dynamic source data
+ * @param {HTMLElement} entryDiv - The entry element
+ * @param {HTMLElement} detailsSpan - The details span element
+ * @param {boolean} isLegacy - Whether this is a legacy source format
+ * @returns {void}
+ */
+function updateEntryWithSource(valueSpan, source, entryDiv, detailsSpan, isLegacy = false) {
+    // Get content based on whether it's legacy format or new format
+    const content = isLegacy ? source.locationContent : (source.sourceContent || source.locationContent);
+
+    // Get prefix and suffix from dataset
+    const prefix = valueSpan.dataset.prefix || '';
+    const suffix = valueSpan.dataset.suffix || '';
+
+    // Apply prefix and suffix to the content
+    const formattedContent = `${prefix}${content || '[Waiting for content]'}${suffix}`;
+
+    console.log(`Updating dynamic value to: ${formattedContent}`);
+    valueSpan.textContent = truncateText(formattedContent, 20);
+
+    // Remove missing source class if present
+    valueSpan.classList.remove('missing-source');
+
+    // Updated tooltip with better formatting
+    const contentPreview = content || 'Waiting for content';
+    // Support for both old and new property names
+    const sourceType = isLegacy ? source.locationType : (source.sourceType || source.locationType);
+    const sourceTag = isLegacy ? (source.locationTag || 'No tag') : (source.sourceTag || source.locationTag || 'No tag');
+    const sourcePath = isLegacy ? source.locationPath : (source.sourcePath || source.locationPath);
+
+    const prefixSuffixInfo = (prefix || suffix) ?
+        `Format: "${prefix}[dynamic content]${suffix}"\n` : '';
+
+    const tooltipContent = `${sourceType} - ${sourceTag} - ${sourcePath}\n${prefixSuffixInfo}\nValue (${contentPreview.length} chars):\n${contentPreview}`;
+    valueSpan.title = tooltipContent;
+
+    // Also update the details span if provided
+    if (detailsSpan) {
+        const sourceTypeMap = {
+            'http': '🌐',
+            'file': '📄',
+            'env': '🔧'
+        };
+        const typeIcon = sourceTypeMap[sourceType] || '📌';
+        const tag = sourceTag !== 'No tag' ? `[${sourceTag}]` : '';
+        detailsSpan.textContent = `${typeIcon} ${tag} ${truncateText(sourcePath, 15)}`;
+        detailsSpan.title = `Type: ${sourceType}\nTag: ${sourceTag}\nPath: ${sourcePath}`;
+    }
+
+    // Remove any existing highlight animation or "recently updated" status
+    // This is only for initial load, not for actual updates
+    valueSpan.classList.remove('highlight-update', 'recently-updated');
+}
+
+/**
+ * Renders one entry and returns its container element with added enable/disable toggle
+ * and support for request/response header type
  * @param {HTMLElement} entriesList - The container with all entries
  * @param {string} id - Unique ID of the entry
  * @param {string} headerName - Name of the header
@@ -168,24 +261,58 @@ function tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv)
  * @param {string} sourceId - ID of the dynamic source (for dynamic headers)
  * @param {string} prefix - Prefix for dynamic headers
  * @param {string} suffix - Suffix for dynamic headers
+ * @param {boolean} isResponse - Whether this is a response header
+ * @param {boolean} isEnabled - Whether this header is enabled
  * @returns {HTMLElement} - The rendered entry element
  */
-export function renderEntry(entriesList, id, headerName, headerValue, domains, isDynamic, sourceId, prefix = '', suffix = '') {
+export function renderEntry(entriesList, id, headerName, headerValue, domains, isDynamic,
+                            sourceId, prefix = '', suffix = '', isResponse = false, isEnabled = true) {
     const entryDiv = document.createElement('div');
     entryDiv.classList.add('entryItem');
     entryDiv.dataset.entryId = id; // Store ID for easy targeting later
 
+    // Apply disabled styling if the entry is not enabled
+    if (!isEnabled) {
+        entryDiv.classList.add('disabled');
+    }
+
+    // Status toggle (enable/disable)
+    const statusTd = document.createElement('span');
+    statusTd.classList.add(isEnabled ? 'status-enabled' : 'status-disabled');
+
+    // Create toggle switch
+    const switchLabel = document.createElement('label');
+    switchLabel.classList.add('switch');
+
+    const toggleInput = document.createElement('input');
+    toggleInput.type = 'checkbox';
+    toggleInput.checked = isEnabled; // Set initial state based on isEnabled
+    toggleInput.dataset.entryId = id; // Store entry ID on the toggle for easy reference
+
+    toggleInput.addEventListener('change', (e) => {
+        const newStatus = e.target.checked;
+        console.log(`Toggle switch changed for rule ${id} to ${newStatus ? 'enabled' : 'disabled'}`);
+        toggleRuleStatus(id, newStatus);
+    });
+
+    const sliderSpan = document.createElement('span');
+    sliderSpan.classList.add('slider');
+
+    switchLabel.appendChild(toggleInput);
+    switchLabel.appendChild(sliderSpan);
+    statusTd.appendChild(switchLabel);
+
     // Type indicator
     const typeTd = document.createElement('span');
     typeTd.classList.add('type-indicator');
-    if (isDynamic) {
-        typeTd.textContent = 'D';
-        typeTd.classList.add('type-dynamic');
-        typeTd.title = 'Dynamic value from a pre-configured source';
+    if (isResponse) {
+        typeTd.textContent = 'Resp';
+        typeTd.classList.add('type-response');
+        typeTd.title = isDynamic ? 'Dynamic response header' : 'Static response header';
     } else {
-        typeTd.textContent = 'S';
-        typeTd.classList.add('type-static');
-        typeTd.title = 'Static value inserted by the user';
+        typeTd.textContent = 'Req';
+        typeTd.classList.add('type-request');
+        typeTd.title = isDynamic ? 'Dynamic request header' : 'Static request header';
     }
 
     // Header name span - normalize to match Chrome's behavior
@@ -203,13 +330,42 @@ export function renderEntry(entriesList, id, headerName, headerValue, domains, i
     valueSpan.dataset.prefix = prefix || ''; // Store prefix for reference
     valueSpan.dataset.suffix = suffix || ''; // Store suffix for reference
 
-    // For dynamic values, show a placeholder and set tooltip with source ID
+    // Domains container - shows multiple domains nicely
+    const domainsSpan = document.createElement('span');
+    domainsSpan.classList.add('domain-tags');
+
+    // Format domains for display
+    const formattedDomains = formatDomains(domains);
+    domainsSpan.innerHTML = formattedDomains.html;
+    domainsSpan.title = formattedDomains.tooltip;
+
+    // Details span (for dynamic headers, shows source info)
+    const detailsSpan = document.createElement('span');
+    detailsSpan.classList.add('truncated', 'source-details');
+
+    // IMPORTANT: Create the remove button before any async operations
+    const removeButton = document.createElement('button');
+    removeButton.classList.add('removeBtn');
+    removeButton.textContent = 'Remove';
+    // Pass entriesList to removeEntry
+    removeButton.addEventListener('click', () => removeEntry(id, entriesList));
+
+    // Build the row with new status column
+    entryDiv.appendChild(statusTd);
+    entryDiv.appendChild(typeTd);
+    entryDiv.appendChild(nameSpan);
+    entryDiv.appendChild(valueSpan);
+    entryDiv.appendChild(domainsSpan);
+    entryDiv.appendChild(detailsSpan);
+    entryDiv.appendChild(removeButton);
+
+    // Now process dynamic values AFTER all elements are created and attached
     if (isDynamic) {
         const sources = getDynamicSources();
         // Check if we have any sources before trying to find a match
         const sourceMissing = !sources || sources.length === 0 ||
-            !sources.some(s => s.sourceId?.toString() === (sourceId || '').toString() ||
-                s.locationId?.toString() === (sourceId || '').toString());
+            !sources.some(s => (s.sourceId?.toString() === (sourceId || '').toString()) ||
+                (s.locationId?.toString() === (sourceId || '').toString()));
 
         if (!sourceMissing) {
             const source = sources.find(s => s.sourceId?.toString() === (sourceId || '').toString() ||
@@ -238,16 +394,28 @@ export function renderEntry(entriesList, id, headerName, headerValue, domains, i
                 valueSpan.classList.remove('missing-source');
                 // Also make sure we don't have any highlight classes applied
                 valueSpan.classList.remove('highlight-update', 'recently-updated');
+
+                // Update detailsSpan content
+                const sourceTypeMap = {
+                    'http': '🌐',
+                    'file': '📄',
+                    'env': '🔧'
+                };
+                const typeIcon = sourceTypeMap[sourceType] || '📌';
+                const tag = (source.sourceTag || source.locationTag) ? `[${source.sourceTag || source.locationTag}]` : '';
+                const path = source.sourcePath || source.locationPath;
+                detailsSpan.textContent = `${typeIcon} ${tag} ${truncateText(path, 15)}`;
+                detailsSpan.title = `Type: ${sourceType}\nTag: ${source.sourceTag || source.locationTag || 'None'}\nPath: ${path}`;
             } else {
                 // Source wasn't found in memory, but we have sources loaded
                 // Try to check storage once more
-                tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv);
+                tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv, detailsSpan);
             }
         } else {
             // No sources loaded at all or source definitely missing
             // Display missing source UI and check storage as fallback
             displayMissingSourceUI(valueSpan, sourceId);
-            tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv);
+            tryLoadSourceFromStorage(valueSpan, sourceId, prefix, suffix, entryDiv, detailsSpan);
         }
     } else {
         valueSpan.textContent = truncateText(headerValue, 20);
@@ -256,71 +424,59 @@ export function renderEntry(entriesList, id, headerName, headerValue, domains, i
         valueSpan.classList.remove('missing-source');
         // Also make sure we don't have any highlight classes applied
         valueSpan.classList.remove('highlight-update', 'recently-updated');
+
+        detailsSpan.textContent = 'Static';
+        detailsSpan.title = 'Static header value';
     }
-
-    // Domains container - shows multiple domains nicely
-    const domainsSpan = document.createElement('span');
-    domainsSpan.classList.add('domain-tags');
-
-    // Format domains for display
-    const formattedDomains = formatDomains(domains);
-    domainsSpan.innerHTML = formattedDomains.html;
-    domainsSpan.title = formattedDomains.tooltip;
-
-    // Details span (for dynamic headers, shows source info)
-    const detailsSpan = document.createElement('span');
-    detailsSpan.classList.add('truncated', 'source-details');
-    if (isDynamic) {
-        const sources = getDynamicSources();
-        const sourceMissing = !sources || sources.length === 0 ||
-            !sources.some(s => s.sourceId?.toString() === (sourceId || '').toString() ||
-                s.locationId?.toString() === (sourceId || '').toString());
-
-        if (!sourceMissing) {
-            const source = sources.find(s => s.sourceId?.toString() === (sourceId || '').toString() ||
-                s.locationId?.toString() === (sourceId || '').toString());
-
-            if (source) {
-                // Existing code for showing source details
-                const sourceTypeMap = {
-                    'http': '🌐',
-                    'file': '📄',
-                    'env': '🔧'
-                };
-                const sourceType = source.sourceType || source.locationType;
-                const typeIcon = sourceTypeMap[sourceType] || '📌';
-                const tag = (source.sourceTag || source.locationTag) ? `[${source.sourceTag || source.locationTag}]` : '';
-                const path = source.sourcePath || source.locationPath;
-                detailsSpan.textContent = `${typeIcon} ${tag} ${truncateText(path, 15)}`;
-                detailsSpan.title = `Type: ${sourceType}\nTag: ${source.sourceTag || source.locationTag || 'None'}\nPath: ${path}`;
-            } else {
-                // Source wasn't found, but we have sources
-                displayMissingSourceDetailsUI(detailsSpan, sourceId);
-            }
-        } else {
-            // No sources loaded at all or source definitely missing
-            displayMissingSourceDetailsUI(detailsSpan, sourceId);
-        }
-    } else {
-        detailsSpan.textContent = '';
-    }
-
-    // Remove button
-    const removeButton = document.createElement('button');
-    removeButton.classList.add('removeBtn');
-    removeButton.textContent = 'Remove';
-    // Pass entriesList to removeEntry
-    removeButton.addEventListener('click', () => removeEntry(id, entriesList));
-
-    // Build the row
-    entryDiv.appendChild(typeTd);
-    entryDiv.appendChild(nameSpan);
-    entryDiv.appendChild(valueSpan);
-    entryDiv.appendChild(domainsSpan);
-    entryDiv.appendChild(detailsSpan);
-    entryDiv.appendChild(removeButton);
 
     return entryDiv;
+}
+/**
+ *
+ * Toggles the enabled status of a rule
+ * @param {string} id - The ID of the rule to toggle
+ * @param {boolean} isEnabled - The new enabled status
+ */
+export function toggleRuleStatus(id, isEnabled) {
+    storage.sync.get(['savedData'], (result) => {
+        const savedData = result.savedData || {};
+
+        if (savedData[id]) {
+            // Update the enabled status
+            savedData[id].isEnabled = isEnabled;
+
+            // Save the updated data
+            storage.sync.set({ savedData }, () => {
+                console.log(`Rule ${id} ${isEnabled ? 'enabled' : 'disabled'}`);
+
+                // Update our stored data reference to keep it in sync
+                currentSavedData = savedData;
+
+                // Find and update the UI element
+                const entryElement = document.querySelector(`.entryItem[data-entry-id="${id}"]`);
+                if (entryElement) {
+                    entryElement.classList.toggle('disabled', !isEnabled);
+
+                    // Update the status indicator
+                    const statusElement = entryElement.querySelector('.status-enabled, .status-disabled');
+                    if (statusElement) {
+                        statusElement.className = isEnabled ? 'status-enabled' : 'status-disabled';
+                    }
+
+                    // Update the checkbox directly too to prevent state mismatch
+                    const checkbox = entryElement.querySelector('input[type="checkbox"]');
+                    if (checkbox) {
+                        checkbox.checked = isEnabled;
+                    }
+                }
+
+                // Notify the background script to update the rules
+                runtime.sendMessage({
+                    type: 'rulesUpdated'
+                });
+            });
+        }
+    });
 }
 
 /**
@@ -361,7 +517,8 @@ export function updateDynamicEntryValue(entryId, sourceId) {
                         );
 
                         if (storedSource) {
-                            updateEntryWithSource(alternateValueSpan, storedSource, entryElem);
+                            const detailsSpan = entryElem.querySelector('.source-details');
+                            updateEntryWithSource(alternateValueSpan, storedSource, entryElem, detailsSpan);
                             return true;
                         }
                     }
@@ -369,7 +526,8 @@ export function updateDynamicEntryValue(entryId, sourceId) {
                 return false;
             }
 
-            updateEntryWithSource(alternateValueSpan, source, entryElem);
+            const detailsSpan = entryElem.querySelector('.source-details');
+            updateEntryWithSource(alternateValueSpan, source, entryElem, detailsSpan);
             return true;
         }
 
@@ -388,7 +546,8 @@ export function updateDynamicEntryValue(entryId, sourceId) {
                 );
 
                 if (storedSource) {
-                    updateEntryWithSource(valueSpan, storedSource, entryElem);
+                    const detailsSpan = entryElem.querySelector('.source-details');
+                    updateEntryWithSource(valueSpan, storedSource, entryElem, detailsSpan);
                     return true;
                 }
             }
@@ -396,65 +555,9 @@ export function updateDynamicEntryValue(entryId, sourceId) {
         return false;
     }
 
-    updateEntryWithSource(valueSpan, source, entryElem);
-    return true;
-}
-
-/**
- * Helper function for updating entries with a source.
- * @param {HTMLElement} valueSpan - The value span element
- * @param {Object} source - The dynamic source data
- * @param {HTMLElement} entryElem - The entry element
- * @param {boolean} isLegacy - Whether this is a legacy source format
- * @returns {void}
- */
-function updateEntryWithSource(valueSpan, source, entryElem, isLegacy = false) {
-    // Get content based on whether it's legacy format or new format
-    const content = isLegacy ? source.locationContent : (source.sourceContent || source.locationContent);
-
-    // Get prefix and suffix from dataset
-    const prefix = valueSpan.dataset.prefix || '';
-    const suffix = valueSpan.dataset.suffix || '';
-
-    // Apply prefix and suffix to the content
-    const formattedContent = `${prefix}${content || '[Waiting for content]'}${suffix}`;
-
-    console.log(`Updating value to: ${formattedContent}`);
-    valueSpan.textContent = truncateText(formattedContent, 20);
-
-    // Remove missing source class if present
-    valueSpan.classList.remove('missing-source');
-
-    // Updated tooltip with better formatting
-    const contentPreview = content || 'Waiting for content';
-    // Support for both old and new property names
-    const sourceType = isLegacy ? source.locationType : (source.sourceType || source.locationType);
-    const sourceTag = isLegacy ? (source.locationTag || 'No tag') : (source.sourceTag || source.locationTag || 'No tag');
-    const sourcePath = isLegacy ? source.locationPath : (source.sourcePath || source.locationPath);
-
-    const prefixSuffixInfo = (prefix || suffix) ?
-        `Format: "${prefix}[dynamic content]${suffix}"\n` : '';
-
-    const tooltipContent = `${sourceType} - ${sourceTag} - ${sourcePath}\n${prefixSuffixInfo}\nValue (${contentPreview.length} chars):\n${contentPreview}`;
-    valueSpan.title = tooltipContent;
-
-    // Also update the details span
     const detailsSpan = entryElem.querySelector('.source-details');
-    if (detailsSpan) {
-        const sourceTypeMap = {
-            'http': '🌐',
-            'file': '📄',
-            'env': '🔧'
-        };
-        const typeIcon = sourceTypeMap[sourceType] || '📌';
-        const tag = sourceTag !== 'No tag' ? `[${sourceTag}]` : '';
-        detailsSpan.textContent = `${typeIcon} ${tag} ${truncateText(sourcePath, 15)}`;
-        detailsSpan.title = `Type: ${sourceType}\nTag: ${sourceTag}\nPath: ${sourcePath}`;
-    }
-
-    // Remove any existing highlight animation or "recently updated" status
-    // This is only for initial load, not for actual updates
-    valueSpan.classList.remove('highlight-update', 'recently-updated');
+    updateEntryWithSource(valueSpan, source, entryElem, detailsSpan);
+    return true;
 }
 
 /**
@@ -563,6 +666,10 @@ export function saveEntry(formData, entriesList, clearFormFn) {
     const prefix = formData.prefix || '';
     const suffix = formData.suffix || '';
 
+    // Get response type and enabled status
+    const isResponse = formData.isResponse === true;
+    const isEnabled = formData.isEnabled !== false; // Default to true if not specified
+
     // Validate input
     if (!headerName || (!isDynamic && !headerValue) || domains.length === 0) {
         showNotification('Please fill in all required fields', true);
@@ -589,7 +696,9 @@ export function saveEntry(formData, entriesList, clearFormFn) {
             isDynamic,
             sourceId: isDynamic ? sourceId : null,
             prefix, // Store prefix
-            suffix  // Store suffix
+            suffix,  // Store suffix
+            isResponse, // Store response type
+            isEnabled  // Store enabled status
         };
 
         storage.sync.set({ savedData }, () => {

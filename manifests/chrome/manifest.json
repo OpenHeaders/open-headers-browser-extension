@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
   "description": "Manage HTTP headers with static and dynamic sources and content auto-refresh. Dynamic sources: requests, env vars, files.",
- "version": "1.3.0",
+ "version": "1.4.0",
   "manifest_version": 3,
   "action": {
     "default_popup": "popup.html",
@@ -15,6 +15,7 @@
     "storage",
     "alarms",
     "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
     "tabs"
   ],
   "host_permissions": [

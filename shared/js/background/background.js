@@ -109,6 +109,46 @@ function generateSavedDataHash(savedData) {
     return JSON.stringify(simplifiedData);
 }
 
+/**
+ * Opens the welcome page directly, bypassing setup checks.
+ * This is only called from the "Open Setup Guide" button.
+ */
+function openWelcomePageDirectly() {
+    console.log('Info: Directly opening welcome page (bypassing setup checks)');
+
+    // Track that we're opening a page to prevent duplicates
+    welcomePageBeingOpened = true;
+
+    try {
+        // Use appropriate API based on browser
+        const api = typeof browser !== 'undefined' ? browser : chrome;
+
+        if (api.tabs && api.tabs.create) {
+            const welcomePageUrl = api.runtime.getURL('welcome.html');
+            console.log('Info: Welcome page URL:', welcomePageUrl);
+
+            // Create a new welcome page without any checks
+            const createPromise = typeof api.tabs.create.then === 'function'
+                ? api.tabs.create({ url: welcomePageUrl, active: true })
+                : new Promise((resolve) => api.tabs.create({ url: welcomePageUrl, active: true }, resolve));
+
+            createPromise.then(tab => {
+                console.log('Info: Force-opened welcome tab:', tab.id);
+                welcomePageBeingOpened = false;
+            }).catch(err => {
+                console.log('Info: Failed to force-open welcome page:', err ? err.message : 'unknown error');
+                welcomePageBeingOpened = false;
+            });
+        } else {
+            console.log('Info: Cannot open welcome page - missing permissions');
+            welcomePageBeingOpened = false;
+        }
+    } catch (e) {
+        console.log('Info: Error opening welcome page:', e.message);
+        welcomePageBeingOpened = false;
+    }
+}
+
 // Create a debounce function to avoid too many rapid updates
 function debounce(func, wait) {
     let timeout;
@@ -344,6 +384,28 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.type === 'checkConnection') {
         // Respond with current connection status
         sendResponse({ connected: isWebSocketConnected() });
+    } else if (message.type === 'getDynamicSources') {
+        // Get the current sources and send them back
+        const currentSources = getCurrentSources();
+        sendResponse({
+            sources: currentSources,
+            connected: isWebSocketConnected()
+        });
+    } else if (message.type === 'rulesUpdated') {
+        // Handle rule update request (for enable/disable toggle)
+        console.log('Info: Rule update requested due to enable/disable toggle');
+
+        // Update network rules with the current sources
+        updateNetworkRules(getCurrentSources());
+
+        // Update tracking variables
+        lastSourcesHash = generateSourcesHash(getCurrentSources());
+        lastRulesUpdateTime = Date.now();
+
+        // Send response if callback provided
+        if (sendResponse) {
+            sendResponse({ success: true });
+        }
     } else if (message.type === 'configurationImported') {
         // Handle configuration import
         console.log('Info: Configuration imported, updating rules');
@@ -392,12 +454,21 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ acknowledged: true });
         }
     } else if (message.type === 'openWelcomePage') {
-        // Handle request to open welcome page
+        // Regular welcome page opening (respects setup state)
+        console.log('Info: Opening welcome page requested');
         maybeOpenWelcomePage();
         if (sendResponse) {
             sendResponse({ acknowledged: true });
         }
+    } else if (message.type === 'forceOpenWelcomePage') {
+        // FORCE open the welcome page (ignore setup state)
+        console.log('Info: Force opening welcome page requested');
+        openWelcomePageDirectly();
+        if (sendResponse) {
+            sendResponse({ acknowledged: true });
+        }
     }
+
     // Return true to indicate we'll use sendResponse asynchronously
     return true;
 });
