@@ -1,5 +1,5 @@
 /**
- * Handles entry management (rendering, updating, saving, removing)
+ * Handles entry management (rendering, updating, saving, removing, editing)
  */
 import { formatHeaderValue, truncateText, normalizeHeaderName, generateUniqueId } from '../shared/utils.js';
 import { validateHeaderValue } from '../background/rule-validator.js';
@@ -250,8 +250,8 @@ function updateEntryWithSource(valueSpan, source, entryDiv, detailsSpan, isLegac
 }
 
 /**
- * Renders one entry and returns its container element with added enable/disable toggle
- * and support for request/response header type
+ * Renders one entry and returns its container element with added enable/disable toggle,
+ * edit button, and support for request/response header type
  * @param {HTMLElement} entriesList - The container with all entries
  * @param {string} id - Unique ID of the entry
  * @param {string} headerName - Name of the header
@@ -343,21 +343,42 @@ export function renderEntry(entriesList, id, headerName, headerValue, domains, i
     const detailsSpan = document.createElement('span');
     detailsSpan.classList.add('truncated', 'source-details');
 
-    // IMPORTANT: Create the remove button before any async operations
+    // Create the action buttons container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.classList.add('button-container');
+
+    // Create the edit button
+    const editButton = document.createElement('button');
+    editButton.classList.add('editBtn');
+    editButton.textContent = 'Edit';
+    // Add edit event listener
+    editButton.addEventListener('click', () => {
+        // Create and dispatch a custom event for editing
+        const editEvent = new CustomEvent('entryEdit', {
+            detail: { id: id }
+        });
+        document.dispatchEvent(editEvent);
+    });
+
+    // Create the remove button
     const removeButton = document.createElement('button');
     removeButton.classList.add('removeBtn');
     removeButton.textContent = 'Remove';
     // Pass entriesList to removeEntry
     removeButton.addEventListener('click', () => removeEntry(id, entriesList));
 
-    // Build the row with new status column
+    // Add buttons to container
+    buttonContainer.appendChild(editButton);
+    buttonContainer.appendChild(removeButton);
+
+    // Build the row with all components
     entryDiv.appendChild(statusTd);
     entryDiv.appendChild(typeTd);
     entryDiv.appendChild(nameSpan);
     entryDiv.appendChild(valueSpan);
     entryDiv.appendChild(domainsSpan);
     entryDiv.appendChild(detailsSpan);
-    entryDiv.appendChild(removeButton);
+    entryDiv.appendChild(buttonContainer);
 
     // Now process dynamic values AFTER all elements are created and attached
     if (isDynamic) {
@@ -431,6 +452,118 @@ export function renderEntry(entriesList, id, headerName, headerValue, domains, i
 
     return entryDiv;
 }
+
+/**
+ * Edits an existing entry by ID, populating the form with its data.
+ * @param {string} id - ID of the entry to edit
+ * @param {HTMLElement} entriesList - The container with all entries
+ */
+export function editEntry(id, entriesList) {
+    // Get the entry data from storage
+    storage.sync.get(['savedData'], (result) => {
+        const savedData = result.savedData || {};
+        const entry = savedData[id];
+
+        if (!entry) {
+            console.error(`Entry with ID ${id} not found`);
+            return;
+        }
+
+        console.log(`Editing entry ${id}:`, entry);
+
+        // Get form elements
+        const headerNameInput = document.getElementById('headerNameInput');
+        const headerValueInput = document.getElementById('headerValueInput');
+        const valueTypeSelect = document.getElementById('valueTypeSelect');
+        const dynamicValueSelect = document.getElementById('dynamicValueSelect');
+        const prefixInput = document.getElementById('prefixInput');
+        const suffixInput = document.getElementById('suffixInput');
+        const staticValueRow = document.getElementById('staticValueRow');
+        const dynamicValueRow = document.getElementById('dynamicValueRow');
+        const dynamicPrefixSuffixRow = document.getElementById('dynamicPrefixSuffixRow');
+        const requestRadio = document.getElementById('requestHeaderType');
+        const responseRadio = document.getElementById('responseHeaderType');
+        const saveButton = document.getElementById('saveButton');
+        const cancelButton = document.getElementById('cancelEditButton');
+
+        // Get domain tags manager function
+        const domainTagsManager = window.domainTagsManager;
+
+        // Store the entry ID in a data attribute on the save button
+        saveButton.dataset.editMode = 'true';
+        saveButton.dataset.editId = id;
+        saveButton.textContent = 'Update Header';
+
+        // Show cancel button
+        if (cancelButton) {
+            cancelButton.style.display = 'inline-block';
+        }
+
+        // Set header name
+        headerNameInput.value = entry.headerName || '';
+
+        // Set request/response type
+        if (requestRadio && responseRadio) {
+            requestRadio.checked = !entry.isResponse;
+            responseRadio.checked = entry.isResponse === true;
+        }
+
+        // Set value type and show/hide appropriate inputs
+        const isDynamic = entry.isDynamic === true;
+        valueTypeSelect.value = isDynamic ? 'dynamic' : 'static';
+
+        if (isDynamic) {
+            // Set dynamic source if available
+            if (dynamicValueSelect) {
+                const sourceId = entry.sourceId || '';
+
+                // We need to wait a bit for the dynamic sources to load
+                // before we can select the correct option
+                setTimeout(() => {
+                    for (let i = 0; i < dynamicValueSelect.options.length; i++) {
+                        if (dynamicValueSelect.options[i].value === sourceId) {
+                            dynamicValueSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }, 100);
+
+                // Set prefix and suffix
+                if (prefixInput) prefixInput.value = entry.prefix || '';
+                if (suffixInput) suffixInput.value = entry.suffix || '';
+            }
+
+            // Show/hide appropriate rows
+            if (staticValueRow) staticValueRow.style.display = 'none';
+            if (dynamicValueRow) dynamicValueRow.style.display = 'flex';
+            if (dynamicPrefixSuffixRow) dynamicPrefixSuffixRow.style.display = 'flex';
+        } else {
+            // Set static value
+            headerValueInput.value = entry.headerValue || '';
+
+            // Show/hide appropriate rows
+            if (staticValueRow) staticValueRow.style.display = 'flex';
+            if (dynamicValueRow) dynamicValueRow.style.display = 'none';
+            if (dynamicPrefixSuffixRow) dynamicPrefixSuffixRow.style.display = 'none';
+        }
+
+        // Set domains if the domain tags manager is available
+        if (domainTagsManager) {
+            const domains = Array.isArray(entry.domains)
+                ? entry.domains
+                : (entry.domain ? [entry.domain] : []);
+
+            domainTagsManager.setDomains(domains);
+        }
+
+        // Scroll to the top to make form visible
+        window.scrollTo(0, 0);
+
+        // Focus on the header name input
+        headerNameInput.focus();
+    });
+}
+
 /**
  *
  * Toggles the enabled status of a rule
@@ -646,12 +779,17 @@ export function refreshEntriesList(entriesList, changedSourceIds = []) {
 }
 
 /**
- * Saves a new header entry.
+ * Saves a new header entry or updates an existing one.
  * @param {Object} formData - Form data containing the header information
  * @param {HTMLElement} entriesList - The list element to render entries in
  * @param {Function} clearFormFn - Function to clear form fields after save
  */
 export function saveEntry(formData, entriesList, clearFormFn) {
+    // Check if we're in edit mode
+    const saveButton = document.getElementById('saveButton');
+    const isEditMode = saveButton && saveButton.dataset.editMode === 'true';
+    const editId = saveButton && saveButton.dataset.editId;
+
     // Store normalized header name to match browser's behavior
     const headerName = normalizeHeaderName(formData.headerName);
     const headerValue = formData.headerValue;
@@ -685,11 +823,18 @@ export function saveEntry(formData, entriesList, clearFormFn) {
         }
     }
 
-    const uniqueId = generateUniqueId();
-
     storage.sync.get(['savedData'], (result) => {
         const savedData = result.savedData || {};
-        savedData[uniqueId] = {
+
+        // If in edit mode, use the existing ID; otherwise, generate a new one
+        const entryId = isEditMode ? editId : generateUniqueId();
+
+        // If editing, preserve the existing enabled state if not specified in the form
+        const effectiveIsEnabled = isEditMode
+            ? (formData.isEnabled !== undefined ? formData.isEnabled : savedData[editId]?.isEnabled !== false)
+            : isEnabled;
+
+        savedData[entryId] = {
             headerName, // Store normalized header name
             headerValue,
             domains, // Store domains as array
@@ -698,12 +843,25 @@ export function saveEntry(formData, entriesList, clearFormFn) {
             prefix, // Store prefix
             suffix,  // Store suffix
             isResponse, // Store response type
-            isEnabled  // Store enabled status
+            isEnabled: effectiveIsEnabled // Store enabled status (preserved if editing)
         };
 
         storage.sync.set({ savedData }, () => {
             // Update our stored data
             currentSavedData = savedData;
+
+            // Reset the save button state
+            if (saveButton) {
+                saveButton.dataset.editMode = 'false';
+                saveButton.dataset.editId = '';
+                saveButton.textContent = 'Save';
+            }
+
+            // Hide cancel button if it exists
+            const cancelButton = document.getElementById('cancelEditButton');
+            if (cancelButton) {
+                cancelButton.style.display = 'none';
+            }
 
             // Clear form
             if (clearFormFn) clearFormFn();
@@ -712,7 +870,12 @@ export function saveEntry(formData, entriesList, clearFormFn) {
             renderEntries(entriesList, savedData);
 
             // Show success message
-            showNotification('Header saved successfully');
+            showNotification(isEditMode ? 'Header updated successfully' : 'Header saved successfully');
+
+            // Notify the background script to update the rules
+            runtime.sendMessage({
+                type: 'rulesUpdated'
+            });
         });
     });
 }
@@ -733,6 +896,11 @@ export function removeEntry(id, entriesList) {
         storage.sync.set({ savedData }, () => {
             // Re-render the entries list
             renderEntries(entriesList, savedData);
+
+            // Notify the background script to update the rules
+            runtime.sendMessage({
+                type: 'rulesUpdated'
+            });
         });
     });
 }

@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Open Headers</title>
     <link rel="stylesheet" href="popup.css" />
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
-<body>
+<body class="popup-container">
 <h1>Open Headers</h1>
 
 <div class="inputSection">
@@ -91,7 +91,10 @@
         </div>
     </div>
 
-    <button id="saveButton">Save</button>
+    <div class="buttonRow">
+        <!-- Cancel button will be inserted here by JavaScript -->
+        <button id="saveButton">Save</button>
+    </div>
 </div>
 
 <div class="actionButtons">
@@ -113,7 +116,7 @@
         <span>Header Value</span>
         <span>Domains</span>
         <span>Source Details</span>
-        <span></span>
+        <span>Actions</span>
     </div>
     <div id="entriesList"></div>
 </div>
@@ -151,7 +154,7 @@
             </a>
         </div>
         <div class="footer-text">
-            Open Headers | Version 1.4.0
+            Open Headers | Version 1.5.0
         </div>
     </div>
 </footer>
