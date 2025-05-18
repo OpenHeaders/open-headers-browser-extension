@@ -1,6 +1,6 @@
 {
   "name": "open-headers",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "A browser extension to view and manage HTTP headers",
   "scripts": {
     "build": "npm run build:chrome && npm run build:firefox && npm run build:edge && npm run build:safari",

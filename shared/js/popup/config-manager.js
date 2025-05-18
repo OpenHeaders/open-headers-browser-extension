@@ -1,6 +1,5 @@
 /**
- * Configuration import/export functionality with fixes for notification timing
- * and proper data handling
+ * Configuration import/export functionality with edit mode support
  */
 import { getCurrentSavedData } from './entry-manager.js';
 import { getDynamicSources } from './ui-manager.js';
@@ -8,7 +7,7 @@ import { showNotification } from './notification-system.js';
 import { storage, runtime } from '../shared/browser-api.js';
 
 /**
- * Exports the current configuration to a JSON file with fixed notification timing.
+ * Exports the current configuration to a JSON file.
  * @returns {Promise<void>}
  */
 export async function exportConfiguration() {
@@ -21,7 +20,7 @@ export async function exportConfiguration() {
 
         // Create configuration object
         const configuration = {
-            version: '1.4.0',
+            version: '1.5.0',
             timestamp: new Date().toISOString(),
             headerEntries,
             dynamicSources
@@ -139,7 +138,10 @@ export async function importConfiguration(file) {
                             ...entry,
                             // Set defaults for new fields if not present
                             isResponse: entry.isResponse || false,
-                            isEnabled: entry.isEnabled !== undefined ? entry.isEnabled : true
+                            isEnabled: entry.isEnabled !== undefined ? entry.isEnabled : true,
+                            // Ensure prefix and suffix are defined
+                            prefix: entry.prefix || '',
+                            suffix: entry.suffix || ''
                         };
                     });
 
@@ -189,6 +191,26 @@ export async function importConfiguration(file) {
                             }
                         });
                     });
+
+                    // Exit edit mode if active to prevent confusion
+                    const saveButton = document.getElementById('saveButton');
+                    if (saveButton && saveButton.dataset.editMode === 'true') {
+                        // Reset edit mode
+                        saveButton.dataset.editMode = 'false';
+                        saveButton.dataset.editId = '';
+                        saveButton.textContent = 'Save';
+
+                        // Hide cancel button if exists
+                        const cancelButton = document.getElementById('cancelEditButton');
+                        if (cancelButton) {
+                            cancelButton.style.display = 'none';
+                        }
+
+                        // Clear form using the window function if available
+                        if (window.clearForm && typeof window.clearForm === 'function') {
+                            window.clearForm();
+                        }
+                    }
 
                     // Show success notification
                     showNotification('Configuration imported successfully');

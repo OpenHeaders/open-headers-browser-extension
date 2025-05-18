@@ -19,7 +19,8 @@ import {
     refreshEntriesList,
     getCurrentSavedData,
     updateDynamicEntryValue,
-    renderEntries
+    renderEntries,
+    editEntry
 } from './entry-manager.js';
 import {
     saveDraftInputs,
@@ -42,6 +43,9 @@ let entriesList = null;
 let dynamicValueSelect = null;
 // Store global reference to savedData
 let currentSavedData = {};
+// Track if we're in edit mode
+let isEditMode = false;
+let editingEntryId = null;
 
 /**
  * Refreshes the entries list to reflect the current enabled/disabled status.
@@ -106,6 +110,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Create a cancel button for edit mode
+    const cancelButton = document.createElement('button');
+    cancelButton.id = 'cancelEditButton';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.classList.add('cancelBtn');
+    cancelButton.style.display = 'none'; // Hidden by default
+
+    // Insert cancel button before save button
+    saveButton.parentNode.insertBefore(cancelButton, saveButton);
+
+    // Add event listener for the cancel button
+    cancelButton.addEventListener('click', () => {
+        // Remove editing-entry class from ALL entries
+        document.querySelectorAll('.entryItem.editing-entry').forEach(item => {
+            item.classList.remove('editing-entry');
+        });
+
+        // Reset edit mode
+        isEditMode = false;
+        editingEntryId = null;
+
+        // Reset save button
+        saveButton.dataset.editMode = 'false';
+        saveButton.dataset.editId = '';
+        saveButton.textContent = 'Save';
+
+        // Hide cancel button
+        cancelButton.style.display = 'none';
+
+        // Clear form
+        clearForm();
+    });
+
     // Create the status indicator in the header
     const statusIndicator = initializeStatusIndicator(headerElem);
 
@@ -117,6 +154,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     domainTagsManager = initializeDomainTagsInput(domainInput, domainTags, () => {
         saveDraftInputs(getFormData());
     });
+
+    // Make domain tags manager globally available
+    window.domainTagsManager = domainTagsManager;
 
     // Track saved source ID for restoration
     let savedSourceId = '';
@@ -267,17 +307,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Get the selected header direction (request/response)
         const isResponse = requestRadio ? !requestRadio.checked : false;
 
+        // Get enabled/disabled state from edit mode or default to enabled
+        const isEnabled = isEditMode && editingEntryId ?
+            (currentSavedData[editingEntryId]?.isEnabled !== false) : true;
+
         return {
             // Store the normalized header name to match Chrome's behavior
             headerName: headerNameInput.value,
             headerValue: headerValueInput.value,
             domains: domainTagsManager ? domainTagsManager.getDomains() : [],
             valueType: valueTypeSelect.value,
+            isDynamic: valueTypeSelect.value === 'dynamic',
             sourceId: dynamicValueSelect.value,
             prefix: prefixInput ? prefixInput.value || '' : '',
             suffix: suffixInput ? suffixInput.value || '' : '',
             isResponse: isResponse, // Add response type flag
-            isEnabled: true // New entries are enabled by default
+            isEnabled: isEnabled // Preserve enabled state when editing
         };
     }
 
@@ -301,9 +346,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (requestRadio) requestRadio.checked = true;
         if (responseRadio) responseRadio.checked = false;
 
+        // Remove editing-entry class from ALL entries, not just the current one
+        document.querySelectorAll('.entryItem.editing-entry').forEach(item => {
+            item.classList.remove('editing-entry');
+        });
+
+        // Reset edit mode
+        isEditMode = false;
+        editingEntryId = null;
+
+        // Reset save button
+        saveButton.dataset.editMode = 'false';
+        saveButton.dataset.editId = '';
+        saveButton.textContent = 'Save';
+
+        // Hide cancel button
+        cancelButton.style.display = 'none';
+
         // Also clear the draft data
         saveDraftInputs({}, true, true);
     }
+
+    // Make clearForm available globally for other modules
+    window.clearForm = clearForm;
 
     // Add a blur event handler to normalize header names
     headerNameInput.addEventListener('blur', () => {
@@ -384,6 +449,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // Get the entry's current enabled state if editing, or default to enabled
+        const isEnabled = isEditMode && editingEntryId ?
+            (currentSavedData[editingEntryId]?.isEnabled !== false) : true;
+
+        // Remove editing-entry class from ALL entries
+        document.querySelectorAll('.entryItem.editing-entry').forEach(item => {
+            item.classList.remove('editing-entry');
+        });
+
         // Save the entry with normalized header name
         saveEntry(
             {
@@ -394,8 +468,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 sourceId,
                 prefix,
                 suffix,
-                isResponse,     // Pass the response type flag
-                isEnabled: true // New entries are enabled by default
+                isResponse,
+                isEnabled // Pass the enabled status
             },
             entriesList,
             clearForm
@@ -534,6 +608,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         // It's important to return false if we're not using sendResponse
         return false;
+    });
+
+    // Handle entry edit events triggered from entry-manager.js
+    document.addEventListener('entryEdit', (event) => {
+        const entryId = event.detail.id;
+
+        // Set edit mode
+        isEditMode = true;
+        editingEntryId = entryId;
+
+        // First, remove the editing-entry class from ALL entries
+        document.querySelectorAll('.entryItem.editing-entry').forEach(item => {
+            item.classList.remove('editing-entry');
+        });
+
+        // Then add the class only to the current entry being edited
+        const entryElement = document.querySelector(`.entryItem[data-entry-id="${entryId}"]`);
+        if (entryElement) {
+            entryElement.classList.add('editing-entry');
+
+            // Disable the toggle switch during edit
+            const toggleSwitch = entryElement.querySelector('.switch input[type="checkbox"]');
+            if (toggleSwitch) {
+                // Save the original state to restore later if needed
+                toggleSwitch.dataset.originalState = toggleSwitch.checked;
+                // The CSS will handle disabling the appearance and preventing clicks
+            }
+        }
+
+        // Show cancel button
+        cancelButton.style.display = 'inline-block';
+
+        // Load entry data
+        editEntry(entryId, entriesList);
     });
 
     // Check connection status periodically
@@ -676,6 +784,63 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         }, 200);
+
+        // Add CSS for edit and cancel buttons
+        const styleElement = document.createElement('style');
+        styleElement.textContent = `
+            .button-container {
+                display: flex;
+                gap: 4px;
+                justify-content: flex-end;
+            }
+            .editBtn {
+                background-color: #4285F4;
+                color: #fff;
+                border: none;
+                padding: 4px 8px;
+                cursor: pointer;
+                font-size: 12px;
+                border-radius: 4px;
+                flex-shrink: 0;
+            }
+            .editBtn:hover {
+                background-color: #3b77db;
+            }
+            .cancelBtn {
+                background-color: #9e9e9e;
+                color: #fff;
+                border: none;
+                padding: 8px;
+                cursor: pointer;
+                font-size: 14px;
+                border-radius: 4px;
+                margin-right: 8px;
+            }
+            .cancelBtn:hover {
+                background-color: #757575;
+            }
+            #saveButton[data-edit-mode="true"] {
+                background-color: #34A853;
+            }
+            
+            /* Disabled state for switch when in edit mode */
+            .editing-entry .switch {
+                opacity: 0.6;
+                cursor: not-allowed;
+                pointer-events: none; /* Prevents clicking */
+            }
+            
+            .editing-entry .slider {
+                background-color: #ccc !important; /* Force gray appearance */
+            }
+            
+            /* Add a subtle indicator that we're in edit mode */
+            .editing-entry {
+                background-color: #f8f9fa;
+                border-left: 3px solid #4285F4;
+            }
+        `;
+        document.head.appendChild(styleElement);
 
         // Let the background script know we're open and ready for updates
         try {

@@ -1,16 +1,21 @@
-/* Overall popup width */
-body {
-    width: 750px;
+body.popup-container {
+    width: 780px;
     font-family: Arial, sans-serif;
-    margin: 10px;
+    margin: 10px auto;
     background-color: #f2f2f2;
-    overflow-x: hidden; /* Prevent horizontal scrolling */
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    min-height: 500px; /* Minimum height to ensure footer stays at bottom */
+    min-height: 500px;
+    box-sizing: border-box;
 }
 
-h1 {
+/* Make sure all elements respect the border-box model, but only in our popup */
+.popup-container * {
+    box-sizing: border-box;
+}
+
+.popup-container h1 {
     margin: 0 0 15px 0;
     font-size: 20px;
     text-align: center;
@@ -20,7 +25,7 @@ h1 {
 }
 
 /* Status indicator in the header */
-.status-indicator {
+.popup-container .status-indicator {
     font-size: 12px;
     margin-left: 10px;
     font-weight: normal;
@@ -28,42 +33,47 @@ h1 {
 }
 
 /* Connected status */
-.status-connected {
+.popup-container .status-connected {
     color: #4285F4;
 }
 
 /* Disconnected status */
-.status-disconnected {
+.popup-container .status-disconnected {
     color: #e64545;
 }
 
 /* Updated status */
-.status-updated {
+.popup-container .status-updated {
     color: #00aa00;
 }
 
 /* Section for input fields and save button */
-.inputSection {
+.popup-container .inputSection {
     background-color: #fff;
     padding: 10px;
     border-radius: 6px;
     margin-bottom: 10px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 100%;
 }
 
-.inputRow {
+.popup-container .inputRow {
     display: flex;
     align-items: center;
     margin-bottom: 8px;
+    max-width: 100%;
+    flex-wrap: wrap; /* Allow wrapping for narrow screens */
 }
 
-.label {
+.popup-container .label {
     width: 110px;
     font-weight: bold;
     flex-shrink: 0; /* Prevent the label from shrinking */
 }
 
-input[type="text"], select {
+.popup-container input[type="text"],
+.popup-container select {
     flex: 1;
     padding: 6px;
     border: 1px solid #ccc;
@@ -73,12 +83,12 @@ input[type="text"], select {
 }
 
 /* Make sure select dropdowns don't break layout */
-select {
+.popup-container select {
     text-overflow: ellipsis; /* Add ellipsis for long text */
 }
 
 /* Save button */
-#saveButton {
+.popup-container #saveButton {
     width: 100%;
     padding: 8px;
     cursor: pointer;
@@ -89,12 +99,32 @@ select {
     font-size: 14px;
     margin-top: 5px;
 }
-#saveButton:hover {
+.popup-container #saveButton:hover {
     background-color: #3367D6;
 }
 
+/* Style for the Save button when in edit mode */
+.popup-container #saveButton[data-edit-mode="true"] {
+    background-color: #34A853;
+}
+
+/* Cancel button */
+.popup-container .cancelBtn {
+    background-color: #9e9e9e;
+    color: #fff;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 4px;
+    margin-right: 8px;
+}
+.popup-container .cancelBtn:hover {
+    background-color: #757575;
+}
+
 /* Container for the saved entries */
-.entriesContainer {
+.popup-container .entriesContainer {
     background-color: #fff;
     padding: 10px;
     border-radius: 6px;
@@ -102,29 +132,34 @@ select {
     overflow-x: hidden; /* Prevent horizontal scrolling */
     flex: 1; /* Allow entries container to expand */
     margin-bottom: 10px; /* Reduced space for footer */
+    width: 100%;
+    max-width: 100%;
 }
 
 /* Column header row for the entries */
-.entriesHeader {
+.popup-container .entriesHeader {
     display: grid;
-    grid-template-columns: 50px 60px 90px 130px 125px 125px auto;
+    grid-template-columns: 50px 50px 100px 140px 140px 120px auto;
     column-gap: 8px;
     font-weight: bold;
     margin-bottom: 5px;
     padding: 0 5px;
+    width: 100%;
+    max-width: 100%;
 }
 
-#entriesList {
+.popup-container #entriesList {
     margin-top: 5px;
     max-height: 300px; /* Reduced slightly to make room for footer */
     overflow-y: auto;
     overflow-x: hidden; /* Prevent horizontal scrolling */
+    width: 100%;
 }
 
 /* Each saved entry in a row matching the columns above */
-.entryItem {
+.popup-container .entryItem {
     display: grid;
-    grid-template-columns: 50px 60px 90px 130px 125px 125px auto;
+    grid-template-columns: 50px 50px 100px 140px 140px 120px auto;
     column-gap: 8px;
     align-items: center;
     margin-bottom: 8px;
@@ -132,10 +167,12 @@ select {
     background-color: #fafafa;
     border-radius: 4px;
     min-width: 0; /* Allow grid items to shrink below their content size */
+    width: 100%;
+    max-width: 100%;
 }
 
 /* Type indicator */
-.type-indicator {
+.popup-container .type-indicator {
     font-weight: bold;
     text-align: center;
     border-radius: 4px;
@@ -143,51 +180,77 @@ select {
     font-size: 12px;
 }
 
-.type-static {
+.popup-container .type-static {
     background-color: #e7f4ff;
     color: #0066cc;
 }
 
-.type-dynamic {
+.popup-container .type-dynamic {
     background-color: #e6ffe6;
     color: #006600;
 }
 
 /* Truncated text styling */
-.truncated {
+.popup-container .truncated {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis; /* Add ellipsis for overflowing text */
     min-width: 0; /* Allow the element to shrink below its content size */
+    max-width: 100%;
 }
 
 /* Source details styling */
-.source-details {
+.popup-container .source-details {
     font-size: 12px;
     color: #666;
     min-width: 0; /* Allow shrinking */
 }
 
 /* Legacy support for old class name */
-.location-details {
+.popup-container .location-details {
     font-size: 12px;
     color: #666;
     min-width: 0; /* Allow shrinking */
 }
 
 /* Header value styling - limit width and add ellipsis */
-.header-value {
+.popup-container .header-value {
     min-width: 0; /* Allow shrinking */
 }
 
 /* Long content handling for tooltips */
-[title] {
+.popup-container [title] {
     position: relative;
     cursor: help;
 }
 
+/* Edit and Remove buttons container */
+.popup-container .button-container {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    min-width: 80px; /* Minimum width for buttons */
+    max-width: 100px; /* Maximum width for buttons */
+}
+
+/* Edit button styling */
+.popup-container .editBtn {
+    background-color: #4285F4;
+    color: #fff;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.popup-container .editBtn:hover {
+    background-color: #3b77db;
+}
+
 /* Remove button for each entry */
-.removeBtn {
+.popup-container .removeBtn {
     background-color: #ff4f4f;
     color: #fff;
     border: none;
@@ -195,11 +258,27 @@ select {
     cursor: pointer;
     font-size: 12px;
     border-radius: 4px;
-    justify-self: end;
-    flex-shrink: 0; /* Prevent the button from shrinking */
+    flex-shrink: 0;
 }
-.removeBtn:hover {
+.popup-container .removeBtn:hover {
     background-color: #e64545;
+}
+
+/* Disabled state for switch when in edit mode */
+.popup-container .editing-entry .switch {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none; /* Prevents clicking */
+}
+
+.popup-container .editing-entry .slider {
+    background-color: #ccc !important; /* Force gray appearance */
+}
+
+/* Add a subtle indicator that we're in edit mode */
+.popup-container .editing-entry {
+    background-color: #f8f9fa;
+    border-left: 3px solid #4285F4;
 }
 
 /* Animation for value updates - fixed to prevent auto-application */
@@ -210,12 +289,12 @@ select {
     100% { background-color: transparent; }
 }
 
-.highlight-update {
+.popup-container .highlight-update {
     animation: highlight-update 2s ease-in-out;
 }
 
 /* Add a small indicator for the updated value - fixed to be more specific */
-.header-value.recently-updated::after {
+.popup-container .header-value.recently-updated::after {
     content: '';
     display: inline-block;
     width: 8px;
@@ -227,34 +306,34 @@ select {
 }
 
 /* Style for missing sources - made more specific to prevent incorrect application */
-.header-value.missing-source {
+.popup-container .header-value.missing-source {
     color: #e65100;
     font-style: italic;
 }
 
 /* Add a utility button for entries with missing sources */
-.entryItem[data-source-missing="true"] .removeBtn {
+.popup-container .entryItem[data-source-missing="true"] .removeBtn {
     background-color: #f57c00;
 }
 
 /* Make sure the missing source has visual priority */
-.entryItem[data-source-missing="true"] {
+.popup-container .entryItem[data-source-missing="true"] {
     background-color: #fff8e1;
     border-left: 3px solid #ffa000;
 }
 
 /* Never apply both styles at once - this was part of the bug */
-.header-value.missing-source.recently-updated::after {
+.popup-container .header-value.missing-source.recently-updated::after {
     display: none;
 }
 
 /* Make sure highlight animations don't apply to missing sources */
-.header-value.missing-source.highlight-update {
+.popup-container .header-value.missing-source.highlight-update {
     animation: none;
 }
 
 /* Notification system */
-.notification-container {
+.popup-container .notification-container {
     position: fixed;
     top: 10px;
     right: 10px;
@@ -262,7 +341,7 @@ select {
     z-index: 1000;
 }
 
-.notification {
+.popup-container .notification {
     padding: 10px;
     margin-bottom: 10px;
     border-radius: 4px;
@@ -272,19 +351,19 @@ select {
     font-size: 14px;
 }
 
-.notification-info {
+.popup-container .notification-info {
     background-color: #e3f2fd;
     border-left: 4px solid #2196F3;
     color: #0d47a1;
 }
 
-.notification-error {
+.popup-container .notification-error {
     background-color: #ffebee;
     border-left: 4px solid #f44336;
     color: #b71c1c;
 }
 
-.notification-close {
+.popup-container .notification-close {
     position: absolute;
     top: 5px;
     right: 5px;
@@ -293,32 +372,32 @@ select {
     color: #555;
 }
 
-.notification-fade {
+.popup-container .notification-fade {
     animation: fade-out 0.5s ease-out forwards;
 }
 
 /* Style for option groups in the location select */
-optgroup {
+.popup-container optgroup {
     font-weight: bold;
     color: #333;
 }
 
-option {
+.popup-container option {
     padding: 5px;
     text-overflow: ellipsis;
     overflow: hidden;
 }
 
 /* Make sure the select dropdown options don't cause horizontal scrolling */
-select option {
-    max-width: 500px; /* Limit the dropdown width */
+.popup-container select option {
+    max-width: 600px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 /* Footer styling - more compact version */
-.footer {
+.popup-container .footer {
     margin-top: auto; /* Push footer to bottom */
     background-color: #fff;
     border-top: 1px solid #eaeaea;
@@ -326,10 +405,13 @@ select option {
     border-radius: 0 0 6px 6px;
     text-align: center;
     box-shadow: 0 -2px 4px rgba(0,0,0,0.05);
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* App info section */
-.app-info {
+.popup-container .app-info {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -340,24 +422,30 @@ select option {
     border-left: 3px solid #4285F4;
     font-size: 12px;
     position: relative;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* Features text */
-.app-features {
+.popup-container .app-features {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
     flex: 1;
+    overflow: hidden;
 }
 
-.feature-text {
+.popup-container .feature-text {
     color: #333;
     line-height: 1.3;
+    white-space: normal;
+    max-width: 100%;
 }
 
 /* Connecting arrow */
-.connecting-arrow {
+.popup-container .connecting-arrow {
     display: flex;
     align-items: center;
     margin: 0 15px;
@@ -365,7 +453,7 @@ select option {
     animation: pulse 2s infinite;
 }
 
-.connecting-arrow i {
+.popup-container .connecting-arrow i {
     font-size: 18px;
 }
 
@@ -376,23 +464,24 @@ select option {
 }
 
 /* Download section */
-.download-section {
+.popup-container .download-section {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
 }
 
-.download-label {
+.popup-container .download-label {
     margin-right: 8px;
     color: #555;
     font-weight: bold;
 }
 
-.download-links {
+.popup-container .download-links {
     display: flex;
     gap: 10px;
 }
 
-.download-links a {
+.popup-container .download-links a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -405,26 +494,26 @@ select option {
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-.download-links a:hover {
+.popup-container .download-links a:hover {
     color: white;
     transform: translateY(-2px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.15);
 }
 
-.download-links a:hover i.fa-apple {
+.popup-container .download-links a:hover i.fa-apple {
     background-color: #000000;
 }
 
-.download-links a:hover i.fa-windows {
+.popup-container .download-links a:hover i.fa-windows {
     background-color: #0078D6;
 }
 
-.download-links a:hover i.fa-linux {
+.popup-container .download-links a:hover i.fa-linux {
     background-color: #FCC624;
     color: #000;
 }
 
-.download-links i {
+.popup-container .download-links i {
     font-size: 16px;
     padding: 5px;
     width: 100%;
@@ -436,32 +525,39 @@ select option {
 }
 
 /* Footer bottom section */
-.footer-bottom {
+.popup-container .footer-bottom {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding-top: 6px;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
 }
 
-.social-links {
+.popup-container .social-links {
     display: flex;
     gap: 12px;
 }
 
-.social-links a {
+.popup-container .social-links a {
     color: #4285F4;
     font-size: 18px;
     transition: color 0.3s ease, transform 0.2s ease;
 }
 
-.social-links a:hover {
+.popup-container .social-links a:hover {
     color: #3367D6;
     transform: scale(1.2);
 }
 
-.footer-text {
+.popup-container .footer-text {
     font-size: 11px;
     color: #666;
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @keyframes slide-in {
@@ -485,13 +581,15 @@ select option {
 }
 
 /* Config Import/Export Buttons */
-.actionButtons {
+.popup-container .actionButtons {
     display: flex;
     gap: 10px;
     margin-bottom: 10px;
+    width: 100%;
+    max-width: 100%;
 }
 
-.actionButtons button {
+.popup-container .actionButtons button {
     flex: 1;
     padding: 8px;
     cursor: pointer;
@@ -503,33 +601,34 @@ select option {
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    max-width: 50%;
 }
 
-.actionButtons button:hover {
+.popup-container .actionButtons button:hover {
     background-color: #f1f3f4;
     transform: translateY(-1px);
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.actionButtons button i {
+.popup-container .actionButtons button i {
     margin-right: 5px;
 }
 
-#exportConfigButton {
+.popup-container #exportConfigButton {
     color: #1a73e8;
     border-color: #d2e3fc;
 }
 
-#exportConfigButton:hover {
+.popup-container #exportConfigButton:hover {
     background-color: #d2e3fc;
 }
 
-#importConfigButton {
+.popup-container #importConfigButton {
     color: #188038;
     border-color: #ceead6;
 }
 
-#importConfigButton:hover {
+.popup-container #importConfigButton:hover {
     background-color: #ceead6;
 }
 
@@ -540,18 +639,19 @@ select option {
     100% { transform: scale(1); }
 }
 
-.button-success {
+.popup-container .button-success {
     animation: button-success 0.4s ease-in-out;
 }
 
 /* Domain tag input container */
-.domainInputContainer {
+.popup-container .domainInputContainer {
     display: flex;
     flex-direction: column;
     flex: 1;
+    max-width: 100%;
 }
 
-.tagInput {
+.popup-container .tagInput {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -561,9 +661,10 @@ select option {
     padding: 2px 4px;
     background-color: #fff;
     flex: 1;
+    max-width: 100%;
 }
 
-#domainInput {
+.popup-container #domainInput {
     flex: 1;
     border: none;
     outline: none;
@@ -571,15 +672,16 @@ select option {
     min-width: 60px;
 }
 
-.tagContainer {
+.popup-container .tagContainer {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     align-items: center;
     margin: 2px;
+    max-width: 100%;
 }
 
-.domainTag {
+.popup-container .domainTag {
     display: flex;
     align-items: center;
     background-color: #e3f2fd;
@@ -590,12 +692,12 @@ select option {
     font-size: 12px;
 }
 
-.domainTagText {
+.popup-container .domainTagText {
     margin-right: 4px;
     color: #0d47a1;
 }
 
-.removeTagBtn {
+.popup-container .removeTagBtn {
     background: none;
     border: none;
     color: #f44336;
@@ -604,11 +706,11 @@ select option {
     padding: 0 2px;
 }
 
-.removeTagBtn:hover {
+.popup-container .removeTagBtn:hover {
     color: #d32f2f;
 }
 
-.domainHelp {
+.popup-container .domainHelp {
     display: flex;
     align-items: center;
     font-size: 11px;
@@ -617,20 +719,22 @@ select option {
     padding-left: 2px;
 }
 
-.domainHelp i {
+.popup-container .domainHelp i {
     margin-right: 4px;
     color: #2196F3;
 }
 
 /* Domain tags display in entries */
-.domain-tags {
+.popup-container .domain-tags {
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 
-.domain-tag-small {
+.popup-container .domain-tag-small {
     font-size: 11px;
     background-color: #e3f2fd;
     border-radius: 3px;
@@ -643,7 +747,7 @@ select option {
     max-width: 100%;
 }
 
-.domain-count {
+.popup-container .domain-count {
     font-size: 10px;
     color: #666;
     font-style: italic;
@@ -651,27 +755,31 @@ select option {
 }
 
 /* Prefix/Suffix container */
-.prefixSuffixContainer {
+.popup-container .prefixSuffixContainer {
     display: flex;
     align-items: center;
     gap: 8px;
     flex: 1;
+    flex-wrap: wrap; /* Allow wrapping on narrow screens */
+    max-width: 100%;
 }
 
-.prefixInputWrapper, .suffixInputWrapper {
+.popup-container .prefixInputWrapper,
+.popup-container .suffixInputWrapper {
     display: flex;
     align-items: center;
     gap: 4px;
     flex: 1;
 }
 
-.inputLabel {
+.popup-container .inputLabel {
     font-size: 12px;
     color: #555;
     min-width: 40px;
 }
 
-#prefixInput, #suffixInput {
+.popup-container #prefixInput,
+.popup-container #suffixInput {
     flex: 1;
     padding: 6px;
     border: 1px solid #ccc;
@@ -680,7 +788,7 @@ select option {
     min-width: 0;
 }
 
-.dynamicValueIndicator {
+.popup-container .dynamicValueIndicator {
     background-color: #f0f7ff;
     border: 1px dashed #2196F3;
     border-radius: 4px;
@@ -691,12 +799,12 @@ select option {
 }
 
 /* Update to show/hide prefix/suffix row with value type changes */
-#valueTypeSelect[value="dynamic"] ~ #dynamicPrefixSuffixRow {
+.popup-container #valueTypeSelect[value="dynamic"] ~ #dynamicPrefixSuffixRow {
     display: flex;
 }
 
 /* Style for missing sources */
-.missing-source-indicator {
+.popup-container .missing-source-indicator {
     background-color: #fff3e0;
     color: #e65100;
     border: 1px solid #ffccbc;
@@ -712,24 +820,24 @@ select option {
     100% { opacity: 0.7; }
 }
 
-.missing-source-indicator {
+.popup-container .missing-source-indicator {
     animation: pulse-warning 2s infinite;
 }
 
 /* Header Direction toggle */
-.toggle-container {
+.popup-container .toggle-container {
     display: flex;
     align-items: center;
 }
 
-.toggle-container label {
+.popup-container .toggle-container label {
     margin: 0 12px 0 4px;
     font-size: 14px;
     color: var(--text-color);
 }
 
 /* Enable/Disable switch */
-.switch {
+.popup-container .switch {
     position: relative;
     display: inline-block;
     width: 36px;
@@ -737,13 +845,13 @@ select option {
     margin-right: 8px;
 }
 
-.switch input {
+.popup-container .switch input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.slider {
+.popup-container .slider {
     position: absolute;
     cursor: pointer;
     top: 0;
@@ -755,7 +863,7 @@ select option {
     border-radius: 20px;
 }
 
-.slider:before {
+.popup-container .slider:before {
     position: absolute;
     content: "";
     height: 14px;
@@ -767,44 +875,54 @@ select option {
     border-radius: 50%;
 }
 
-input:checked + .slider {
+.popup-container input:checked + .slider {
     background-color: #4285F4;
 }
 
-input:focus + .slider {
+.popup-container input:focus + .slider {
     box-shadow: 0 0 1px #4285F4;
 }
 
-input:checked + .slider:before {
+.popup-container input:checked + .slider:before {
     transform: translateX(16px);
 }
 
 /* Status column styles */
-.status-enabled, .status-disabled {
+.popup-container .status-enabled,
+.popup-container .status-disabled {
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.status-enabled {
+.popup-container .status-enabled {
     color: #34A853;
 }
 
-.status-disabled {
+.popup-container .status-disabled {
     color: #9AA0A6;
 }
 
 /* Style for disabled entries */
-.entryItem.disabled {
+.popup-container .entryItem.disabled {
     opacity: 0.6;
 }
+
 /* Type indicators for Request/Response */
-.type-request {
+.popup-container .type-request {
     background-color: #e1f5fe;
     color: #0277bd;
 }
 
-.type-response {
+.popup-container .type-response {
     background-color: #f1f8e9;
     color: #558b2f;
+}
+
+/* Button Row */
+.popup-container .buttonRow {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+    width: 100%;
 }
