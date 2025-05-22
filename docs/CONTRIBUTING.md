@@ -70,8 +70,30 @@ We expect all contributors to follow our Code of Conduct. Please be respectful a
 
 ## Development Workflow
 
+### React Development Setup
+
+Open Headers uses **React 18** with **Ant Design 5** for the frontend UI. Before contributing:
+
+1. **Familiarize yourself with the tech stack**:
+   - React 18 with functional components and hooks
+   - Ant Design 5 components and theming
+   - React Context API for state management
+   - LESS for styling with CSS custom properties
+
+2. **Understand the architecture**:
+   - React components in `src/popup/components/`
+   - Global state management via React Context
+   - Custom hooks for reusable logic
+   - Apple-like minimalist design system
+
+### Workflow Steps
+
 1. **Create a new branch** for your work (see [Branching Strategy](#branching-strategy))
-2. **Make your changes** to the codebase
+2. **Make your changes** to the codebase:
+   - For UI changes: Work in `src/popup/components/`
+   - For state management: Update `src/context/HeaderContext.jsx`
+   - For styling: Modify `src/popup/styles/popup.less`
+   - For background logic: Work in `src/background/`
 3. **Run the build process** for the browsers you're targeting:
    ```bash
    npm run build:chrome    # For Chrome
@@ -80,37 +102,146 @@ We expect all contributors to follow our Code of Conduct. Please be respectful a
    npm run build:safari    # For Safari
    ```
 4. **Test your changes** in each targeted browser
-5. **Commit your changes** (see [Commit Message Guidelines](#commit-message-guidelines))
-6. **Push your branch** to your fork
-7. **Create a pull request** to the main repository
+5. **Test React components** using React DevTools
+6. **Commit your changes** (see [Commit Message Guidelines](#commit-message-guidelines))
+7. **Push your branch** to your fork
+8. **Create a pull request** to the main repository
+
+### React Development Guidelines
+
+#### Component Development
+- **Use functional components** with hooks exclusively
+- **Follow Ant Design patterns** for consistent UI/UX
+- **Implement proper prop types** and default values
+- **Use React.memo** for performance optimization where needed
+- **Keep components focused** on a single responsibility
+
+#### State Management
+- **Use React Context** for truly global state (headers, connection status)
+- **Keep local state** for component-specific UI interactions
+- **Use custom hooks** to encapsulate complex logic
+- **Handle errors gracefully** with proper error boundaries
+
+#### Styling Guidelines
+- **Use Ant Design components** as the foundation
+- **Follow the Apple-like design system** (clean, minimalist)
+- **Use LESS variables** and CSS custom properties for theming
+- **Maintain responsive design** for popup constraints (400px width)
+- **Follow consistent spacing** and typography scales
+
+#### Code Examples
+
+**Creating a new component:**
+```jsx
+import React from 'react';
+import { Button, Form, Input } from 'antd';
+
+const MyComponent = ({ onSave, initialValue = '' }) => {
+  const [form] = Form.useForm();
+  
+  const handleFinish = (values) => {
+    onSave(values);
+    form.resetFields();
+  };
+  
+  return (
+    <Form form={form} onFinish={handleFinish} layout="vertical">
+      <Form.Item name="value" initialValue={initialValue}>
+        <Input placeholder="Enter value" />
+      </Form.Item>
+      <Button type="primary" htmlType="submit">
+        Save
+      </Button>
+    </Form>
+  );
+};
+
+export default React.memo(MyComponent);
+```
+
+**Using React Context:**
+```jsx
+import React, { useContext } from 'react';
+import { HeaderContext } from '../context/HeaderContext';
+
+const MyComponent = () => {
+  const { headers, addHeader, connectionStatus } = useContext(HeaderContext);
+  
+  // Component logic here
+  
+  return (
+    // JSX here
+  );
+};
+```
 
 ## Project Structure
 
-Please familiarize yourself with our project structure:
+Please familiarize yourself with our React-based project structure:
 
 ```
 open-headers/
-├── shared/              # Shared code and resources
-│   ├── js/             # JavaScript sources
-│   ├── popup.html      # Popup UI HTML
-│   ├── popup.css       # Popup UI styles
-│   └── images/         # Icons and images
+├── src/                     # Modern React application source
+│   ├── popup/               # React popup application
+│   │   ├── App.jsx          # Main popup component with providers
+│   │   ├── index.jsx        # React app entry point
+│   │   ├── popup.html       # HTML template for popup
+│   │   ├── components/      # Reusable React components
+│   │   │   ├── HeaderForm.jsx    # Form for adding/editing headers
+│   │   │   ├── HeaderList.jsx    # List component for headers
+│   │   │   ├── HeaderTable.jsx   # Table view for header management
+│   │   │   ├── DomainTags.jsx    # Multi-domain input component
+│   │   │   ├── ConnectionInfo.jsx # Connection status component
+│   │   │   ├── Header.jsx        # App header
+│   │   │   └── Footer.jsx        # App footer
+│   │   └── styles/          # LESS stylesheets
+│   │       └── popup.less   # Main stylesheet with Ant Design theming
+│   │
+│   ├── background/          # Background service worker (vanilla JS)
+│   │   ├── index.js         # Entry point for background script
+│   │   ├── background.js    # Main background worker logic
+│   │   ├── header-manager.js # Header rule management
+│   │   ├── rule-validator.js # Header validation
+│   │   ├── websocket.js     # WebSocket client
+│   │   └── safari-websocket-adapter.js # Safari-specific handling
+│   │
+│   ├── context/             # React Context providers
+│   │   └── HeaderContext.jsx # Global state management
+│   │
+│   ├── hooks/               # Custom React hooks
+│   │   └── useHeader.js     # Header management hook
+│   │
+│   ├── utils/               # Shared utility functions
+│   │   ├── browser-api.js   # Browser compatibility layer
+│   │   ├── utils.js         # Common utilities
+│   │   └── header-validator.js # Header validation utilities
+│   │
+│   └── assets/              # Static assets
+│       ├── images/          # Extension icons and images
+│       └── welcome/         # Welcome page files (vanilla JS)
+│           ├── welcome.html # Welcome page HTML
+│           └── welcome.js   # Welcome page JavaScript
 │
-├── manifests/          # Browser-specific manifest files
-│   ├── chrome/
-│   ├── firefox/
-│   ├── edge/
-│   └── safari/
+├── manifests/               # Browser-specific manifest files
+│   ├── chrome/manifest.json # Chrome manifest
+│   ├── firefox/manifest.json # Firefox manifest
+│   ├── edge/manifest.json   # Edge manifest
+│   └── safari/manifest.json # Safari manifest
 │
-├── config/             # Configuration files
-│   ├── webpack/        # Webpack configurations
-│   └── scripts/        # Build and utility scripts
+├── config/                  # Build configuration
+│   ├── webpack/             # Webpack configurations
+│   │   ├── webpack.common.js # Common webpack config
+│   │   ├── webpack.chrome.js # Chrome-specific config
+│   │   ├── webpack.firefox.js # Firefox-specific config
+│   │   ├── webpack.edge.js   # Edge-specific config
+│   │   └── webpack.safari.js # Safari-specific config
+│   └── scripts/             # Build and utility scripts
 │
-├── docs/               # Documentation
-│
-├── dist/               # Build output (gitignored)
-│
-├── releases/           # Release packages (gitignored)
+├── docs/                    # Documentation
+├── dist/                    # Build output (gitignored)
+├── releases/                # Release packages (gitignored)
+├── package.json
+└── README.md
 ```
 
 ## Branching Strategy
@@ -211,40 +342,67 @@ Fixes #57
 
 ## Cross-Browser Testing
 
-All contributions should be tested across supported browsers:
+All contributions should be tested across supported browsers, with special attention to React component behavior:
 
 ### Required Testing
 
 1. **Chrome Testing**:
    - Load the extension in Chrome using Developer Mode
-   - Test all affected functionality
+   - Open React DevTools to inspect component tree and state
+   - Test all affected React components and interactions
    - Verify header injection works correctly
-   - Check console for errors
+   - Check console for React warnings or errors
+   - Test Ant Design component behavior
 
 2. **Firefox Testing**:
    - Load the extension as a temporary add-on
-   - Verify WebSocket connection works properly
+   - Verify React components render properly
+   - Test WebSocket connection integration with React state
    - Test header injection with different resource types
    - Check for any security-related console warnings
+   - Verify Ant Design components work in Firefox
 
 3. **Edge Testing**:
    - Similar to Chrome testing
-   - Verify compatibility with Edge's extension model
+   - Verify React compatibility with Edge's extension model
+   - Test Ant Design component rendering
 
 ### Recommended Testing (if possible)
 
 4. **Safari Testing** (if macOS is available):
    - Build and convert for Safari
+   - Test React components in WebKit environment
+   - Verify Ant Design compatibility with Safari
    - Test using Xcode and Safari extension tools
-   - Verify WebKit compatibility
+
+### React-Specific Testing
+
+- **Component Rendering**: Verify all React components render correctly
+- **State Management**: Test React Context state updates and synchronization
+- **Form Validation**: Test Ant Design form validation and error handling
+- **Real-time Updates**: Verify WebSocket data updates React components properly
+- **Performance**: Check React component re-rendering performance
+- **Error Boundaries**: Test error handling in React components
 
 ### Testing Focus Areas
 
-- **WebSocket Connection**: Ensure it works in all browsers
+- **WebSocket Connection**: Ensure it works in all browsers and updates React state
 - **Header Injection**: Check headers work for different resource types
-- **UI Consistency**: Verify styling is consistent across browsers
-- **Storage**: Confirm settings persist between sessions
-- **Performance**: Check for any browser-specific performance issues
+- **UI Consistency**: Verify Ant Design styling is consistent across browsers
+- **Storage**: Confirm settings persist between sessions and sync with React state
+- **Performance**: Check for any browser-specific React performance issues
+- **Form Interactions**: Test all Ant Design form components and validation
+
+### Using React Developer Tools
+
+1. Install React Developer Tools extension in your browser
+2. Load the Open Headers extension
+3. Open the popup and then React DevTools
+4. Navigate to Components tab to inspect:
+   - Component tree structure
+   - Props and state values
+   - Context provider data
+   - Component re-renders and performance
 
 ## Documentation
 

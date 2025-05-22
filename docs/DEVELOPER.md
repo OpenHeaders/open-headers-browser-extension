@@ -4,52 +4,94 @@ This document contains technical information for developers who want to contribu
 
 ## Architecture
 
+### Overview
+
+Open Headers is a modern browser extension built with **React 18** and **Ant Design 5**, featuring an Apple-like minimalist design. The extension uses a hybrid architecture combining React for the frontend UI with vanilla JavaScript for the background service worker to ensure maximum browser compatibility.
+
+### Technology Stack
+
+- **Frontend Framework**: React 18 with functional components and hooks
+- **UI Library**: Ant Design 5 with custom Apple-like theming
+- **Build System**: Webpack 5 with Babel for ES6+ and JSX compilation
+- **State Management**: React Context API for global application state
+- **Styling**: LESS with CSS custom properties for theming
+- **Background Service**: Vanilla JavaScript for cross-browser compatibility
+- **Module Bundling**: Browser-specific webpack configurations
+
 ### Components
 
 The extension consists of these main components:
 
-- **Popup UI**: The interface that appears when clicking the extension icon
-- **Background Service Worker**: Runs in the background to manage header rules
+- **React Popup UI**: Modern React-based interface with Ant Design components
+- **Background Service Worker**: Vanilla JS that manages header rules and WebSocket connections
+- **React Context System**: Global state management for header entries and dynamic sources
+- **Header Rule System**: Applies headers to matching requests using declarativeNetRequest API
+- **Welcome Page**: Interactive vanilla JS multi-step onboarding experience
 - **WebSocket Client**: Connects to the companion app for dynamic sources
-- **Header Rule System**: Applies headers to matching requests
-- **Welcome Page**: Interactive multi-step onboarding experience for new users
 
 ### Modules
 
-| Module | Description |
-|--------|-------------|
-| `background.js` | Main background service worker that coordinates the extension |
-| `header-manager.js` | Creates and updates browser's declarativeNetRequest rules |
-| `websocket.js` | Manages WebSocket connection to the companion app |
-| `rule-validator.js` | Validates and sanitizes header values |
-| `popup.js` | Main popup UI coordinator |
-| `entry-manager.js` | Manages saved header entries and rendering |
-| `ui-manager.js` | UI utilities for the popup interface |
-| `draft-manager.js` | Handles saving and restoring form inputs |
-| `domain-tags-manager.js` | Handles multiple domain tag input and management |
-| `config-manager.js` | Handles configuration import and export |
-| `notification-system.js` | Displays notifications in the popup UI |
-| `utils.js` | Shared utility functions |
-| `browser-api.js` | Browser detection and compatibility layer |
-| `safari-websocket-adapter.js` | Safari-specific WebSocket handling |
-| `welcome.js` | Controls the interactive welcome page functionality |
+| Module | Technology | Description |
+|--------|------------|-------------|
+| `src/popup/App.jsx` | React 18 | Main popup application component with routing and context providers |
+| `src/popup/components/` | React + Ant Design | Reusable UI components (HeaderForm, HeaderList, etc.) |
+| `src/context/HeaderContext.jsx` | React Context | Global state management for headers and dynamic sources |
+| `src/hooks/useHeader.js` | React Hooks | Custom hook for header management logic |
+| `src/background/background.js` | Vanilla JS | Main background service worker coordinator |
+| `src/background/header-manager.js` | Vanilla JS | Creates and updates browser's declarativeNetRequest rules |
+| `src/background/websocket.js` | Vanilla JS | Manages WebSocket connection to companion app |
+| `src/background/rule-validator.js` | Vanilla JS | Validates and sanitizes header values |
+| `src/utils/browser-api.js` | Vanilla JS | Browser detection and compatibility layer |
+| `src/assets/welcome/welcome.js` | Vanilla JS | Interactive welcome page functionality |
 
 ### Data Flow
 
-1. User configures headers in the popup UI
-2. Configurations are saved to browser storage
-3. Background service worker creates declarativeNetRequest rules
-4. When using dynamic sources:
-    - WebSocket connection receives source updates
-    - Header values are updated in real-time
-    - UI refreshes to show current values
+1. **User Interaction**: User configures headers through React components
+2. **State Management**: React Context manages application state and form data
+3. **Persistence**: Configurations saved to browser storage via React effects
+4. **Background Processing**: Background service worker creates declarativeNetRequest rules
+5. **Dynamic Updates**: WebSocket connection receives source updates from companion app
+6. **UI Synchronization**: React components re-render with updated data from context
+
+### React Architecture
+
+#### Component Structure
+```
+src/popup/
+├── App.jsx                    # Main app wrapper with providers
+├── index.jsx                  # React app entry point
+├── components/
+│   ├── HeaderForm.jsx         # Form for adding/editing headers
+│   ├── HeaderList.jsx         # List of saved header entries
+│   ├── HeaderTable.jsx        # Table view for header management
+│   ├── DomainTags.jsx         # Multi-domain input component
+│   ├── ConnectionInfo.jsx     # Connection status display
+│   ├── Header.jsx             # App header component
+│   └── Footer.jsx             # App footer component
+└── styles/
+    └── popup.less             # Main stylesheet with Ant Design theming
+```
+
+#### State Management
+- **React Context**: Global state for header entries, dynamic sources, and connection status
+- **Local State**: Component-level state for forms, UI interactions, and temporary data
+- **Browser Storage**: Persistent storage managed through React effects and custom hooks
+
+#### Styling and Theming
+- **Design System**: Apple-like minimalist aesthetic with clean typography
+- **Primary Color**: #4285F4 (Google Blue) used throughout the interface
+- **Typography**: SF Pro Text font family for iOS/macOS feel
+- **Components**: Ant Design 5 components with custom theming via ConfigProvider
+- **Responsive Design**: Optimized for browser extension popup dimensions (400px width)
 
 ## Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 14.0 or higher
-- [npm](https://www.npmjs.com/) 6.0 or higher
+- [Node.js](https://nodejs.org/) 16.0 or higher
+- [npm](https://www.npmjs.com/) 8.0 or higher
+- Basic knowledge of React 18, hooks, and modern JavaScript
+- Familiarity with Ant Design 5 components
 
 ### Setup
 
@@ -88,88 +130,117 @@ The extension consists of these main components:
 
 ```
 open-headers/
-├── shared/              # Shared code and resources
-│   ├── js/
-│   │   ├── background/  # Background service worker scripts
-│   │   │   ├── index.js # Entry point for background script
-│   │   │   ├── background.js # Main background worker logic
-│   │   │   ├── header-manager.js # Header rule management
-│   │   │   ├── rule-validator.js # Header validation
-│   │   │   ├── websocket.js # WebSocket client
-│   │   │   └── safari-websocket-adapter.js # Safari-specific WebSocket handling
-│   │   ├── popup/       # Popup UI scripts
-│   │   │   ├── index.js # Entry point for popup
-│   │   │   ├── popup.js # Main popup logic
-│   │   │   ├── entry-manager.js # Entry management
-│   │   │   ├── ui-manager.js # UI utilities
-│   │   │   ├── domain-tags-manager.js # Domain tag input management
-│   │   │   ├── config-manager.js # Import/export functionality
-│   │   │   ├── draft-manager.js # Draft inputs management
-│   │   │   └── notification-system.js # Notification display
-│   │   └── shared/      # Shared utilities
-│   │       ├── utils.js # Common utility functions
-│   │       └── browser-api.js # Browser detection and compatibility layer
-│   ├── popup.html       # Popup UI HTML
-│   ├── popup.css        # Popup UI styles
-│   ├── welcome.html     # Welcome page HTML
-│   ├── js/welcome.js    # Welcome page JavaScript
-│   └── images/          # Icons and images
+├── src/                     # Modern React application source
+│   ├── popup/               # React popup application
+│   │   ├── App.jsx          # Main popup component with providers
+│   │   ├── index.jsx        # React app entry point
+│   │   ├── popup.html       # HTML template for popup
+│   │   ├── components/      # Reusable React components
+│   │   │   ├── HeaderForm.jsx    # Form for adding/editing headers
+│   │   │   ├── HeaderList.jsx    # List component for headers
+│   │   │   ├── HeaderTable.jsx   # Table view for header management
+│   │   │   ├── DomainTags.jsx    # Multi-domain input component
+│   │   │   ├── ConnectionInfo.jsx # Connection status component
+│   │   │   ├── Header.jsx        # App header
+│   │   │   └── Footer.jsx        # App footer
+│   │   └── styles/          # LESS stylesheets
+│   │       └── popup.less   # Main stylesheet with Ant Design theming
+│   │
+│   ├── background/          # Background service worker (vanilla JS)
+│   │   ├── index.js         # Entry point for background script
+│   │   ├── background.js    # Main background worker logic
+│   │   ├── header-manager.js # Header rule management
+│   │   ├── rule-validator.js # Header validation
+│   │   ├── websocket.js     # WebSocket client
+│   │   └── safari-websocket-adapter.js # Safari-specific handling
+│   │
+│   ├── context/             # React Context providers
+│   │   └── HeaderContext.jsx # Global state management
+│   │
+│   ├── hooks/               # Custom React hooks
+│   │   └── useHeader.js     # Header management hook
+│   │
+│   ├── utils/               # Shared utility functions
+│   │   ├── browser-api.js   # Browser compatibility layer
+│   │   ├── utils.js         # Common utilities
+│   │   └── header-validator.js # Header validation utilities
+│   │
+│   └── assets/              # Static assets
+│       ├── images/          # Extension icons and images
+│       └── welcome/         # Welcome page files (vanilla JS)
+│           ├── welcome.html # Welcome page HTML
+│           └── welcome.js   # Welcome page JavaScript
 │
-├── manifests/           # Browser-specific manifest files
-│   ├── chrome/
-│   │   └── manifest.json # Chrome manifest
-│   ├── firefox/
-│   │   └── manifest.json # Firefox manifest
-│   ├── edge/
-│   │   └── manifest.json # Edge manifest
-│   └── safari/
-│       └── manifest.json # Safari manifest
+├── manifests/               # Browser-specific manifest files
+│   ├── chrome/manifest.json # Chrome manifest
+│   ├── firefox/manifest.json # Firefox manifest
+│   ├── edge/manifest.json   # Edge manifest
+│   └── safari/manifest.json # Safari manifest
 │
-├── config/              # Configuration files
-│   ├── webpack/         # Webpack configurations
+├── config/                  # Build configuration
+│   ├── webpack/             # Webpack configurations
 │   │   ├── webpack.common.js # Common webpack config
-│   │   ├── webpack.chrome.js # Chrome-specific webpack config
-│   │   ├── webpack.firefox.js # Firefox-specific webpack config
-│   │   ├── webpack.edge.js # Edge-specific webpack config
-│   │   ├── webpack.safari.js # Safari-specific webpack config
-│   │   └── webpack.dev.js # Development webpack config
-│   └── scripts/         # Build and utility scripts
-│       ├── build-utils.js # Post-build processing without obfuscation
-│       └── release.js   # Release script for creating packages
+│   │   ├── webpack.chrome.js # Chrome-specific config
+│   │   ├── webpack.firefox.js # Firefox-specific config
+│   │   ├── webpack.edge.js   # Edge-specific config
+│   │   └── webpack.safari.js # Safari-specific config
+│   └── scripts/             # Build and utility scripts
 │
-├── docs/                # Documentation
-│   ├── DEVELOPER.md     # This file
-│   ├── CONTRIBUTING.md  # Contribution guidelines
-│   ├── PRIVACY.md       # Privacy policy
-│   └── chrome-store-compliance.md # Chrome Web Store compliance guide
-│
-├── dist/                # Build output (gitignored)
-│   ├── chrome/
-│   ├── firefox/
-│   ├── edge/
-│   └── safari/
-│
-├── releases/            # Release packages (gitignored)
-│
-├── package.json         # npm package configuration
-├── README.md
-└── .gitignore
+├── docs/                    # Documentation
+├── dist/                    # Build output (gitignored)
+├── releases/                # Release packages (gitignored)
+├── package.json
+└── README.md
 ```
 
-### Development Workflow
+### React Development Workflow
 
-1. Make your changes to the source files
-2. Run browser-specific build commands to test in different browsers:
+1. **Component Development**:
+   - Create new components in `src/popup/components/`
+   - Use functional components with hooks
+   - Follow Ant Design component patterns
+   - Implement proper TypeScript-like prop validation
+
+2. **State Management**:
+   - Use React Context for global state
+   - Leverage custom hooks for reusable logic
+   - Manage side effects with useEffect
+
+3. **Styling**:
+   - Use Ant Design components as base
+   - Customize with LESS variables and CSS custom properties
+   - Follow the Apple-like design system
+   - Ensure responsive design for popup constraints
+
+4. **Testing Changes**:
    ```bash
-   npm run build:chrome  # For Chrome
-   npm run build:firefox # For Firefox
-   npm run build:edge    # For Edge
-   npm run build:safari  # For Safari
+   npm run build:chrome  # Build for testing
+   # Load extension in Chrome developer mode
+   # Test React components and state management
    ```
-3. Load the extension in the appropriate browser using "Load unpacked" (Chrome/Edge), "Load Temporary Add-on" (Firefox), or the Safari converter
-4. Test your changes
-5. For production build, run `npm run build` to build for all browsers
-6. Create release packages with `npm run release`
+
+### Development Guidelines
+
+#### React Best Practices
+- Use functional components with hooks exclusively
+- Implement proper error boundaries for robust UX
+- Use React.memo for performance optimization where needed
+- Follow React 18 concurrent features best practices
+- Maintain clean component separation of concerns
+
+#### Ant Design Integration
+- Use Ant Design components as the foundation
+- Customize theme through ConfigProvider
+- Follow Ant Design design principles
+- Ensure accessibility through proper ARIA attributes
+- Use consistent spacing and typography scales
+
+#### State Management Patterns
+- Use React Context for truly global state
+- Keep component state local when possible
+- Implement proper error handling in state updates
+- Use custom hooks to encapsulate complex logic
+- Maintain predictable state updates
 
 ## Browser Compatibility
 
@@ -177,377 +248,219 @@ Open Headers supports multiple browsers with specific adaptations for each:
 
 ### Cross-Browser Implementation
 
-The extension uses browser detection and compatibility layers to ensure consistent behavior:
+#### React Frontend Compatibility
+- **All Browsers**: React components work consistently across all supported browsers
+- **Webpack Builds**: Browser-specific optimizations in webpack configurations
+- **Ant Design**: Full compatibility across Chrome, Firefox, Edge, and Safari
+- **CSS**: LESS compilation with browser-specific vendor prefixes
 
-- **Manifest Files**: Different manifests for each browser target
-    - Chrome/Edge: Uses manifest v3 with service worker
-    - Firefox: Uses manifest v3 with explicit `browser_specific_settings`
-    - Safari: Uses manifest v3 with special considerations for WebKit
+#### Background Service Worker
+- **Chrome/Edge**: Full React dev tools support, optimal performance
+- **Firefox**: Enhanced CSP handling, proper source map generation
+- **Safari**: WebKit-specific optimizations, memory management
 
-- **WebSocket Connection**: Different implementations for browser security models
-    - Chrome/Edge: Standard WebSocket implementation
-    - Firefox: Dual protocol implementation (WSS/WS) with certificate handling
-    - Safari: Adaptation for Safari's unique WebKit security model
+### WebSocket Security Implementation
 
-- **Storage APIs**: Unified API to handle browser differences
-    - The `browser-api.js` module provides cross-browser abstraction
+**Firefox Enhanced Security (v1.2.0+)**:
+- Secure WebSocket (`wss://`) on port 59211 with certificate handling
+- Fallback to standard WebSocket (`ws://`) on port 59210
+- Interactive certificate acceptance through welcome page
+- Connection state persistence across sessions
 
-### WebSocket Security Implementation (v1.2.0+)
+**Chrome/Edge Standard Implementation**:
+- Standard WebSocket on port 59210
+- Simplified connection flow
+- Optimal performance for React state updates
 
-Firefox has stricter security requirements for WebSocket connections. In version 1.2.0, we've implemented:
-
-1. **Dual Protocol Support**:
-    - Secure WebSocket (`wss://`) on port 59211 with proper certificate handling
-    - Fallback to standard WebSocket (`ws://`) on port 59210 if SSL handshake fails
-
-2. **Certificate Handling Flow**:
-    - First-time users are guided through certificate acceptance
-    - The extension detects previous successful connections
-    - Smart protocol selection based on previous successes
-
-3. **Connection Recovery**:
-    - Protocol switching on connection failure
-    - Persistent storage of successful connection methods
-    - Automatic reconnection with appropriate protocol
-
-Implementation details can be found in `websocket.js`:
-```javascript
-// Firefox-specific WebSocket connection handling
-function connectWebSocketFirefox(onSourcesReceived) {
-    // Check for previously accepted certificate
-    storage.local.get(['certificateAccepted'], (result) => {
-        const certificateAccepted = result.certificateAccepted;
-        
-        if (certificateAccepted) {
-            // Use secure WSS endpoint
-            connectFirefoxWss(onSourcesReceived);
-        } else {
-            // Show welcome page for certificate acceptance
-            openFirefoxOnboardingPage();
-            // Try secure connection anyway
-            connectFirefoxWss(onSourcesReceived);
-        }
-    });
-}
-```
-
-### Welcome Page Implementation (v1.3.0+)
-
-The interactive welcome page guides users through the setup process with a professional multi-step flow:
-
-1. **Modern Multi-Step Design**:
-    - Three-page flow with intuitive navigation
-    - Step indicators for visual progress tracking
-    - Browser-adaptive UI with smooth transitions
-    - Visual illustrations and interactive elements
-
-2. **Components**:
-    - `welcome.html`: Modern, responsive UI with multi-step design
-    - `welcome.js`: Browser detection, UI flow management, and animation control
-    - `background.js`: Welcome page invocation and state persistence
-
-3. **Browser-Specific Flows**:
-    - **Chrome/Edge**: Simplified two-step process
-        1. Install and connect to companion app
-        2. Learn how to pin the extension
-    - **Firefox**: Enhanced four-step process
-        1. Install companion app
-        2. Certificate acceptance guidance
-        3. Certificate verification
-        4. Connection verification
-    - **Safari**: Custom flow for WebKit environment
-
-4. **Visual Features**:
-    - Browser toolbar visualization with animations
-    - Interactive step completion indicators
-    - Visual explanations of key concepts
-    - Consistent, professional styling across pages
-
-5. **Implementation Notes**:
-    - CSS animations for smooth transitions between steps
-    - Browser-adaptive layout and content
-    - Responsive design that works on various screen sizes
-    - Clear visual status indicators for each step
-    - Content Security Policy compliant JavaScript structure
-
-### Build Configuration
-
-Each browser has its own webpack configuration:
-- `config/webpack/webpack.chrome.js` - Chrome configuration
-- `config/webpack/webpack.firefox.js` - Firefox configuration
-- `config/webpack/webpack.edge.js` - Edge configuration
-- `config/webpack/webpack.safari.js` - Safari configuration
+**Safari WebKit Adaptations**:
+- Custom WebSocket adapter for Safari's security model
+- Special handling for WebKit memory management
+- React performance optimizations for Safari
 
 ### Testing Cross-Browser
 
-When testing, verify these browser-specific aspects:
-1. **WebSocket Connection**: Ensure proper connection to the companion app
-2. **Header Injection**: Verify headers are applied consistently
-3. **CSS/UI**: Check that styling works properly in each browser
-4. **Storage**: Confirm settings persist between sessions
-5. **Welcome Page**: Test the welcome flow for each browser
+When testing React components and functionality:
 
-### Known Browser Differences
-
-| Feature | Chrome | Firefox | Edge | Safari |
-|---------|--------|---------|------|--------|
-| WebSocket Security | Standard | Strict (WSS) | Standard | Strictest |
-| CSP Requirements | Moderate | High | Moderate | Very High |
-| Resource Types | All Supported | Limited Set | All Supported | Limited Set |
-| Manifest Support | Full v3 | v3 with limitations | Full v3 | v3 with WebKit specifics |
-| Welcome Flow | Two-step | Four-step | Two-step | Two-step with WebKit specifics |
+1. **React DevTools**: Use React Developer Tools in each browser
+2. **Component Rendering**: Verify React components render consistently
+3. **State Management**: Test React Context state updates
+4. **Ant Design Components**: Verify UI component behavior
+5. **WebSocket Integration**: Test real-time state updates from background
+6. **Form Validation**: Test React form validation across browsers
 
 ## Testing
 
-### Manual Testing
+### React Component Testing
 
-1. Load the extension in your target browser using the appropriate method:
-    - Chrome/Edge: "Load unpacked" in extensions page
-    - Firefox: "Load Temporary Add-on" in about:debugging
-    - Safari: Run converted app from Xcode
+1. **Component Rendering**:
+   ```bash
+   # Load extension in browser
+   # Open popup and verify React components render
+   # Test form interactions and state updates
+   # Verify Ant Design components work properly
+   ```
 
-2. Test various header configurations:
-    - Static headers with different domain patterns
-    - Dynamic headers with prefix/suffix formatting
-    - Multiple domains per header
-    - Import/export functionality
-    - Test validation for invalid header values
-    - Test with and without the companion app
+2. **State Management Testing**:
+   - Test React Context state updates
+   - Verify proper re-rendering on state changes
+   - Test error boundaries and error handling
+   - Validate form state management
 
-3. Cross-browser specific tests:
-    - Test WebSocket connection in each browser
-    - For Firefox, test both WSS and WS connections
-    - Test the welcome page flow for each browser
-    - Verify that headers are applied to all resource types
-    - Check that UI styling is consistent
-    - Test cache prevention functionality
+3. **Integration Testing**:
+   - Test background script integration with React state
+   - Verify WebSocket data updates React components
+   - Test browser storage integration with React state
+   - Validate cross-tab state synchronization
+
+### Manual Testing with React DevTools
+
+1. Install React Developer Tools extension
+2. Open Open Headers popup
+3. Navigate to React DevTools
+4. Inspect component tree and state
+5. Test state updates and prop changes
+6. Verify context provider data flow
 
 ### Welcome Page Testing
 
-Verify the welcome page functions correctly:
-1. Reset the storage to simulate first install:
-   ```javascript
-   // In browser console
-   chrome.storage.local.remove(['setupCompleted', 'certificateAccepted']);
-   // or for Firefox
-   browser.storage.local.remove(['setupCompleted', 'certificateAccepted']);
-   ```
-2. Reload the extension
-3. Verify the welcome page appears automatically
-4. Test each step in the welcome flow:
-    - Test page navigation (Next/Back buttons)
-    - Verify step indicators update correctly
-    - Confirm that browser-specific steps are correctly shown/hidden
-5. Verify app connection detection
-6. Verify certificate acceptance (Firefox)
-7. Test connection verification functionality
-8. Ensure proper completion and state saving
-
-### End-to-End Testing
-
-For complete testing with the companion app:
-
-1. Start the companion app
-2. Ensure the WebSocket connection is established (look for "Connected" status)
-3. Create headers with dynamic sources
-4. Verify header injection by visiting test websites
-
-### Testing Domains
-
-For testing header injection, use sites like:
-- [httpbin.org/headers](https://httpbin.org/headers) - Shows received headers
-- [requestbin.com](https://requestbin.com) - Create a bin to inspect headers
+The welcome page remains vanilla JavaScript for maximum compatibility:
+1. Reset storage to simulate first install
+2. Verify welcome page appearance and flow
+3. Test browser-specific step visibility
+4. Validate connection detection and state updates
 
 ## Building for Distribution
 
-### Production Build
-
-To create production-ready builds for all browsers:
+### Production Build Process
 
 ```bash
 npm run build
 ```
 
-This will:
-1. Bundle all scripts with Webpack
-2. Minify (but not obfuscate) the code to comply with Chrome Web Store requirements
-3. Create browser-specific builds in the `dist` directory
+**React Build Optimizations**:
+- React production build with optimizations
+- Ant Design tree-shaking for smaller bundle size
+- CSS extraction and minification
+- Browser-specific optimizations
 
-### Creating Release Packages
+**Build Outputs**:
+- React popup bundle: Optimized for each browser
+- Background service worker: Cross-browser vanilla JS
+- Ant Design styles: Extracted and minified CSS
+- Static assets: Images and welcome page files
 
-To create zip packages for distribution:
+### Code Splitting and Optimization
 
-```bash
-npm run release
-```
-
-This will:
-1. Build all browser versions
-2. Create zip packages in the `releases` directory
-3. Display a summary of the created packages
-
-### Browser Store Submissions
-
-#### Chrome Web Store
-1. Create a release package using `npm run release`
-2. Sign in to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole/)
-3. Upload the Chrome zip file from the `releases` directory
-4. Complete the store listing information
-5. Submit for review
-
-**Important**: Chrome Web Store has strict requirements about code readability. The extension code must not be obfuscated. Our build process is configured to comply with these requirements.
-
-#### Firefox Add-ons
-1. Create a release package using `npm run release`
-2. Sign in to [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/)
-3. Upload the Firefox zip file from the `releases` directory
-4. Complete the listing information
-5. Submit for review
-
-#### Microsoft Edge Add-ons
-1. Create a release package using `npm run release`
-2. Sign in to [Microsoft Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/overview)
-3. Upload the Edge zip file from the `releases` directory
-4. Complete the listing information
-5. Submit for review
-
-#### Safari App Store
-1. Create a release package using `npm run release`
-2. Run `npm run safari:convert` to convert to a Safari app
-3. Open the Xcode project in `safari/xcode_project`
-4. Sign with your Apple Developer account
-5. Archive and upload to App Store Connect
-6. Complete the listing information
-7. Submit for review
+- **React Components**: Bundled efficiently with Webpack
+- **Ant Design**: Tree-shaken to include only used components
+- **LESS Compilation**: Optimized CSS output with vendor prefixes
+- **Browser Targets**: Specific builds for Chrome, Firefox, Edge, Safari
 
 ## Implementation Details
 
-### Multiple Domains Support
+### React Context Architecture
 
-Headers can now be applied to multiple domains using the domain-tags-manager.js module:
+```javascript
+// HeaderContext.jsx - Global state management
+const HeaderContext = createContext();
 
-- The domain input allows adding multiple patterns with enter or comma separator
-- Domains are stored as arrays in the header configuration
-- The `header-manager.js` creates separate rules for each domain pattern
+export const HeaderProvider = ({ children }) => {
+  const [headers, setHeaders] = useState([]);
+  const [dynamicSources, setDynamicSources] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  
+  // Context value with state and methods
+  const contextValue = {
+    headers,
+    dynamicSources,
+    connectionStatus,
+    addHeader,
+    updateHeader,
+    deleteHeader,
+    refreshSources
+  };
+  
+  return (
+    <HeaderContext.Provider value={contextValue}>
+      {children}
+    </HeaderContext.Provider>
+  );
+};
+```
 
-### Browser Compatibility Layer
+### Ant Design Theming
 
-The browser-api.js module provides a unified interface for browser APIs:
-
-- Detects the current browser environment
-- Provides consistent API methods that work across browsers
-- Handles Firefox's promisified APIs vs Chrome's callback-based APIs
-- Manages Safari's storage limitations
-
-### WebSocket Connection Handling
-
-Browser-specific WebSocket handling in v1.2.0:
-
-- **Firefox** (Enhanced in v1.2.0+):
-    - Primary: Secure WebSocket (`wss://`) on port 59211
-    - Certificate acceptance via welcome page
-    - Fallback to standard WebSocket (`ws://`) if needed
-    - Smart connection restoration based on previous success
-
-- **Chrome/Edge**:
-    - Standard WebSocket implementation on port 59210
-    - Simplified connection flow
-
-- **Safari**:
-    - Uses adapter for WebKit security model
-    - Special handling for Safari's strict security requirements
-
-All browsers implement:
-- Auto-reconnection with browser-specific error handling
-- Detection of removed sources and header configuration updates
-- Connection status persistence across browser sessions
-
-### Multi-Step Welcome Page Implementation (v1.3.0+)
-
-The enhanced welcome page in v1.3.0 features:
-
-- **Modern Multi-Step Design**:
-    - Three-page flow with intuitive progression
-    - Step indicators at the top for visual progress tracking
-    - Smooth page transitions between steps
-    - Professional styling similar to industry-standard onboarding flows
-
-- **Browser Detection and Adaptation**:
-    - Automatically detects browser type
-    - Dynamically shows only relevant steps for each browser
-    - Firefox users see all four steps for certificate handling
-    - Chrome/Edge/Safari users see a simplified two-step flow
-
-- **Visual Elements**:
-    - Interactive browser toolbar visualization with animations
-    - Visual representations of headers and browser elements
-    - Pinning instruction visualization with browser-specific guidance
-    - Clear step indicators with active state highlighting
-
-- **Content Organization**:
-    - First page: Introduction with visual representation of HTTP headers
-    - Second page: Setup process with companion app connection
-    - Third page: Extension pinning instructions and completion
-
-- **Responsive Layout**:
-    - Adapts to different screen sizes
-    - Properly sized containers to prevent scrolling
-    - Clear visual hierarchy with proper spacing
-    - Consistent styling throughout the flow
-
-- **Error Handling**:
-    - Provides clear visual feedback for connection states
-    - Shows helpful error messages with recovery options
-    - Allows proceeding even if optimal setup isn't achieved
-    - Maintains state between page navigation
-
-### Cache Prevention for Headers
-
-To ensure headers are applied consistently:
-
-- Adds Cache-Control and other cache-related headers to prevent browsers from using cached responses
-- Implements different resource type handling for Firefox vs Chrome/Edge
-- Creates separate rules for main_frame and other resource types
-- Uses debouncing and hash-based change detection to prevent unnecessary rule updates
-
-## Server Component
-
-The companion app runs WebSocket servers on two ports:
-- Standard WebSocket server on port 59210 (ws://)
-- Secure WebSocket server on port 59211 (wss://)
-
-### Source Types
-
-- **HTTP**: Values from HTTP requests responses
-- **File**: Values from local files on your system
-- **Environment**: Values from environment variables
-
-### Communication Protocol
-
-The extension and companion app communicate with JSON messages:
-
-```json
-{
-  "type": "sourcesUpdated",
-  "sources": [
-    {
-      "sourceId": "unique-id-1",
-      "sourceType": "http",
-      "sourcePath": "https://api.example.com/status",
-      "sourceTag": "API Token",
-      "sourceContent": "token-value-123"
+```javascript
+// App.jsx - Custom theme configuration
+const customTheme = {
+  token: {
+    colorPrimary: '#4285F4',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto',
+    borderRadius: 8,
+    colorBgContainer: '#ffffff'
+  },
+  components: {
+    Button: {
+      borderRadius: 8,
+      fontWeight: 500
     },
-    {
-      "sourceId": "unique-id-2",
-      "sourceType": "file",
-      "sourcePath": "/path/to/file.txt",
-      "sourceTag": "Config",
-      "sourceContent": "file-content-here"
+    Input: {
+      borderRadius: 6
     }
-  ]
-}
+  }
+};
+
+<ConfigProvider theme={customTheme}>
+  <App />
+</ConfigProvider>
+```
+
+### Form Management with Ant Design
+
+```javascript
+// HeaderForm.jsx - Form component with validation
+const HeaderForm = () => {
+  const [form] = Form.useForm();
+  const { addHeader } = useContext(HeaderContext);
+  
+  const onFinish = (values) => {
+    addHeader(values);
+    form.resetFields();
+  };
+  
+  return (
+    <Form form={form} onFinish={onFinish} layout="vertical">
+      <Form.Item
+        name="headerName"
+        label="Header Name"
+        rules={[{ required: true, message: 'Please enter header name' }]}
+      >
+        <Input placeholder="e.g., Authorization" />
+      </Form.Item>
+      {/* Additional form fields */}
+    </Form>
+  );
+};
 ```
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and procedures.
+### React Development Contributions
+
+When contributing React components:
+
+1. **Follow React 18 Patterns**: Use modern hooks and concurrent features
+2. **Ant Design Standards**: Follow Ant Design component guidelines
+3. **Apple Design Language**: Maintain minimalist, clean aesthetic
+4. **Performance**: Use React.memo and useMemo where appropriate
+5. **Accessibility**: Ensure proper ARIA attributes and keyboard navigation
+
+### Code Style Guidelines
+
+- **Components**: Use functional components with descriptive names
+- **Hooks**: Extract complex logic into custom hooks
+- **Props**: Use destructuring and provide default values
+- **State**: Keep state as local as possible, use Context for global state
+- **Styling**: Follow LESS conventions and maintain design consistency
+
+For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).

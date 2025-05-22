@@ -143,11 +143,11 @@ module.exports = {
                     to: 'images' 
                 },
                 {
-                    from: 'shared/welcome.html',
+                    from: 'src/assets/welcome/welcome.html',
                     to: 'welcome.html'
                 },
                 {
-                    from: 'shared/js/welcome.js',
+                    from: 'src/assets/welcome/welcome.js',
                     to: 'js/welcome.js'
                 }
             ]
