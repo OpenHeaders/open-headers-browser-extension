@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Table, 
   Tag, 
@@ -28,19 +28,32 @@ const { Text } = Typography;
  * Professional table component for displaying header entries
  */
 const HeaderTable = () => {
-  const [searchText, setSearchText] = useState('');
-  const [filteredInfo, setFilteredInfo] = useState({});
-  const [sortedInfo, setSortedInfo] = useState({});
   const { message } = App.useApp();
   
   const { 
     headerEntries, 
     editMode,
-    dynamicSources, 
+    dynamicSources,
+    uiState,
+    updateUiState,
     startEditingEntry, 
     deleteHeaderEntry, 
     toggleEntryEnabled 
   } = useHeader();
+
+  // Initialize local state from context
+  const [searchText, setSearchText] = useState(uiState?.tableState?.searchText || '');
+  const [filteredInfo, setFilteredInfo] = useState(uiState?.tableState?.filteredInfo || {});
+  const [sortedInfo, setSortedInfo] = useState(uiState?.tableState?.sortedInfo || {});
+
+  // Sync local state with context state when context changes
+  useEffect(() => {
+    if (uiState?.tableState) {
+      setSearchText(uiState.tableState.searchText || '');
+      setFilteredInfo(uiState.tableState.filteredInfo || {});
+      setSortedInfo(uiState.tableState.sortedInfo || {});
+    }
+  }, [uiState?.tableState]);
   
   // Convert header entries object to array for table
   const dataSource = Object.entries(headerEntries).map(([id, entry]) => {
@@ -95,12 +108,53 @@ const HeaderTable = () => {
   const handleChange = (pagination, filters, sorter) => {
     setFilteredInfo(filters);
     setSortedInfo(sorter);
+    
+    // Update context state for persistence
+    if (updateUiState) {
+      updateUiState({
+        tableState: {
+          searchText,
+          filteredInfo: filters,
+          sortedInfo: sorter
+        }
+      });
+    }
+  };
+  
+  // Handle search text changes
+  const handleSearchChange = (value) => {
+    setSearchText(value);
+    
+    // Update context state for persistence
+    if (updateUiState) {
+      updateUiState({
+        tableState: {
+          searchText: value,
+          filteredInfo,
+          sortedInfo
+        }
+      });
+    }
   };
   
   // Clear all filters and sorting
   const clearAll = () => {
+    const clearedState = {
+      searchText: '',
+      filteredInfo: {},
+      sortedInfo: {}
+    };
+    
+    setSearchText('');
     setFilteredInfo({});
     setSortedInfo({});
+    
+    // Update context state for persistence
+    if (updateUiState) {
+      updateUiState({
+        tableState: clearedState
+      });
+    }
   };
   
   const columns = [
@@ -191,7 +245,6 @@ const HeaderTable = () => {
       filters: [
         ...new Set([
           ...dataSource.map(item => item.isResponse ? 'Response' : 'Request'),
-          ...dataSource.map(item => item.isDynamic ? 'Dynamic' : 'Static'),
           ...dataSource.filter(item => item.sourceTag).map(item => item.sourceTag)
         ])
       ].map(tag => ({
@@ -203,7 +256,6 @@ const HeaderTable = () => {
       onFilter: (value, record) => {
         const tags = [
           record.isResponse ? 'Response' : 'Request',
-          record.isDynamic ? 'Dynamic' : 'Static',
           ...(record.sourceTag ? [record.sourceTag] : [])
         ];
         return tags.includes(value);
@@ -214,9 +266,6 @@ const HeaderTable = () => {
           <Tag color={record.isResponse ? 'blue' : 'green'} size="small">
             {record.isResponse ? 'Resp' : 'Req'}
           </Tag>
-          {record.isDynamic && (
-            <Tag color="purple" size="small">D</Tag>
-          )}
           {record.sourceTag && (
             <Tag color="orange" size="small">{record.sourceTag}</Tag>
           )}
@@ -330,7 +379,8 @@ const HeaderTable = () => {
             allowClear
             size="small"
             style={{ width: 350 }}
-            onChange={(e) => setSearchText(e.target.value)}
+            value={searchText}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </Space>
       </div>

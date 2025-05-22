@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layout } from 'antd';
 import { HeaderProvider } from '../context/HeaderContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 import Header from './components/Header';
 import HeaderForm from './components/HeaderForm';
 import HeaderList from './components/HeaderList';
@@ -14,25 +15,27 @@ const { Content } = Layout;
  */
 const App = () => {
   return (
-    <HeaderProvider>
-      <Layout className="app-container">
-        <Header />
-        
-        <Content className="content">
-          <div className="form-container">
-            <HeaderForm />
-          </div>
+    <ErrorBoundary>
+      <HeaderProvider>
+        <Layout className="app-container">
+          <Header />
           
-          <ConnectionInfo />
+          <Content className="content">
+            <div className="form-container">
+              <HeaderForm />
+            </div>
+            
+            <ConnectionInfo />
+            
+            <div className="entries-list">
+              <HeaderList />
+            </div>
+          </Content>
           
-          <div className="entries-list">
-            <HeaderList />
-          </div>
-        </Content>
-        
-        <Footer />
-      </Layout>
-    </HeaderProvider>
+          <Footer />
+        </Layout>
+      </HeaderProvider>
+    </ErrorBoundary>
   );
 };
 

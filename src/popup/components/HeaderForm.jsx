@@ -14,7 +14,17 @@ import {
   SaveOutlined,
   CloseOutlined,
   PlusOutlined,
-  SettingOutlined
+  SettingOutlined,
+  CodeOutlined,
+  KeyOutlined,
+  ApiOutlined,
+  SwapOutlined,
+  LinkOutlined,
+  LeftOutlined,
+  RightOutlined,
+  GlobalOutlined,
+  FileTextOutlined,
+  CodeSandboxOutlined
 } from '@ant-design/icons';
 import { useHeader } from '../../hooks/useHeader';
 import { normalizeHeaderName } from '../../utils/utils';
@@ -24,21 +34,66 @@ import DomainTags from './DomainTags';
 const { Option } = Select;
 
 /**
+ * Get icon for source type
+ */
+const getSourceIcon = (source) => {
+  const sourceType = source.sourceType || source.locationType || '';
+  
+  if (sourceType.toLowerCase().includes('http')) {
+    return <GlobalOutlined style={{ marginRight: 4 }} />;
+  } else if (sourceType.toLowerCase().includes('file')) {
+    return <FileTextOutlined style={{ marginRight: 4 }} />;
+  } else if (sourceType.toLowerCase().includes('env')) {
+    return <CodeSandboxOutlined style={{ marginRight: 4 }} />;
+  }
+  
+  return <ApiOutlined style={{ marginRight: 4 }} />;
+};
+
+/**
+ * Format source display with icon, tag, and path
+ */
+const formatSourceDisplay = (source) => {
+  const tag = source.sourceTag || source.locationTag || '';
+  const path = source.sourcePath || source.locationPath || '';
+  const type = source.sourceType || source.locationType || '';
+  
+  // Build display string
+  let display = '';
+  
+  // Add tag if exists
+  if (tag) {
+    display = `[${tag}] `;
+  }
+  
+  // Add path
+  if (path) {
+    display += path;
+  } else {
+    // Fallback to source ID if no path
+    display += `Source ${source.sourceId || source.locationId}`;
+  }
+  
+  return display;
+};
+
+/**
  * Form for adding or editing headers
  */
 const HeaderForm = () => {
   const [form] = Form.useForm();
   const { message } = App.useApp();
   const isUpdatingRef = useRef(false);
-  const [collapseOpen, setCollapseOpen] = useState(false);
   
   const { 
-    dynamicSources, 
-    draftValues, 
-    editMode, 
+    dynamicSources = [], 
+    draftValues = {}, 
+    editMode = { isEditing: false, entryId: null }, 
+    uiState = { formCollapsed: false },
     saveHeaderEntry, 
     cancelEditing, 
-    updateDraftValues 
+    updateDraftValues,
+    updateUiState
   } = useHeader();
   
   // Update form values when draft values change
@@ -80,10 +135,10 @@ const HeaderForm = () => {
   
   // Close collapse when editing ends
   useEffect(() => {
-    if (!editMode.isEditing) {
-      setCollapseOpen(false);
+    if (!editMode.isEditing && updateUiState) {
+      updateUiState({ formCollapsed: false });
     }
-  }, [editMode.isEditing]);
+  }, [editMode.isEditing, updateUiState]);
   
   // Handle form submission
   const handleSubmit = (values) => {
@@ -110,7 +165,7 @@ const HeaderForm = () => {
     }, 
     (successMsg) => {
       message.success(successMsg);
-      setCollapseOpen(false); // Close collapse after successful save
+      updateUiState && updateUiState({ formCollapsed: false }); // Close collapse after successful save
     },
     (errorMsg) => message.error(errorMsg)
     );
@@ -151,8 +206,8 @@ const HeaderForm = () => {
     >
       <Collapse 
         size="small"
-        activeKey={editMode.isEditing || collapseOpen ? ['add-header'] : []}
-        onChange={(keys) => setCollapseOpen(keys.includes('add-header'))}
+        activeKey={editMode.isEditing || uiState?.formCollapsed ? ['add-header'] : []}
+        onChange={(keys) => updateUiState && updateUiState({ formCollapsed: keys.includes('add-header') })}
         style={{ marginBottom: 8 }}
         items={[{
           key: 'add-header',
@@ -219,13 +274,17 @@ const HeaderForm = () => {
                           placeholder="Select a dynamic source"
                           disabled={dynamicSources.length === 0}
                           size="small"
+                          suffixIcon={<ApiOutlined />}
                         >
                           {dynamicSources.map(source => (
                             <Option 
                               key={source.sourceId || source.locationId} 
                               value={source.sourceId || source.locationId}
                             >
-                              {source.sourceTag || source.locationTag || source.sourcePath || source.locationPath}
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                {getSourceIcon(source)}
+                                <span>{formatSourceDisplay(source)}</span>
+                              </div>
                             </Option>
                           ))}
                         </Select>
@@ -235,25 +294,78 @@ const HeaderForm = () => {
                 )}
               </Form.Item>
               
-              {/* Row 3 - Format Options (only for dynamic) */}
+              {/* Row 3 - Value Format (only for dynamic) */}
               <Form.Item dependencies={['valueType']} noStyle>
                 {({ getFieldValue }) => 
                   getFieldValue('valueType') === 'dynamic' && (
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+                    <div style={{ marginBottom: 8 }}>
                       <Form.Item
-                        label="Prefix (Optional)"
-                        name="prefix"
-                        style={{ flex: 1, marginBottom: 0 }}
+                        label="Value Format"
+                        style={{ marginBottom: 4 }}
                       >
-                        <Input placeholder="e.g. Bearer " size="small" />
-                      </Form.Item>
-                      
-                      <Form.Item
-                        label="Suffix (Optional)"
-                        name="suffix"
-                        style={{ flex: 1, marginBottom: 0 }}
-                      >
-                        <Input placeholder="e.g. .v1" size="small" />
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: '#8c8c8c',
+                          marginBottom: '8px',
+                          lineHeight: '1.5'
+                        }}>
+                          Final value is concatenated directly: prefix+source_value+suffix<br />
+                          Example: for "Bearer token123", type "Bearer " (with space) in prefix
+                        </div>
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          backgroundColor: '#f5f5f5',
+                          borderRadius: '6px',
+                          padding: '4px',
+                          border: '1px solid #e8e9ea'
+                        }}>
+                          <Form.Item
+                            name="prefix"
+                            style={{ flex: 1, marginBottom: 0, marginRight: -1 }}
+                          >
+                            <Input 
+                              placeholder="Prefix (optional)" 
+                              size="small" 
+                              style={{ 
+                                borderRadius: '4px 0 0 4px',
+                                borderRight: 'none',
+                                textAlign: 'right'
+                              }}
+                            />
+                          </Form.Item>
+                          
+                          <div style={{ 
+                            padding: '4px 12px',
+                            backgroundColor: '#f0f0f0',
+                            border: '1px solid #d9d9d9',
+                            color: '#8c8c8c',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            height: '32px',
+                            boxSizing: 'border-box',
+                            zIndex: 1,
+                            fontStyle: 'italic'
+                          }}>
+                            {'{source_value}'}
+                          </div>
+                          
+                          <Form.Item
+                            name="suffix"
+                            style={{ flex: 1, marginBottom: 0, marginLeft: -1 }}
+                          >
+                            <Input 
+                              placeholder="Suffix (optional)" 
+                              size="small" 
+                              style={{ 
+                                borderRadius: '0 4px 4px 0',
+                                borderLeft: 'none'
+                              }}
+                            />
+                          </Form.Item>
+                        </div>
                       </Form.Item>
                     </div>
                   )

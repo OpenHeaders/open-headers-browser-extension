@@ -10,6 +10,7 @@ body {
   overflow: hidden;
   background: #ffffff;
   color: rgba(0, 0, 0, 0.88);
+  box-sizing: border-box;
 }
 
 .app-container {
@@ -19,15 +20,29 @@ body {
   flex-direction: column;
   background: #ffffff;
   position: relative;
+  overflow: hidden;
 }
 
 .header {
-  padding: 6px 16px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ffffff;
-  border-bottom: 1px solid #f0f0f0;
+  background: linear-gradient(180deg, #fbfbfb 0%, #f8f9fa 100%);
+  border-bottom: 1px solid #e8e9ea;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+  z-index: 10;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.06) 50%, transparent 100%);
+  }
 }
 
 .header h1 {
@@ -37,20 +52,60 @@ body {
   color: rgba(0, 0, 0, 0.88);
 }
 
+.header .ant-typography {
+  margin: 0;
+}
+
+.header .ant-typography h4 {
+  margin: 0;
+  font-weight: 600;
+  text-shadow: 0 0.5px 1px rgba(255, 255, 255, 0.8);
+}
+
+.header .connection-status {
+  .ant-badge-status-dot {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+  }
+  
+  .ant-typography {
+    text-shadow: 0 0.5px 1px rgba(255, 255, 255, 0.6);
+  }
+}
+
 .content {
   flex: 1;
-  padding: 6px 16px 40px 16px; /* Increased bottom padding for larger footer */
+  padding: 8px 16px 50px 16px; /* Increased bottom padding for footer space */
   background: #ffffff;
   overflow-y: auto;
   min-height: 0; /* Allow flex shrinking */
+  position: relative;
 }
 
 .form-container {
-  margin: 6px 0;
+  margin: 8px 0;
   background: #ffffff;
-  border-radius: 6px;
-  padding: 12px;
-  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 14px;
+  border: 1px solid #e8e9ea;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  
+  .ant-collapse {
+    border: 1px solid #f0f1f2;
+    border-radius: 6px;
+    background: #fafbfc;
+    
+    .ant-collapse-header {
+      background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+      border-radius: 6px 6px 0 0;
+      font-weight: 500;
+      text-shadow: 0 0.5px 1px rgba(255, 255, 255, 0.8);
+    }
+    
+    .ant-collapse-content {
+      background: #ffffff;
+      border-top: 1px solid #f0f1f2;
+    }
+  }
 }
 
 .entries-list {
@@ -63,15 +118,53 @@ body {
   left: 0;
   right: 0;
   width: 800px; /* Match body width */
-  padding: 8px 16px;
+  padding: 10px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid #f0f0f0;
-  background: #ffffff;
-  z-index: 10;
-  height: 36px; /* Increased height for text labels */
+  border-top: 1px solid #e8e9ea;
+  background: linear-gradient(0deg, #f8f9fa 0%, #fbfbfb 100%);
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
+  z-index: 100;
+  height: 40px; /* Slightly increased for better proportions */
   box-sizing: border-box;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.06) 50%, transparent 100%);
+  }
+}
+
+.footer {
+  .ant-btn {
+    text-shadow: 0 0.5px 1px rgba(255, 255, 255, 0.6);
+    border: none;
+    background: transparent;
+    
+    &:hover {
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: 6px;
+    }
+    
+    &:focus {
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+    }
+  }
+  
+  .ant-typography {
+    text-shadow: 0 0.5px 1px rgba(255, 255, 255, 0.6);
+  }
+  
+  // Version text styling
+  span[style*="font-size: 11px"] {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
 }
 
 /* Minimal Ant Design overrides for compactness */

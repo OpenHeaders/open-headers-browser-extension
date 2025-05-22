@@ -2,8 +2,45 @@ import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { storage, runtime } from '../utils/browser-api';
 import { generateUniqueId } from '../utils/utils';
 
-// Create context
-export const HeaderContext = createContext();
+// Create context with default values
+const defaultContextValue = {
+  headerEntries: {},
+  dynamicSources: [],
+  isConnected: false,
+  editMode: { isEditing: false, entryId: null },
+  draftValues: {
+    headerName: '',
+    headerValue: '',
+    domains: [],
+    valueType: 'static',
+    sourceId: '',
+    prefix: '',
+    suffix: '',
+    isResponse: false
+  },
+  uiState: {
+    formCollapsed: false,
+    lastActiveTab: 'form',
+    tableState: {
+      searchText: '',
+      filteredInfo: {},
+      sortedInfo: {}
+    }
+  },
+  loadHeaderEntries: () => {},
+  loadDynamicSources: () => {},
+  refreshHeaderEntries: () => {},
+  saveHeaderEntry: () => {},
+  toggleEntryEnabled: () => {},
+  deleteHeaderEntry: () => {},
+  startEditingEntry: () => {},
+  cancelEditing: () => {},
+  updateDraftValues: () => {},
+  updateUiState: () => {},
+  clearPopupState: () => {}
+};
+
+export const HeaderContext = createContext(defaultContextValue);
 
 export const HeaderProvider = ({ children }) => {
   // State for header entries
@@ -31,6 +68,17 @@ export const HeaderProvider = ({ children }) => {
     prefix: '',
     suffix: '',
     isResponse: false
+  });
+
+  // State for UI persistence
+  const [uiState, setUiState] = useState({
+    formCollapsed: false,
+    lastActiveTab: 'form',
+    tableState: {
+      searchText: '',
+      filteredInfo: {},
+      sortedInfo: {}
+    }
   });
   
   // Load header entries from storage
@@ -63,6 +111,87 @@ export const HeaderProvider = ({ children }) => {
         });
       }
     });
+  }, []);
+
+  // Load popup state from storage
+  const loadPopupState = useCallback(() => {
+    storage.local.get(['popupState'], (result) => {
+      if (result.popupState) {
+        const { draftValues: savedDraft, editMode: savedEditMode, uiState: savedUiState, timestamp } = result.popupState;
+        
+        // Check if saved state is too old (more than 1 hour)
+        const ONE_HOUR = 60 * 60 * 1000;
+        if (timestamp && (Date.now() - timestamp) > ONE_HOUR) {
+          // Clear old state
+          storage.local.remove(['popupState']);
+          return;
+        }
+        
+        // Restore draft values if they exist and are valid
+        if (savedDraft) {
+          // Validate that saved draft has proper structure
+          const validDraft = {
+            headerName: savedDraft.headerName || '',
+            headerValue: savedDraft.headerValue || '',
+            domains: Array.isArray(savedDraft.domains) ? savedDraft.domains : [],
+            valueType: ['static', 'dynamic'].includes(savedDraft.valueType) ? savedDraft.valueType : 'static',
+            sourceId: savedDraft.sourceId || '',
+            prefix: savedDraft.prefix || '',
+            suffix: savedDraft.suffix || '',
+            isResponse: Boolean(savedDraft.isResponse)
+          };
+          
+          setDraftValues(prevDraft => ({
+            ...prevDraft,
+            ...validDraft
+          }));
+        }
+        
+        // Restore edit mode if it exists and is valid
+        if (savedEditMode && typeof savedEditMode.isEditing === 'boolean') {
+          setEditMode(prevEditMode => ({
+            ...prevEditMode,
+            isEditing: savedEditMode.isEditing,
+            entryId: savedEditMode.entryId || null
+          }));
+        }
+
+        // Restore UI state if it exists and is valid
+        if (savedUiState) {
+          const validUiState = {
+            formCollapsed: Boolean(savedUiState.formCollapsed),
+            lastActiveTab: savedUiState.lastActiveTab || 'form',
+            tableState: {
+              searchText: savedUiState.tableState?.searchText || '',
+              filteredInfo: savedUiState.tableState?.filteredInfo || {},
+              sortedInfo: savedUiState.tableState?.sortedInfo || {}
+            }
+          };
+          
+          setUiState(prevUiState => ({
+            ...prevUiState,
+            ...validUiState
+          }));
+        }
+      }
+    });
+  }, []);
+
+  // Save popup state to storage
+  const savePopupState = useCallback(() => {
+    const popupState = {
+      draftValues,
+      editMode,
+      uiState,
+      timestamp: Date.now()
+    };
+    
+    storage.local.set({ popupState });
+  }, [draftValues, editMode, uiState]);
+
+  // Clear saved popup state
+  const clearPopupState = useCallback(() => {
+    storage.local.remove(['popupState']);
   }, []);
   
   // Save a header entry
@@ -136,7 +265,7 @@ export const HeaderProvider = ({ children }) => {
         });
         
         // Clear form (include headerType to reset radio buttons)
-        setDraftValues({
+        const clearedDraft = {
           headerName: '',
           headerValue: '',
           domains: [],
@@ -146,6 +275,33 @@ export const HeaderProvider = ({ children }) => {
           suffix: '',
           isResponse: false,
           headerType: 'request'
+        };
+        setDraftValues(clearedDraft);
+        
+        // Clear form-related saved state but preserve table state
+        storage.local.get(['popupState'], (result) => {
+          if (result.popupState) {
+            const updatedState = {
+              ...result.popupState,
+              draftValues: {
+                headerName: '',
+                headerValue: '',
+                domains: [],
+                valueType: 'static',
+                sourceId: '',
+                prefix: '',
+                suffix: '',
+                isResponse: false
+              },
+              editMode: { isEditing: false, entryId: null },
+              uiState: {
+                ...result.popupState.uiState,
+                formCollapsed: false
+                // Keep tableState unchanged
+              }
+            };
+            storage.local.set({ popupState: updatedState });
+          }
         });
         
         // Notify the background script to update rules
@@ -247,11 +403,45 @@ export const HeaderProvider = ({ children }) => {
       isResponse: false,
       headerType: 'request'
     });
-  }, []);
+    
+    // Clear form-related saved state but preserve table state when editing is cancelled
+    storage.local.get(['popupState'], (result) => {
+      if (result.popupState) {
+        const updatedState = {
+          ...result.popupState,
+          draftValues: {
+            headerName: '',
+            headerValue: '',
+            domains: [],
+            valueType: 'static',
+            sourceId: '',
+            prefix: '',
+            suffix: '',
+            isResponse: false
+          },
+          editMode: { isEditing: false, entryId: null },
+          uiState: {
+            ...result.popupState.uiState,
+            formCollapsed: false
+            // Keep tableState unchanged
+          }
+        };
+        storage.local.set({ popupState: updatedState });
+      }
+    });
+  }, [clearPopupState]);
   
   // Update draft values
   const updateDraftValues = useCallback((values) => {
     setDraftValues(prev => ({
+      ...prev,
+      ...values
+    }));
+  }, []);
+
+  // Update UI state
+  const updateUiState = useCallback((values) => {
+    setUiState(prev => ({
       ...prev,
       ...values
     }));
@@ -276,6 +466,7 @@ export const HeaderProvider = ({ children }) => {
     // Initial load of data
     loadHeaderEntries();
     loadDynamicSources();
+    loadPopupState();
     
     // Notify background script that popup is open
     runtime.sendMessage({ type: 'popupOpen' }, (response) => {
@@ -298,7 +489,7 @@ export const HeaderProvider = ({ children }) => {
       runtime.onMessage.removeListener(handleMessagesFromBackground);
       clearInterval(connectionCheckInterval);
     };
-  }, [loadHeaderEntries, loadDynamicSources, refreshHeaderEntries]);
+  }, [loadHeaderEntries, loadDynamicSources, loadPopupState, refreshHeaderEntries]);
   
   // Monitor storage changes 
   useEffect(() => {
@@ -322,6 +513,29 @@ export const HeaderProvider = ({ children }) => {
       storage.onChanged.removeListener(handleStorageChanges);
     };
   }, []);
+
+  // Auto-save popup state when draft values, edit mode, or UI state changes
+  useEffect(() => {
+    // Only save if there's meaningful state to preserve
+    const hasContent = 
+      draftValues.headerName || 
+      draftValues.headerValue || 
+      draftValues.domains.length > 0 ||
+      editMode.isEditing ||
+      uiState.formCollapsed !== false ||
+      uiState.tableState.searchText ||
+      Object.keys(uiState.tableState.filteredInfo).length > 0 ||
+      Object.keys(uiState.tableState.sortedInfo).length > 0;
+    
+    if (hasContent) {
+      // Debounce the save operation to avoid excessive writes
+      const saveTimer = setTimeout(() => {
+        savePopupState();
+      }, 500);
+      
+      return () => clearTimeout(saveTimer);
+    }
+  }, [draftValues, editMode, uiState, savePopupState]);
   
   // Context value
   const contextValue = {
@@ -330,6 +544,7 @@ export const HeaderProvider = ({ children }) => {
     isConnected,
     editMode,
     draftValues,
+    uiState,
     loadHeaderEntries,
     loadDynamicSources,
     refreshHeaderEntries,
@@ -338,7 +553,9 @@ export const HeaderProvider = ({ children }) => {
     deleteHeaderEntry,
     startEditingEntry,
     cancelEditing,
-    updateDraftValues
+    updateDraftValues,
+    updateUiState,
+    clearPopupState
   };
   
   return (
