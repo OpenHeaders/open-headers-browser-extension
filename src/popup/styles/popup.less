@@ -1,0 +1,134 @@
+@import '~antd/dist/reset.css';
+
+/* Global styles */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  width: 800px; /* Reduced width to prevent horizontal scrolling */
+  height: 540px; /* Further reduced to eliminate vertical scroll */
+  overflow: hidden;
+  background: #ffffff;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.app-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  position: relative;
+}
+
+.header {
+  padding: 6px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.content {
+  flex: 1;
+  padding: 6px 16px 40px 16px; /* Increased bottom padding for larger footer */
+  background: #ffffff;
+  overflow-y: auto;
+  min-height: 0; /* Allow flex shrinking */
+}
+
+.form-container {
+  margin: 6px 0;
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid #d9d9d9;
+}
+
+.entries-list {
+  margin-top: 6px;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 800px; /* Match body width */
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #f0f0f0;
+  background: #ffffff;
+  z-index: 10;
+  height: 36px; /* Increased height for text labels */
+  box-sizing: border-box;
+}
+
+/* Minimal Ant Design overrides for compactness */
+.ant-form-item {
+  margin-bottom: 6px;
+}
+
+/* Extra compact form items in collapse panel */
+.ant-collapse .ant-form-item {
+  margin-bottom: 4px;
+}
+
+.ant-collapse .ant-form-item-label {
+  padding-bottom: 0;
+}
+
+.ant-form-item-label {
+  padding: 0 0 1px;
+}
+
+.ant-form-item-label > label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.88);
+  height: 20px;
+  line-height: 20px;
+}
+
+/* Use Ant Design's compact size globally */
+.ant-btn {
+  height: 32px;
+}
+
+/* Connection status */
+.connection-status {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.connection-status .status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.connection-status .connected {
+  background-color: #52c41a;
+}
+
+.connection-status .disconnected {
+  background-color: #ff4d4f;
+}
+
+/* Domain tag hover effects */
+.professional-domain-tags .ant-tag:hover {
+  background: rgba(66, 133, 244, 0.12) !important;
+}
+

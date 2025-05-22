@@ -20,7 +20,7 @@ export async function exportConfiguration() {
 
         // Create configuration object
         const configuration = {
-            version: '1.5.0',
+            version: '2.0.0',
             timestamp: new Date().toISOString(),
             headerEntries,
             dynamicSources
