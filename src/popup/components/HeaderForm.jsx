@@ -33,6 +33,7 @@ import { useHeader } from '../../hooks/useHeader';
 import { normalizeHeaderName } from '../../utils/utils';
 import { validateHeaderValue } from '../../utils/header-validator';
 import DomainTags from './DomainTags';
+import {storage} from "../../utils/browser-api";
 
 const { Option } = Select;
 
@@ -100,6 +101,9 @@ const HeaderForm = () => {
         updateDraftValues,
         updateUiState
     } = useHeader();
+
+    const [dynamicSourceAlertDismissed, setDynamicSourceAlertDismissed] = useState(false);
+    const [lastConnectionState, setLastConnectionState] = useState(null);
 
     // Check if the current source is still available
     const isCurrentSourceAvailable = () => {
@@ -171,6 +175,35 @@ const HeaderForm = () => {
         // Update the ref for next render
         prevEditModeRef.current = { ...editMode };
     }, [draftValues, form, editMode]);
+
+    // Load dismissal state from storage
+    useEffect(() => {
+        storage.local.get(['dynamicSourceAlertDismissed'], (result) => {
+            if (result.dynamicSourceAlertDismissed) {
+                setDynamicSourceAlertDismissed(true);
+            }
+        });
+    }, []);
+
+    // Monitor connection state changes for alert dismissal
+    useEffect(() => {
+        if (lastConnectionState === null) {
+            setLastConnectionState(isConnected);
+            return;
+        }
+
+        if (!lastConnectionState && isConnected) {
+            setDynamicSourceAlertDismissed(false);
+            storage.local.remove(['dynamicSourceAlertDismissed']);
+        }
+
+        setLastConnectionState(isConnected);
+    }, [isConnected, lastConnectionState]);
+
+    const handleDynamicSourceAlertDismiss = () => {
+        setDynamicSourceAlertDismissed(true);
+        storage.local.set({ dynamicSourceAlertDismissed: true });
+    };
 
     // Handle form submission
     const handleSubmit = (values) => {
@@ -252,21 +285,24 @@ const HeaderForm = () => {
                     children: (
                         <>
                             {/* Show warning if editing a header with unavailable dynamic source */}
-                            {editMode.isEditing && draftValues.valueType === 'dynamic' && (!isConnected || !isCurrentSourceAvailable()) && (
-                                <Alert
-                                    message="Dynamic Source Unavailable"
-                                    description={
-                                        !isConnected
-                                            ? "The companion app is not connected. This header's dynamic value will be empty until the app is reconnected."
-                                            : "The selected dynamic source is no longer available. Please select a different source or change to static value."
-                                    }
-                                    type="warning"
-                                    icon={<DisconnectOutlined />}
-                                    showIcon
-                                    style={{ marginBottom: 12 }}
-                                    closable
-                                />
-                            )}
+                            {editMode.isEditing && draftValues.valueType === 'dynamic' &&
+                                (!isConnected || !isCurrentSourceAvailable()) &&
+                                !dynamicSourceAlertDismissed && (
+                                    <Alert
+                                        message="Dynamic Source Unavailable"
+                                        description={
+                                            !isConnected
+                                                ? "The companion app is not connected. This header's dynamic value will be empty until the app is reconnected."
+                                                : "The selected dynamic source is no longer available. Please select a different source or change to static value."
+                                        }
+                                        type="warning"
+                                        icon={<DisconnectOutlined />}
+                                        showIcon
+                                        style={{ marginBottom: 12 }}
+                                        closable
+                                        onClose={handleDynamicSourceAlertDismiss}
+                                    />
+                                )}
 
                             {/* Row 1 - Header Name and Direction */}
                             <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
@@ -438,7 +474,7 @@ const HeaderForm = () => {
                                                         zIndex: 1,
                                                         fontStyle: 'italic'
                                                     }}>
-                                                        {isConnected ? '{source_value}' : '{empty}'}
+                                                        {isConnected ? '{source_value}' : '{empty_value}'}
                                                     </div>
 
                                                     <Form.Item

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, {createContext, useState, useEffect, useCallback, useRef} from 'react';
 import { storage, runtime } from '../utils/browser-api';
 import { generateUniqueId } from '../utils/utils';
 
@@ -200,6 +200,17 @@ export const HeaderProvider = ({ children }) => {
       sortedInfo: {}
     }
   });
+
+  const prevConnectionRef = useRef(isConnected);
+
+  useEffect(() => {
+    if (!prevConnectionRef.current && isConnected) {
+      storage.local.remove(['connectionAlertDismissed', 'dynamicSourceAlertDismissed'], () => {
+        console.log('Info: Cleared alert dismissal states after reconnection');
+      });
+    }
+    prevConnectionRef.current = isConnected;
+  }, [isConnected]);
 
   // Load header entries from storage
   const loadHeaderEntries = useCallback(() => {
@@ -573,13 +584,11 @@ export const HeaderProvider = ({ children }) => {
 
   // Cancel editing
   const cancelEditing = useCallback(() => {
-    // Reset edit mode
     setEditMode({
       isEditing: false,
       entryId: null
     });
 
-    // Clear form
     setDraftValues({
       headerName: '',
       headerValue: '',
@@ -592,7 +601,12 @@ export const HeaderProvider = ({ children }) => {
       headerType: 'request'
     });
 
-    // Clear form-related saved state but preserve table state when editing is cancelled
+    // ADD THIS:
+    setUiState(prev => ({
+      ...prev,
+      formCollapsed: false
+    }));
+
     storage.local.get(['popupState'], (result) => {
       if (result.popupState) {
         const updatedState = {
@@ -609,8 +623,8 @@ export const HeaderProvider = ({ children }) => {
           },
           editMode: { isEditing: false, entryId: null },
           uiState: {
-            ...result.popupState.uiState
-            // Keep formCollapsed and tableState unchanged
+            ...result.popupState.uiState,
+            formCollapsed: false  // ADD THIS
           }
         };
         storage.local.set({ popupState: updatedState });

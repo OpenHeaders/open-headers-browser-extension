@@ -97,7 +97,7 @@ const HeaderTable = () => {
     if (!connected) {
       return {
         value: '(Disconnected)',
-        sourceInfo: 'Companion app disconnected',
+        sourceInfo: 'Local app disconnected',
         sourceTag: '',
         available: false,
         connected: false
@@ -219,7 +219,7 @@ const HeaderTable = () => {
 
         return (
             <Tooltip
-                title={hasIssue ? (record.sourceConnected ? "Source no longer exists" : "Companion app disconnected") : null}
+                title={hasIssue ? (record.sourceConnected ? "Source no longer exists" : "Local app disconnected") : null}
             >
               <Text
                   ellipsis
