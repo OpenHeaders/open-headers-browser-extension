@@ -112,7 +112,7 @@ const HeaderTable = () => {
     if (!source) {
       return {
         value: '{not found}',  // Clear indication of missing source
-        sourceInfo: `Source ID: ${entry.sourceId}`,
+        sourceInfo: `Source #${entry.sourceId} (removed)`,
         sourceTag: '',
         available: false,
         connected: true
@@ -126,7 +126,13 @@ const HeaderTable = () => {
     const sourceTag = source.sourceTag || source.locationTag || '';
     const sourcePath = source.sourcePath || source.locationPath || source.sourceUrl || source.locationUrl || '';
 
-    return { value, sourceInfo: sourcePath, sourceTag, available: true, connected: true };
+    // Prefix env variables with $ for clarity
+    const sourceType = source.sourceType || source.locationType || '';
+    const displayPath = sourceType.toLowerCase().includes('env') && sourcePath && !sourcePath.startsWith('$')
+        ? `$${sourcePath}`
+        : sourcePath;
+
+    return { value, sourceInfo: displayPath, sourceTag, available: true, connected: true };
   }
 
   // Handle table changes (pagination, filters, sorter)
@@ -368,9 +374,9 @@ const HeaderTable = () => {
         let tooltipContent = sourceInfo;
         if (hasIssue) {
           if (!record.sourceConnected) {
-            tooltipContent = "Companion app is disconnected";
+            tooltipContent = "Companion app is disconnected. Reconnect to use dynamic values.";
           } else {
-            tooltipContent = `Source with ID ${record.sourceId} was removed from the companion app`;
+            tooltipContent = `Source #${record.sourceId} was removed from the companion app`;
           }
         }
 

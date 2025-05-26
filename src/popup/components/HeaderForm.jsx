@@ -32,8 +32,8 @@ import {
 import { useHeader } from '../../hooks/useHeader';
 import { normalizeHeaderName } from '../../utils/utils';
 import { validateHeaderValue } from '../../utils/header-validator';
+import { storage } from '../../utils/browser-api';
 import DomainTags from './DomainTags';
-import {storage} from "../../utils/browser-api";
 
 const { Option } = Select;
 
@@ -70,12 +70,16 @@ const formatSourceDisplay = (source) => {
         display = `[${tag}] `;
     }
 
-    // Add path
+    // Add path with $ prefix for env variables
     if (path) {
-        display += path;
+        // Prefix env variables with $ for clarity
+        const displayPath = type.toLowerCase().includes('env') && !path.startsWith('$')
+            ? `$${path}`
+            : path;
+        display += displayPath;
     } else {
         // Fallback to source ID if no path
-        display += `Source ${source.sourceId || source.locationId}`;
+        display += `Source #${source.sourceId || source.locationId}`;
     }
 
     return display;
@@ -89,6 +93,8 @@ const HeaderForm = () => {
     const { message } = App.useApp();
     const isUpdatingRef = useRef(false);
     const prevEditModeRef = useRef(null);
+    const [dynamicSourceAlertDismissed, setDynamicSourceAlertDismissed] = useState(false);
+    const [lastConnectionState, setLastConnectionState] = useState(null);
 
     const {
         dynamicSources = [],
@@ -101,9 +107,6 @@ const HeaderForm = () => {
         updateDraftValues,
         updateUiState
     } = useHeader();
-
-    const [dynamicSourceAlertDismissed, setDynamicSourceAlertDismissed] = useState(false);
-    const [lastConnectionState, setLastConnectionState] = useState(null);
 
     // Check if the current source is still available
     const isCurrentSourceAvailable = () => {
@@ -187,23 +190,21 @@ const HeaderForm = () => {
 
     // Monitor connection state changes for alert dismissal
     useEffect(() => {
+        // Initialize lastConnectionState on first render
         if (lastConnectionState === null) {
             setLastConnectionState(isConnected);
             return;
         }
 
+        // If connection state changed from disconnected to connected
         if (!lastConnectionState && isConnected) {
+            // Clear dismissal state when reconnected
             setDynamicSourceAlertDismissed(false);
             storage.local.remove(['dynamicSourceAlertDismissed']);
         }
 
         setLastConnectionState(isConnected);
     }, [isConnected, lastConnectionState]);
-
-    const handleDynamicSourceAlertDismiss = () => {
-        setDynamicSourceAlertDismissed(true);
-        storage.local.set({ dynamicSourceAlertDismissed: true });
-    };
 
     // Handle form submission
     const handleSubmit = (values) => {
@@ -255,6 +256,13 @@ const HeaderForm = () => {
 
             updateDraftValues(transformedValues);
         }
+    };
+
+    // Handle dynamic source alert dismissal
+    const handleDynamicSourceAlertDismiss = () => {
+        setDynamicSourceAlertDismissed(true);
+        // Save dismissal state to storage
+        storage.local.set({ dynamicSourceAlertDismissed: true });
     };
 
     return (
@@ -381,31 +389,64 @@ const HeaderForm = () => {
                                                                 ? "Companion app is disconnected"
                                                                 : "No dynamic sources available"
                                                         }
+                                                        optionLabelProp="label"
                                                     >
-                                                        {isConnected && dynamicSources.map(source => (
-                                                            <Option
-                                                                key={source.sourceId || source.locationId}
-                                                                value={source.sourceId || source.locationId}
-                                                            >
-                                                                <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                                    {getSourceIcon(source)}
-                                                                    <span>{formatSourceDisplay(source)}</span>
-                                                                </div>
-                                                            </Option>
-                                                        ))}
-                                                        {/* If editing and source no longer exists, show it as unavailable */}
-                                                        {editMode.isEditing && draftValues.sourceId && !isCurrentSourceAvailable() && (
-                                                            <Option
-                                                                key={draftValues.sourceId}
-                                                                value={draftValues.sourceId}
-                                                                disabled
-                                                            >
-                                                                <div style={{ display: 'flex', alignItems: 'center', color: '#ff4d4f' }}>
-                                                                    <WarningOutlined style={{ marginRight: 4 }} />
-                                                                    <span>Source {draftValues.sourceId} (No longer available)</span>
-                                                                </div>
-                                                            </Option>
-                                                        )}
+                                                        {/* Render available sources when connected */}
+                                                        {isConnected && dynamicSources.map(source => {
+                                                            const displayText = formatSourceDisplay(source);
+                                                            return (
+                                                                <Option
+                                                                    key={source.sourceId || source.locationId}
+                                                                    value={source.sourceId || source.locationId}
+                                                                    label={displayText}
+                                                                >
+                                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                                        {getSourceIcon(source)}
+                                                                        <span>{displayText}</span>
+                                                                    </div>
+                                                                </Option>
+                                                            );
+                                                        })}
+                                                        {/* Always show an option for the current value when editing */}
+                                                        {editMode.isEditing && draftValues.sourceId && (() => {
+                                                            const sourceExists = dynamicSources.some(s =>
+                                                                (s.sourceId || s.locationId) === draftValues.sourceId
+                                                            );
+
+                                                            // Determine the label based on connection state and source availability
+                                                            let label = '';
+                                                            let displayText = '';
+
+                                                            if (!isConnected) {
+                                                                // When disconnected, we can't know if source exists
+                                                                label = 'App disconnected';
+                                                                displayText = 'App disconnected';
+                                                            } else if (!sourceExists) {
+                                                                // Connected but source doesn't exist
+                                                                label = `Source #${draftValues.sourceId} (removed)`;
+                                                                displayText = `Source #${draftValues.sourceId} (removed)`;
+                                                            } else {
+                                                                // Connected and source exists - no need for special option
+                                                                return null;
+                                                            }
+
+                                                            return (
+                                                                <Option
+                                                                    key={draftValues.sourceId}
+                                                                    value={draftValues.sourceId}
+                                                                    disabled
+                                                                    label={label}
+                                                                >
+                                                                    <div style={{ display: 'flex', alignItems: 'center', color: '#ff4d4f' }}>
+                                                                        {!isConnected ?
+                                                                            <DisconnectOutlined style={{ marginRight: 4 }} /> :
+                                                                            <WarningOutlined style={{ marginRight: 4 }} />
+                                                                        }
+                                                                        <span>{displayText}</span>
+                                                                    </div>
+                                                                </Option>
+                                                            );
+                                                        })()}
                                                     </Select>
                                                 </Form.Item>
                                             )}
@@ -536,7 +577,7 @@ const HeaderForm = () => {
                                         size="small"
                                         style={{ minWidth: 100 }}
                                     >
-                                        {editMode.isEditing ? 'Update' : 'Save'}
+                                        {editMode.isEditing ? 'Update' : 'Create'}
                                     </Button>
                                 </Space>
                             </Form.Item>

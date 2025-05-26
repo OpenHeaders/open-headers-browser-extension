@@ -169,7 +169,7 @@ const Footer = () => {
             onClick={handleOpenWelcomePage}
             size="small"
           >
-            Initial setup
+            Setup Guide
           </Button>
         </Space>
       </div>
