@@ -96,8 +96,8 @@ const HeaderTable = () => {
 
     if (!connected) {
       return {
-        value: '(Disconnected)',
-        sourceInfo: 'Local app disconnected',
+        value: '{empty_value}',  // More clear that value is empty
+        sourceInfo: 'App disconnected',
         sourceTag: '',
         available: false,
         connected: false
@@ -111,8 +111,8 @@ const HeaderTable = () => {
 
     if (!source) {
       return {
-        value: '(Source not found)',
-        sourceInfo: `Source ${entry.sourceId} no longer exists`,
+        value: '{not found}',  // Clear indication of missing source
+        sourceInfo: `Source ID: ${entry.sourceId}`,
         sourceTag: '',
         available: false,
         connected: true
@@ -217,20 +217,30 @@ const HeaderTable = () => {
         const displayValue = record.isDynamic ? record.dynamicValue : text;
         const hasIssue = record.isDynamic && (!record.sourceAvailable || !record.sourceConnected);
 
+        // Determine the tooltip message
+        let tooltipMessage = null;
+        if (hasIssue) {
+          if (!record.sourceConnected) {
+            tooltipMessage = "Value is empty because the companion app is disconnected";
+          } else {
+            tooltipMessage = "Value is empty because the source no longer exists";
+          }
+        }
+
         return (
-            <Tooltip
-                title={hasIssue ? (record.sourceConnected ? "Source no longer exists" : "Local app disconnected") : null}
-            >
+            <Tooltip title={tooltipMessage}>
               <Text
                   ellipsis
-                  type={hasIssue ? "danger" : undefined}
+                  type={hasIssue ? "secondary" : undefined}
                   style={{
                     display: 'block',
-                    fontSize: '13px'
+                    fontSize: '13px',
+                    fontStyle: hasIssue ? 'italic' : 'normal',
+                    opacity: hasIssue ? 0.7 : 1
                   }}
               >
                 {hasIssue && (
-                    <WarningOutlined style={{ marginRight: 4 }} />
+                    <WarningOutlined style={{ marginRight: 4, color: '#ff7875' }} />
                 )}
                 {displayValue}
               </Text>
@@ -307,8 +317,19 @@ const HeaderTable = () => {
                 <Tag color="orange" size="small">{record.sourceTag}</Tag>
             )}
             {record.isDynamic && !record.sourceAvailable && (
-                <Tooltip title={record.sourceConnected ? "Source not found" : "App disconnected"}>
-                  <Tag color="error" size="small" icon={<DisconnectOutlined />}>
+                <Tooltip
+                    title={
+                      record.sourceConnected
+                          ? "Dynamic source not found. The configured source no longer exists."
+                          : "Companion app is offline. Dynamic value will be empty until reconnected."
+                    }
+                >
+                  <Tag
+                      color="error"
+                      size="small"
+                      icon={<DisconnectOutlined />}
+                      style={{ cursor: 'help' }}
+                  >
                     {!record.sourceConnected ? 'Offline' : 'Missing'}
                   </Tag>
                 </Tooltip>
@@ -336,26 +357,40 @@ const HeaderTable = () => {
                     color: '#bfbfbf'
                   }}
               >
-                Static
+                Static value
               </Text>
           );
         }
 
         const hasIssue = !record.sourceAvailable || !record.sourceConnected;
 
+        // Determine tooltip based on connection state
+        let tooltipContent = sourceInfo;
+        if (hasIssue) {
+          if (!record.sourceConnected) {
+            tooltipContent = "Companion app is disconnected";
+          } else {
+            tooltipContent = `Source with ID ${record.sourceId} was removed from the companion app`;
+          }
+        }
+
         return (
-            <Text
-                ellipsis
-                type={hasIssue ? "danger" : undefined}
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  color: hasIssue ? undefined : '#8c8c8c'
-                }}
-                title={sourceInfo}
-            >
-              {sourceInfo}
-            </Text>
+            <Tooltip title={tooltipContent}>
+              <Text
+                  ellipsis
+                  type={hasIssue ? "secondary" : undefined}
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontStyle: hasIssue ? 'italic' : 'normal',
+                    opacity: hasIssue ? 0.7 : 1,
+                    cursor: hasIssue ? 'help' : 'default'
+                  }}
+              >
+                {hasIssue && <WarningOutlined style={{ marginRight: 4, color: '#ff7875' }} />}
+                {sourceInfo}
+              </Text>
+            </Tooltip>
         );
       },
     },
