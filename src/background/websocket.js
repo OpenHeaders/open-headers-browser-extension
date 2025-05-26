@@ -58,6 +58,22 @@ function broadcastConnectionStatus() {
 }
 
 /**
+ * Clear dynamic sources when disconnected
+ * This keeps the sources in local storage but marks them as disconnected
+ * This way we preserve the configuration but show appropriate UI
+ */
+function clearDynamicSourcesOnDisconnect() {
+    console.log('Info: Connection lost, preserving sources but marking as disconnected');
+
+    // Don't clear the sources from memory - keep them for when reconnected
+    // But notify the UI that we're disconnected
+    broadcastConnectionStatus();
+
+    // Don't clear from storage - we want to preserve the configuration
+    // The UI will check isConnected to determine if sources are available
+}
+
+/**
  * Opens the Firefox welcome/onboarding page instead of directly showing the certificate error
  */
 function openFirefoxOnboardingPage() {
@@ -830,8 +846,8 @@ function handleConnectionFailure() {
     isConnecting = false;
     isConnected = false;
 
-    // Notify any open popups
-    broadcastConnectionStatus();
+    // Clear sources on disconnect
+    clearDynamicSourcesOnDisconnect();
 
     // Try again after delay
     reconnectTimer = setTimeout(() => {
@@ -860,21 +876,7 @@ export function isWebSocketConnected() {
  * @returns {Array} - Array of sources
  */
 export function getCurrentSources() {
-    // If we don't have any sources in memory, try to load from storage
-    if (allSources.length === 0) {
-        try {
-            // Use browser-agnostic storage API instead of chrome.storage.local
-            storage.local.get(['dynamicSources'], (result) => {
-                if (result.dynamicSources && Array.isArray(result.dynamicSources) &&
-                    result.dynamicSources.length > 0 && allSources.length === 0) {
-                    allSources = result.dynamicSources;
-                    console.log('Info: Loaded sources from storage.local:', allSources.length);
-                }
-            });
-        } catch (e) {
-            console.log('Info: Error loading from storage:', e);
-        }
-    }
-
+    // Always return the current sources, even if disconnected
+    // The UI will check connection status separately
     return [...allSources]; // Return a copy to prevent mutation
 }

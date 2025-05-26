@@ -1,16 +1,22 @@
 /**
  * Enhanced header-manager.js with specialized response header support
+ * and disconnected dynamic source handling
  */
 import { isValidHeaderValue, sanitizeHeaderValue } from './rule-validator.js';
 import { normalizeHeaderName } from '../utils/utils.js';
 import { storage, declarativeNetRequest, runtime } from '../utils/browser-api.js';
+import { isWebSocketConnected } from './websocket.js';
 
 /**
  * Updates the network request rules based on saved data and dynamic sources.
  * Implements specialized handling for response headers to maximize compatibility.
+ * Handles disconnected dynamic sources by skipping them.
  * @param {Array} dynamicSources - The current dynamic sources from WebSocket
  */
 export function updateNetworkRules(dynamicSources) {
+    // Check if we're connected
+    const isConnected = isWebSocketConnected();
+
     // Get all saved headers
     storage.sync.get(['savedData'], (result) => {
         const savedData = result.savedData || {};
@@ -34,7 +40,7 @@ export function updateNetworkRules(dynamicSources) {
             }
 
             // Process entry and add to appropriate array
-            const processedEntry = processEntry(entry, dynamicSources);
+            const processedEntry = processEntry(entry, dynamicSources, isConnected);
             if (processedEntry) {
                 if (processedEntry.isResponse) {
                     responseEntries.push(processedEntry);
@@ -92,18 +98,32 @@ export function updateNetworkRules(dynamicSources) {
  * Process an entry and determine if it's valid
  * @param {Object} entry - The header entry
  * @param {Array} dynamicSources - Available dynamic sources
+ * @param {boolean} isConnected - Whether the companion app is connected
  * @returns {Object|null} - Processed entry or null if invalid
  */
-function processEntry(entry, dynamicSources) {
+function processEntry(entry, dynamicSources, isConnected) {
     let headerValue = entry.headerValue;
 
     // Handle dynamic values
     if (entry.isDynamic && entry.sourceId) {
+        // If not connected, skip dynamic headers
+        if (!isConnected) {
+            console.log(`Info: Skipping dynamic header ${entry.headerName} - companion app not connected`);
+            return null;
+        }
+
         const source = dynamicSources.find(s => s.sourceId?.toString() === entry.sourceId?.toString() ||
             s.locationId?.toString() === entry.sourceId?.toString());
 
         if (source) {
             const dynamicContent = source.sourceContent || source.locationContent;
+
+            // If dynamic content is empty, skip this header
+            if (!dynamicContent) {
+                console.log(`Info: Skipping rule for ${entry.headerName} - dynamic source ${entry.sourceId} has empty content`);
+                return null;
+            }
+
             const prefix = entry.prefix || '';
             const suffix = entry.suffix || '';
             headerValue = `${prefix}${dynamicContent}${suffix}`;

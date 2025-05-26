@@ -454,6 +454,12 @@ export const HeaderProvider = ({ children }) => {
         };
         setDraftValues(clearedDraft);
 
+        // Collapse the form after successful save
+        setUiState(prev => ({
+          ...prev,
+          formCollapsed: false  // false = collapsed (backwards naming)
+        }));
+
         // Clear form-related saved state but preserve table state
         // Don't change formCollapsed state - let user control it
         storage.local.get(['popupState'], (result) => {
@@ -472,8 +478,8 @@ export const HeaderProvider = ({ children }) => {
               },
               editMode: { isEditing: false, entryId: null },
               uiState: {
-                ...result.popupState.uiState
-                // Keep formCollapsed and tableState unchanged
+                ...result.popupState.uiState,
+                formCollapsed: false  // Collapse the form after save
               }
             };
             storage.local.set({ popupState: updatedState });
@@ -672,7 +678,7 @@ export const HeaderProvider = ({ children }) => {
     };
   }, [loadHeaderEntries, loadDynamicSources, loadPopupState, refreshHeaderEntries]);
 
-  // Monitor storage changes 
+  // Monitor storage changes
   useEffect(() => {
     const handleStorageChanges = (changes, area) => {
       // Listen for dynamic sources changes
