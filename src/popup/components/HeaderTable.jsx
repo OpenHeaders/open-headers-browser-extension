@@ -96,7 +96,7 @@ const HeaderTable = () => {
 
     if (!connected) {
       return {
-        value: '{empty_value}',  // More clear that value is empty
+        value: 'App disconnected',
         sourceInfo: 'App disconnected',
         sourceTag: '',
         available: false,
@@ -111,7 +111,7 @@ const HeaderTable = () => {
 
     if (!source) {
       return {
-        value: '{not found}',  // Clear indication of missing source
+        value: `Source #${entry.sourceId} (removed)`,
         sourceInfo: `Source #${entry.sourceId} (removed)`,
         sourceTag: '',
         available: false,
@@ -227,7 +227,7 @@ const HeaderTable = () => {
         let tooltipMessage = null;
         if (hasIssue) {
           if (!record.sourceConnected) {
-            tooltipMessage = "Value is empty because the companion app is disconnected";
+            tooltipMessage = "Value is empty because the local app is disconnected";
           } else {
             tooltipMessage = "Value is empty because the source no longer exists";
           }
@@ -327,7 +327,7 @@ const HeaderTable = () => {
                     title={
                       record.sourceConnected
                           ? "Dynamic source not found. The configured source no longer exists."
-                          : "Companion app is offline. Dynamic value will be empty until reconnected."
+                          : "Local app is offline. Dynamic value will be empty until reconnected."
                     }
                 >
                   <Tag
@@ -374,7 +374,7 @@ const HeaderTable = () => {
         let tooltipContent = sourceInfo;
         if (hasIssue) {
           if (!record.sourceConnected) {
-            tooltipContent = "Companion app is disconnected. Reconnect to use dynamic values.";
+            tooltipContent = "Local app is disconnected. Reconnect to use dynamic values.";
           } else {
             tooltipContent = `Source #${record.sourceId} was removed from the companion app`;
           }

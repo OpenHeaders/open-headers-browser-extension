@@ -98,7 +98,7 @@ export function updateNetworkRules(dynamicSources) {
  * Process an entry and determine if it's valid
  * @param {Object} entry - The header entry
  * @param {Array} dynamicSources - Available dynamic sources
- * @param {boolean} isConnected - Whether the companion app is connected
+ * @param {boolean} isConnected - Whether the local app is connected
  * @returns {Object|null} - Processed entry or null if invalid
  */
 function processEntry(entry, dynamicSources, isConnected) {
@@ -108,7 +108,7 @@ function processEntry(entry, dynamicSources, isConnected) {
     if (entry.isDynamic && entry.sourceId) {
         // If not connected, skip dynamic headers
         if (!isConnected) {
-            console.log(`Info: Skipping dynamic header ${entry.headerName} - companion app not connected`);
+            console.log(`Info: Skipping dynamic header ${entry.headerName} - local app not connected`);
             return null;
         }
 

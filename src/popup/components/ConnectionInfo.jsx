@@ -57,7 +57,7 @@ const ConnectionInfo = () => {
           message="Local App Not Connected"
           description={
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <span style={{ fontSize: '12px' }}>Install the companion app to use dynamic sources.</span>
+              <span style={{ fontSize: '12px' }}>Install the local app to use dynamic sources.</span>
               <Space size={8}>
                 <Button
                     type="primary"

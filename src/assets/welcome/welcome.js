@@ -227,10 +227,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Check if the companion app is running
+     * Check if the local app is running
      */
     function checkAppRunning() {
-        console.log('Checking if companion app is running...');
+        console.log('Checking if local app is running...');
 
         const xhr = new XMLHttpRequest();
         xhr.timeout = 2000;

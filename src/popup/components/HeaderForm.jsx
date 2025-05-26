@@ -221,7 +221,7 @@ const HeaderForm = () => {
 
         // Show warning if saving with disconnected dynamic source
         if (isDynamic && !isConnected) {
-            message.warning('Dynamic source saved but companion app is not connected. The value will be empty until reconnected.');
+            message.warning('Dynamic source saved but local app is not connected. The value will be empty until reconnected.');
         }
 
         saveHeaderEntry({
@@ -300,7 +300,7 @@ const HeaderForm = () => {
                                         message="Dynamic Source Unavailable"
                                         description={
                                             !isConnected
-                                                ? "The companion app is not connected. This header's dynamic value will be empty until the app is reconnected."
+                                                ? "The local app is not connected. This header's dynamic value will be empty until the app is reconnected."
                                                 : "The selected dynamic source is no longer available. Please select a different source or change to static value."
                                         }
                                         type="warning"
@@ -345,7 +345,7 @@ const HeaderForm = () => {
                                             <Form.Item
                                                 label="Value Type"
                                                 name="valueType"
-                                                style={{ minWidth: 180, marginBottom: 0 }}
+                                                style={{ minWidth: 195, marginBottom: 0 }}
                                             >
                                                 <Select size="small">
                                                     <Option value="static">Static</Option>
@@ -386,7 +386,7 @@ const HeaderForm = () => {
                                                         suffixIcon={!isConnected ? <DisconnectOutlined /> : <ApiOutlined />}
                                                         notFoundContent={
                                                             !isConnected
-                                                                ? "Companion app is disconnected"
+                                                                ? "Local app is disconnected"
                                                                 : "No dynamic sources available"
                                                         }
                                                         optionLabelProp="label"
@@ -474,7 +474,7 @@ const HeaderForm = () => {
                                                     Example: for "Bearer token123", type "Bearer " (with space) in prefix
                                                     {!isConnected && (
                                                         <div style={{ color: '#ff7875', marginTop: 4 }}>
-                                                            <WarningOutlined /> Dynamic value will be empty until companion app is connected
+                                                            <WarningOutlined /> Dynamic value will be empty until local app is connected
                                                         </div>
                                                     )}
                                                 </div>
@@ -515,7 +515,7 @@ const HeaderForm = () => {
                                                         zIndex: 1,
                                                         fontStyle: 'italic'
                                                     }}>
-                                                        {isConnected ? '{source_value}' : '{empty_value}'}
+                                                        {'{source_value}'}
                                                     </div>
 
                                                     <Form.Item
