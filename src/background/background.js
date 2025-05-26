@@ -1,6 +1,5 @@
 /**
  * Main background service worker
- * Updated with universal welcome page support
  */
 
 /**
@@ -28,11 +27,6 @@ async function initializeExtension() {
             console.log('Info: Initialized saved data hash');
         }
     });
-
-    // Check if we should show the welcome page with a small delay
-    setTimeout(() => {
-        maybeOpenWelcomePage();
-    }, 1000);
 
     // Connect to WebSocket and update rules when we receive new data
     await connectWebSocket((sources) => {
@@ -202,9 +196,9 @@ alarms.onAlarm.addListener((alarm) => {
 });
 
 /**
- * Opens the welcome page for any browser
+ * Opens the welcome page ONLY on first install
  */
-function maybeOpenWelcomePage() {
+function openWelcomePageOnInstall() {
     // Don't open if we're already opening a page
     if (welcomePageBeingOpened) {
         console.log('Info: Welcome page already being opened, skipping');
@@ -213,101 +207,66 @@ function maybeOpenWelcomePage() {
 
     // Set flag immediately to prevent race conditions
     welcomePageBeingOpened = true;
-    console.log('Info: Welcome page opening flag set to prevent duplicates');
+    console.log('Info: Opening welcome page for first install');
 
-    // Check if the user has completed setup before
-    storage.local.get(['setupCompleted', 'setupCompletedTime', 'certificateAccepted'], (result) => {
-        const setupCompleted = result.setupCompleted;
-        const certificateAccepted = result.certificateAccepted;
-        const setupCompletedTime = result.setupCompletedTime || 0;
-        const now = Date.now();
-        const daysSinceSetup = (now - setupCompletedTime) / (1000 * 60 * 60 * 24);
+    try {
+        // Use appropriate API based on browser
+        const api = typeof browser !== 'undefined' ? browser : chrome;
 
-        // For Firefox, we additionally check if certificate is accepted
-        if (isFirefox) {
-            if (certificateAccepted && setupCompleted) {
-                console.log('Info: Certificate already accepted for Firefox, skipping welcome page');
-                welcomePageBeingOpened = false;
-                return;
-            }
-        } else {
-            // For other browsers, just check if setup is completed
-            if (setupCompleted) {
-                console.log('Info: Setup already completed, skipping welcome page');
-                welcomePageBeingOpened = false;
-                return;
-            }
-        }
+        if (api.tabs && api.tabs.query) {
+            const welcomePageUrl = api.runtime.getURL('welcome.html');
 
-        // If never completed setup or it's been more than 30 days since a failed attempt, show welcome page
-        const shouldShowWelcome = !setupCompleted || daysSinceSetup > 30;
+            // First check if a welcome page is already open
+            const queryPromise = typeof api.tabs.query.then === 'function'
+                ? api.tabs.query({})  // Firefox uses promises
+                : new Promise((resolve) => api.tabs.query({}, resolve)); // Chrome uses callbacks
 
-        if (shouldShowWelcome) {
-            console.log('Info: Opening welcome page');
+            queryPromise.then(tabs => {
+                const welcomeTabs = tabs.filter(tab =>
+                    tab.url === welcomePageUrl ||
+                    tab.url.startsWith(welcomePageUrl)
+                );
 
-            try {
-                // Use appropriate API based on browser
-                const api = typeof browser !== 'undefined' ? browser : chrome;
+                if (welcomeTabs.length > 0) {
+                    // Welcome page is already open, just focus it
+                    console.log('Info: Welcome page already exists, focusing it');
 
-                if (api.tabs && api.tabs.query) {
-                    const welcomePageUrl = api.runtime.getURL('welcome.html');
+                    const updatePromise = typeof api.tabs.update.then === 'function'
+                        ? api.tabs.update(welcomeTabs[0].id, {active: true})
+                        : new Promise((resolve) => api.tabs.update(welcomeTabs[0].id, {active: true}, resolve));
 
-                    // First check if a welcome page is already open
-                    const queryPromise = typeof api.tabs.query.then === 'function'
-                        ? api.tabs.query({})  // Firefox uses promises
-                        : new Promise((resolve) => api.tabs.query({}, resolve)); // Chrome uses callbacks
-
-                    queryPromise.then(tabs => {
-                        const welcomeTabs = tabs.filter(tab =>
-                            tab.url === welcomePageUrl ||
-                            tab.url.startsWith(welcomePageUrl)
-                        );
-
-                        if (welcomeTabs.length > 0) {
-                            // Welcome page is already open, just focus it
-                            console.log('Info: Welcome page already exists, focusing it');
-
-                            const updatePromise = typeof api.tabs.update.then === 'function'
-                                ? api.tabs.update(welcomeTabs[0].id, {active: true})
-                                : new Promise((resolve) => api.tabs.update(welcomeTabs[0].id, {active: true}, resolve));
-
-                            updatePromise.then(() => {
-                                welcomePageBeingOpened = false;
-                            }).catch(err => {
-                                console.log('Info: Error focusing existing welcome tab:', err ? err.message : 'unknown error');
-                                welcomePageBeingOpened = false;
-                            });
-                        } else {
-                            // Create a new welcome page
-                            const createPromise = typeof api.tabs.create.then === 'function'
-                                ? api.tabs.create({ url: welcomePageUrl, active: true })
-                                : new Promise((resolve) => api.tabs.create({ url: welcomePageUrl, active: true }, resolve));
-
-                            createPromise.then(tab => {
-                                console.log('Info: Opened welcome tab:', tab.id);
-                                welcomePageBeingOpened = false;
-                            }).catch(err => {
-                                console.log('Info: Failed to open welcome page:', err ? err.message : 'unknown error');
-                                welcomePageBeingOpened = false;
-                            });
-                        }
+                    updatePromise.then(() => {
+                        welcomePageBeingOpened = false;
                     }).catch(err => {
-                        console.log('Info: Error checking for existing welcome tabs:', err ? err.message : 'unknown error');
+                        console.log('Info: Error focusing existing welcome tab:', err ? err.message : 'unknown error');
                         welcomePageBeingOpened = false;
                     });
                 } else {
-                    console.log('Info: Cannot open welcome page - missing permissions');
-                    welcomePageBeingOpened = false;
+                    // Create a new welcome page
+                    const createPromise = typeof api.tabs.create.then === 'function'
+                        ? api.tabs.create({ url: welcomePageUrl, active: true })
+                        : new Promise((resolve) => api.tabs.create({ url: welcomePageUrl, active: true }, resolve));
+
+                    createPromise.then(tab => {
+                        console.log('Info: Opened welcome tab:', tab.id);
+                        welcomePageBeingOpened = false;
+                    }).catch(err => {
+                        console.log('Info: Failed to open welcome page:', err ? err.message : 'unknown error');
+                        welcomePageBeingOpened = false;
+                    });
                 }
-            } catch (e) {
-                console.log('Info: Error opening welcome page:', e.message);
+            }).catch(err => {
+                console.log('Info: Error checking for existing welcome tabs:', err ? err.message : 'unknown error');
                 welcomePageBeingOpened = false;
-            }
+            });
         } else {
-            console.log('Info: Skipping welcome page, setup already completed recently');
+            console.log('Info: Cannot open welcome page - missing permissions');
             welcomePageBeingOpened = false;
         }
-    });
+    } catch (e) {
+        console.log('Info: Error opening welcome page:', e.message);
+        welcomePageBeingOpened = false;
+    }
 }
 
 // Register for startup to reconnect if browser restarts
@@ -320,15 +279,16 @@ runtime.onStartup.addListener(() => {
 runtime.onInstalled.addListener((details) => {
     console.log('Info: Extension installed or updated:', details.reason);
 
-    // Show welcome page on install for all browsers with a small delay to prevent race conditions
+    // Only show welcome page on fresh install, not on updates
     if (details.reason === 'install') {
+        console.log('Info: Fresh install detected, opening welcome page');
         setTimeout(() => {
-            maybeOpenWelcomePage();
+            openWelcomePageOnInstall();
         }, 500);
-    } else {
-        // For updates or other events, initialize normally
-        initializeExtension();
     }
+
+    // Always initialize the extension regardless of install/update
+    initializeExtension();
 });
 
 // Start the extension when loaded
@@ -454,15 +414,14 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ acknowledged: true });
         }
     } else if (message.type === 'openWelcomePage') {
-        // Regular welcome page opening (respects setup state)
-        console.log('Info: Opening welcome page requested');
-        maybeOpenWelcomePage();
+        // This message type is no longer used - we don't want to open welcome page randomly
+        console.log('Info: Ignoring openWelcomePage request - welcome page should only open on install');
         if (sendResponse) {
             sendResponse({ acknowledged: true });
         }
     } else if (message.type === 'forceOpenWelcomePage') {
-        // FORCE open the welcome page (ignore setup state)
-        console.log('Info: Force opening welcome page requested');
+        // FORCE open the welcome page (from the Guide button in popup)
+        console.log('Info: Force opening welcome page requested from popup');
         openWelcomePageDirectly();
         if (sendResponse) {
             sendResponse({ acknowledged: true });

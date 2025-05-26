@@ -146,7 +146,7 @@ const Footer = () => {
             onClick={handleExport}
             size="small"
           >
-            Export
+            Export rules
           </Button>
           
           <Upload
@@ -159,7 +159,7 @@ const Footer = () => {
               icon={<ImportOutlined />}
               size="small"
             >
-              Import
+              Import rules
             </Button>
           </Upload>
           
@@ -169,7 +169,7 @@ const Footer = () => {
             onClick={handleOpenWelcomePage}
             size="small"
           >
-            Guide
+            Initial setup
           </Button>
         </Space>
       </div>
