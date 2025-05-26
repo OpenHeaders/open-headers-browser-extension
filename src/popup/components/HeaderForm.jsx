@@ -411,7 +411,7 @@ const HeaderForm = () => {
                     size="small"
                     style={{ minWidth: 100 }}
                   >
-                    {editMode.isEditing ? 'Update' : 'Save'}
+                    {editMode.isEditing ? 'Create' : 'Save'}
                   </Button>
                 </Space>
               </Form.Item>

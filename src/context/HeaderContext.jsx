@@ -42,6 +42,126 @@ const defaultContextValue = {
 
 export const HeaderContext = createContext(defaultContextValue);
 
+/**
+ * Helper function to check if two domain patterns conflict
+ * @param {string} domain1 - First domain pattern
+ * @param {string} domain2 - Second domain pattern
+ * @returns {boolean} - True if domains conflict
+ *
+ * Examples of conflicts:
+ * - example.com vs example.com (exact match)
+ * - *.example.com vs sub.example.com (wildcard matches subdomain)
+ * - *.example.com vs *.example.com (same pattern)
+ * - *example.com vs example.com (wildcard matches domain)
+ *
+ * Examples of non-conflicts:
+ * - example.com vs *.example.com (root domain vs subdomain wildcard)
+ * - example.com vs sub.example.com (different specific domains)
+ * - example.com/api vs example.com/app (different paths)
+ */
+function doDomainsConflict(domain1, domain2) {
+  // Normalize domains - remove protocol but keep paths for pattern matching
+  const normalizeDomain = (domain) => {
+    return domain.toLowerCase()
+        .trim()
+        .replace(/^https?:\/\//, ''); // Remove protocol only
+  };
+
+  const d1 = normalizeDomain(domain1);
+  const d2 = normalizeDomain(domain2);
+
+  // Exact match
+  if (d1 === d2) {
+    return true;
+  }
+
+  // Extract domain and path parts
+  const getParts = (domain) => {
+    const slashIndex = domain.indexOf('/');
+    if (slashIndex === -1) {
+      return { domain: domain, path: '/*' }; // Default to /* if no path specified
+    }
+    return {
+      domain: domain.substring(0, slashIndex),
+      path: domain.substring(slashIndex)
+    };
+  };
+
+  const parts1 = getParts(d1);
+  const parts2 = getParts(d2);
+
+  // Helper function to check if a pattern matches a domain
+  const doesPatternMatchDomain = (pattern, domain) => {
+    // Handle different wildcard formats
+
+    // *.example.com - matches only subdomains, NOT example.com itself
+    if (pattern.startsWith('*.')) {
+      const base = pattern.substring(2);
+      // Check if domain is a subdomain of base
+      return domain.endsWith('.' + base) && domain !== base;
+    }
+
+    // *example.com - matches example.com AND all subdomains
+    if (pattern.startsWith('*') && !pattern.startsWith('*.')) {
+      const base = pattern.substring(1);
+      return domain === base || domain.endsWith(base);
+    }
+
+    // example.* - matches example.com, example.org, etc.
+    if (pattern.endsWith('.*')) {
+      const base = pattern.substring(0, pattern.length - 2);
+      return domain.startsWith(base);
+    }
+
+    // General wildcard pattern
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+      return regex.test(domain);
+    }
+
+    // No wildcards, exact match only
+    return pattern === domain;
+  };
+
+  try {
+    // Check if domains match
+    let domainsMatch = false;
+
+    // Check both directions
+    if (doesPatternMatchDomain(parts1.domain, parts2.domain) ||
+        doesPatternMatchDomain(parts2.domain, parts1.domain)) {
+      domainsMatch = true;
+    }
+
+    // If domains don't match, no conflict
+    if (!domainsMatch) {
+      return false;
+    }
+
+    // Domains match, now check paths
+    const pathMatches = (pathPattern, path) => {
+      if (pathPattern === '/*') return true; // Matches everything
+      if (pathPattern === path) return true; // Exact match
+
+      // Convert path pattern to regex
+      const regex = new RegExp('^' + pathPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+      return regex.test(path);
+    };
+
+    // If either path matches the other, there's a conflict
+    if (pathMatches(parts1.path, parts2.path) || pathMatches(parts2.path, parts1.path)) {
+      return true;
+    }
+
+  } catch (e) {
+    // If regex parsing fails, be conservative and report conflict
+    console.warn('Domain conflict check failed:', e);
+    return true;
+  }
+
+  return false;
+}
+
 export const HeaderProvider = ({ children }) => {
   // State for header entries
   const [headerEntries, setHeaderEntries] = useState({});
@@ -218,9 +338,66 @@ export const HeaderProvider = ({ children }) => {
       return;
     }
 
+    // Check for duplicate domains within the same entry
+    const normalizedDomains = domains.map(d => d.toLowerCase().trim());
+    const uniqueDomains = new Set(normalizedDomains);
+    if (uniqueDomains.size !== normalizedDomains.length) {
+      onError?.('Duplicate domains detected in the same rule');
+      return;
+    }
+
     // Get current entries
     storage.sync.get(['savedData'], (result) => {
       const savedData = result.savedData || {};
+
+      // Check for duplicates - prevent same header name + domain combination
+      // This ensures no two rules can set the same header for the same domain
+      const normalizedHeaderName = headerName.toLowerCase();
+      const isRequestHeader = !isResponse;
+
+      // Check each existing entry for conflicts
+      for (const [existingId, existingEntry] of Object.entries(savedData)) {
+        // Skip checking against itself when editing
+        if (editMode.isEditing && editMode.entryId === existingId) {
+          continue;
+        }
+
+        // Check if it's the same header name and same type (request/response)
+        if (existingEntry.headerName.toLowerCase() === normalizedHeaderName &&
+            existingEntry.isResponse === isResponse) {
+
+          // Check for domain conflicts
+          const existingDomains = existingEntry.domains || [];
+          const conflictingDomains = [];
+
+          for (const newDomain of domains) {
+            for (const existingDomain of existingDomains) {
+              // Check for exact match or pattern overlap
+              if (doDomainsConflict(newDomain, existingDomain)) {
+                conflictingDomains.push(`"${newDomain}" conflicts with "${existingDomain}"`);
+              }
+            }
+          }
+
+          if (conflictingDomains.length > 0) {
+            const headerType = isResponse ? 'response' : 'request';
+            const direction = existingEntry.isEnabled ? 'active' : 'disabled';
+            const firstConflict = conflictingDomains[0];
+            const moreCount = conflictingDomains.length - 1;
+
+            let errorMsg = `A ${direction} ${headerType} header "${headerName}" already exists`;
+            if (moreCount > 0) {
+              errorMsg += ` for: ${firstConflict} and ${moreCount} more domain(s)`;
+            } else {
+              errorMsg += ` for: ${firstConflict}`;
+            }
+
+            onError?.(errorMsg);
+            return;
+          }
+        }
+      }
+
       let entryId;
 
       // If editing, use existing ID
@@ -495,7 +672,7 @@ export const HeaderProvider = ({ children }) => {
     };
   }, [loadHeaderEntries, loadDynamicSources, loadPopupState, refreshHeaderEntries]);
 
-  // Monitor storage changes
+  // Monitor storage changes 
   useEffect(() => {
     const handleStorageChanges = (changes, area) => {
       // Listen for dynamic sources changes

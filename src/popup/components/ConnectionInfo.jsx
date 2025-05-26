@@ -26,7 +26,7 @@ const ConnectionInfo = () => {
   
   return (
     <Alert
-      message="Companion App Not Connected"
+      message="Local App Not Connected"
       description={
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
           <span style={{ fontSize: '12px' }}>Install the companion app to use dynamic sources.</span>
