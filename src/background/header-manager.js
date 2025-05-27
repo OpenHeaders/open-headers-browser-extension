@@ -6,6 +6,7 @@ import { isValidHeaderValue, sanitizeHeaderValue } from './rule-validator.js';
 import { normalizeHeaderName } from '../utils/utils.js';
 import { storage, declarativeNetRequest, runtime } from '../utils/browser-api.js';
 import { isWebSocketConnected } from './websocket.js';
+import { validateHeaderName } from '../utils/header-validator.js';
 
 /**
  * Updates the network request rules based on saved data and dynamic sources.
@@ -102,6 +103,13 @@ export function updateNetworkRules(dynamicSources) {
  * @returns {Object|null} - Processed entry or null if invalid
  */
 function processEntry(entry, dynamicSources, isConnected) {
+    // First validate the header name
+    const headerNameValidation = validateHeaderName(entry.headerName, entry.isResponse);
+    if (!headerNameValidation.valid) {
+        console.log(`Info: Skipping rule for ${entry.headerName} - ${headerNameValidation.message}`);
+        return null;
+    }
+
     let headerValue = entry.headerValue;
 
     // Handle dynamic values
@@ -134,9 +142,9 @@ function processEntry(entry, dynamicSources, isConnected) {
     }
 
     // Validate the header value
-    if (!isValidHeaderValue(headerValue)) {
+    if (!isValidHeaderValue(headerValue, entry.headerName)) {
         headerValue = sanitizeHeaderValue(headerValue);
-        if (!isValidHeaderValue(headerValue)) {
+        if (!isValidHeaderValue(headerValue, entry.headerName)) {
             console.log(`Info: Skipping invalid header value for ${entry.headerName}`);
             return null;
         }
@@ -151,9 +159,9 @@ function processEntry(entry, dynamicSources, isConnected) {
         return null;
     }
 
-    // Return processed entry
+    // Return processed entry with normalized header name
     return {
-        headerName: normalizeHeaderName(entry.headerName),
+        headerName: headerNameValidation.sanitized || normalizeHeaderName(entry.headerName),
         headerValue: headerValue,
         domains: domains,
         isResponse: entry.isResponse === true
@@ -360,21 +368,61 @@ function createResponseHeaderRules(entry, startId) {
 function formatUrlPattern(domain) {
     let urlFilter = domain.trim();
 
-    // If the domain doesn't include a protocol and doesn't start with *, add * at the beginning
-    if (!urlFilter.includes('://') && !urlFilter.startsWith('*')) {
-        // If it contains a wildcard, ensure proper formatting
-        if (urlFilter.includes('*')) {
-            // Make sure wildcards work correctly with dot notation
-            urlFilter = urlFilter.replace(/\*\./g, '*://');
-        } else {
-            // For exact domains, add *:// prefix to match both http and https
-            urlFilter = '*://' + urlFilter;
+    // If it's already a full URL pattern, validate and return
+    if (urlFilter.includes('://')) {
+        // Ensure it has a path component
+        const protocolEnd = urlFilter.indexOf('://') + 3;
+        const afterProtocol = urlFilter.substring(protocolEnd);
+
+        if (!afterProtocol.includes('/')) {
+            urlFilter = urlFilter + '/*';
         }
+
+        return urlFilter;
     }
 
-    // Make sure the pattern includes a path component for proper matching
-    if (!urlFilter.includes('/') && !urlFilter.endsWith('*')) {
+    // Handle special cases
+
+    // IP addresses
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;
+    if (ipRegex.test(urlFilter)) {
+        return '*://' + urlFilter + '/*';
+    }
+
+    // IPv6 addresses (basic check)
+    if (urlFilter.includes('[') && urlFilter.includes(']')) {
+        return '*://' + urlFilter + '/*';
+    }
+
+    // Localhost
+    if (urlFilter === 'localhost' || urlFilter.startsWith('localhost:')) {
+        return '*://' + urlFilter + '/*';
+    }
+
+    // Handle wildcards properly
+    if (urlFilter.startsWith('*.')) {
+        // *.example.com -> *://*.example.com/*
+        return '*://' + urlFilter + '/*';
+    } else if (urlFilter.startsWith('*') && !urlFilter.startsWith('*://')) {
+        // *example.com -> *://*example.com/*
+        return '*://' + urlFilter + '/*';
+    } else {
+        // Regular domain -> *://domain/*
+        urlFilter = '*://' + urlFilter;
+    }
+
+    // Ensure path component
+    if (!urlFilter.includes('/') || urlFilter.endsWith('://')) {
         urlFilter = urlFilter + '/*';
+    } else {
+        // Check if it ends with a domain without path
+        const lastSlash = urlFilter.lastIndexOf('/');
+        const protocolSlashes = urlFilter.indexOf('://');
+
+        // If the only slashes are from the protocol, add /*
+        if (lastSlash <= protocolSlashes + 1) {
+            urlFilter = urlFilter + '/*';
+        }
     }
 
     return urlFilter;

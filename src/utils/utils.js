@@ -2,6 +2,15 @@
  * Shared utility functions
  */
 
+export {
+  validateHeaderName,
+  validateHeaderValue,
+  validateDomain,
+  validateDomains,
+  sanitizeHeaderValue,
+  getSuggestedHeaders
+} from './header-validator';
+
 /**
  * Normalizes a header name to proper capitalization format
  * @param {string} headerName - The header name to normalize
@@ -67,21 +76,53 @@ export const debounce = (func, wait) => {
 export const formatUrlPattern = (domain) => {
   let urlFilter = domain.trim();
 
-  // If the domain doesn't include a protocol and doesn't start with *, add * at the beginning
-  if (!urlFilter.includes('://') && !urlFilter.startsWith('*')) {
-    // If it contains a wildcard, ensure proper formatting
-    if (urlFilter.includes('*')) {
-      // Make sure wildcards work correctly with dot notation
-      urlFilter = urlFilter.replace(/\*\./g, '*://');
-    } else {
-      // For exact domains, add *:// prefix to match both http and https
-      urlFilter = '*://' + urlFilter;
+  // If it's already a full URL pattern, return as-is
+  if (urlFilter.includes('://')) {
+    // Ensure it has a path component
+    const protocolEnd = urlFilter.indexOf('://') + 3;
+    const afterProtocol = urlFilter.substring(protocolEnd);
+
+    if (!afterProtocol.includes('/')) {
+      urlFilter = urlFilter + '/*';
     }
+
+    return urlFilter;
+  }
+
+  // Handle IP addresses specially
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;
+  if (ipRegex.test(urlFilter)) {
+    return '*://' + urlFilter + '/*';
+  }
+
+  // Handle localhost
+  if (urlFilter === 'localhost' || urlFilter.startsWith('localhost:')) {
+    return '*://' + urlFilter + '/*';
+  }
+
+  // If the domain doesn't include a protocol and doesn't start with *, add *:// at the beginning
+  if (!urlFilter.startsWith('*')) {
+    urlFilter = '*://' + urlFilter;
+  } else if (urlFilter.startsWith('*.')) {
+    // Convert *.example.com to *://*.example.com
+    urlFilter = '*://' + urlFilter;
+  } else if (urlFilter.startsWith('*') && !urlFilter.startsWith('*://')) {
+    // Convert *example.com to *://*example.com (but not *://)
+    urlFilter = '*://' + urlFilter;
   }
 
   // Make sure the pattern includes a path component for proper matching
-  if (!urlFilter.includes('/') && !urlFilter.endsWith('*')) {
+  if (!urlFilter.includes('/') || urlFilter.endsWith('://')) {
     urlFilter = urlFilter + '/*';
+  } else {
+    // Check if it ends with a domain without path
+    const lastSlash = urlFilter.lastIndexOf('/');
+    const protocolSlashes = urlFilter.indexOf('://');
+
+    // If the only slashes are from the protocol, add /*
+    if (lastSlash <= protocolSlashes + 1) {
+      urlFilter = urlFilter + '/*';
+    }
   }
 
   return urlFilter;

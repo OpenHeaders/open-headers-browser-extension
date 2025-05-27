@@ -289,8 +289,8 @@ const HeaderTable = () => {
       width: 80,
       align: 'center',
       sorter: (a, b) => {
-        const tagA = `${a.isResponse ? 'Resp' : 'Req'}${a.isDynamic ? '-D' : ''}${a.sourceTag ? `-${a.sourceTag}` : ''}`;
-        const tagB = `${b.isResponse ? 'Resp' : 'Req'}${b.isDynamic ? '-D' : ''}${b.sourceTag ? `-${b.sourceTag}` : ''}`;
+        const tagA = `${a.isResponse ? 'Response' : 'Request'}${a.isDynamic ? '-D' : ''}${a.sourceTag ? `-${a.sourceTag}` : ''}`;
+        const tagB = `${b.isResponse ? 'Response' : 'Request'}${b.isDynamic ? '-D' : ''}${b.sourceTag ? `-${b.sourceTag}` : ''}`;
         return tagA.localeCompare(tagB);
       },
       filters: [
@@ -317,7 +317,7 @@ const HeaderTable = () => {
       render: (_, record) => (
           <Space size={3} direction="vertical">
             <Tag color={record.isResponse ? 'blue' : 'green'} size="small">
-              {record.isResponse ? 'Resp' : 'Req'}
+              {record.isResponse ? 'Response' : 'Request'}
             </Tag>
             {record.sourceTag && record.sourceAvailable && (
                 <Tag color="orange" size="small">{record.sourceTag}</Tag>

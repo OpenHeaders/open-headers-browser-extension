@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Tag, Input, Tooltip, Space } from 'antd';
+import { Tag, Input, Tooltip, Space, App } from 'antd';
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons';
+import { validateDomain } from '../../utils/header-validator';
 
 /**
  * Professional domain tags component for managing multiple domain patterns
  */
 const DomainTags = ({ value = [], onChange }) => {
+  const { message } = App.useApp();
   const [inputVisible, setInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [editInputIndex, setEditInputIndex] = useState(-1);
@@ -116,18 +118,23 @@ const DomainTags = ({ value = [], onChange }) => {
   // Process an input value into one domain (single domain processing)
   const processSingleDomain = (input) => {
     if (!input) return '';
-    
+
     // Remove leading/trailing whitespace and quotes
     let domain = input.trim().replace(/^["']|["']$/g, '');
-    
-    // Remove protocol if present (http://, https://, etc.)
-    domain = domain.replace(/^https?:\/\//, '');
-    
-    // Remove trailing slashes and paths
-    domain = domain.split('/')[0];
-    
-    // Return the domain as-is without auto-adding /*
-    return domain;
+
+    // Validate the domain
+    const validation = validateDomain(domain);
+    if (!validation.valid) {
+      message.error(validation.message);
+      return '';
+    }
+
+    if (validation.warning) {
+      message.warning(validation.warning);
+    }
+
+    // Return the sanitized domain
+    return validation.sanitized || domain;
   };
   
   // Handle input confirm (when Enter is pressed or input loses focus)
@@ -183,13 +190,14 @@ const DomainTags = ({ value = [], onChange }) => {
   return (
     <div className="professional-domain-tags">
       {/* Always visible help text */}
-      <div style={{ 
+      <div style={{
         fontSize: 12,
         color: '#8c8c8c',
         marginBottom: 8,
-        lineHeight: 1
+        lineHeight: 1.4
       }}>
-        Separate multiple domains with Enter or comma. Use * as wildcard.
+        Separate multiple domains with Enter or comma. Use * as wildcard.<br/>
+        Examples: localhost:3001 • example.com • *.example.com • *://example.com/* • 192.168.1.1
       </div>
       
       {/* Domain tags and input */}

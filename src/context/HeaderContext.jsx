@@ -1,6 +1,7 @@
 import React, {createContext, useState, useEffect, useCallback, useRef} from 'react';
 import { storage, runtime } from '../utils/browser-api';
 import { generateUniqueId } from '../utils/utils';
+import { validateDomain } from '../utils/header-validator';
 
 // Create context with default values
 const defaultContextValue = {
@@ -53,46 +54,89 @@ export const HeaderContext = createContext(defaultContextValue);
  * - *.example.com vs sub.example.com (wildcard matches subdomain)
  * - *.example.com vs *.example.com (same pattern)
  * - *example.com vs example.com (wildcard matches domain)
+ * - *://example.com/* vs https://example.com/* (protocol wildcard matches specific)
  *
  * Examples of non-conflicts:
  * - example.com vs *.example.com (root domain vs subdomain wildcard)
  * - example.com vs sub.example.com (different specific domains)
  * - example.com/api vs example.com/app (different paths)
+ * - http://example.com vs https://example.com (different protocols without wildcards)
  */
 function doDomainsConflict(domain1, domain2) {
-  // Normalize domains - remove protocol but keep paths for pattern matching
-  const normalizeDomain = (domain) => {
-    return domain.toLowerCase()
-        .trim()
-        .replace(/^https?:\/\//, ''); // Remove protocol only
-  };
+  // Validate both domains first
+  const validation1 = validateDomain(domain1);
+  const validation2 = validateDomain(domain2);
 
-  const d1 = normalizeDomain(domain1);
-  const d2 = normalizeDomain(domain2);
+  if (!validation1.valid || !validation2.valid) {
+    // If either domain is invalid, consider them conflicting to be safe
+    return true;
+  }
+
+  // Use sanitized versions if available
+  const d1 = (validation1.sanitized || domain1).toLowerCase().trim();
+  const d2 = (validation2.sanitized || domain2).toLowerCase().trim();
 
   // Exact match
   if (d1 === d2) {
     return true;
   }
 
-  // Extract domain and path parts
-  const getParts = (domain) => {
-    const slashIndex = domain.indexOf('/');
-    if (slashIndex === -1) {
-      return { domain: domain, path: '/*' }; // Default to /* if no path specified
+  // If one pattern matches all (*), it conflicts with everything
+  if (d1 === '*' || d2 === '*') {
+    return true;
+  }
+
+  // Extract protocol, domain, and path parts
+  const parsePattern = (pattern) => {
+    let protocol = '*';
+    let domain = pattern;
+    let path = '/*';
+
+    // Extract protocol if present
+    const protocolMatch = pattern.match(/^(\*|https?|file|ftp|wss?):\/\//);
+    if (protocolMatch) {
+      protocol = protocolMatch[1];
+      domain = pattern.substring(protocolMatch[0].length);
     }
-    return {
-      domain: domain.substring(0, slashIndex),
-      path: domain.substring(slashIndex)
-    };
+
+    // Extract path if present
+    const pathIndex = domain.indexOf('/');
+    if (pathIndex !== -1) {
+      path = domain.substring(pathIndex);
+      domain = domain.substring(0, pathIndex);
+    }
+
+    return { protocol, domain, path };
   };
 
-  const parts1 = getParts(d1);
-  const parts2 = getParts(d2);
+  const parts1 = parsePattern(d1);
+  const parts2 = parsePattern(d2);
+
+  // Check if protocols are compatible
+  const protocolsMatch = (p1, p2) => {
+    if (p1 === p2) return true;
+    if (p1 === '*' || p2 === '*') return true;
+    return false;
+  };
+
+  if (!protocolsMatch(parts1.protocol, parts2.protocol)) {
+    return false; // Different specific protocols don't conflict
+  }
 
   // Helper function to check if a pattern matches a domain
   const doesPatternMatchDomain = (pattern, domain) => {
-    // Handle different wildcard formats
+    // Handle IP addresses - they must match exactly
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (ipRegex.test(pattern) || ipRegex.test(domain)) {
+      return pattern === domain;
+    }
+
+    // Handle localhost
+    if (pattern === 'localhost' || domain === 'localhost') {
+      return pattern === domain ||
+          (pattern === '127.0.0.1' && domain === 'localhost') ||
+          (pattern === 'localhost' && domain === '127.0.0.1');
+    }
 
     // *.example.com - matches only subdomains, NOT example.com itself
     if (pattern.startsWith('*.')) {
@@ -111,6 +155,14 @@ function doDomainsConflict(domain1, domain2) {
     if (pattern.endsWith('.*')) {
       const base = pattern.substring(0, pattern.length - 2);
       return domain.startsWith(base);
+    }
+
+    // example.*.com - matches example.test.com, example.prod.com, etc.
+    if (pattern.includes('.*')) {
+      const parts = pattern.split('.*');
+      if (parts.length === 2) {
+        return domain.startsWith(parts[0]) && domain.endsWith(parts[1]);
+      }
     }
 
     // General wildcard pattern
@@ -143,9 +195,23 @@ function doDomainsConflict(domain1, domain2) {
       if (pathPattern === '/*') return true; // Matches everything
       if (pathPattern === path) return true; // Exact match
 
+      // Normalize paths for comparison
+      const normalizePath = (p) => {
+        // Ensure path starts with /
+        if (!p.startsWith('/')) p = '/' + p;
+        // Remove trailing slash unless it's just /
+        if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+        return p;
+      };
+
+      const normalizedPattern = normalizePath(pathPattern);
+      const normalizedPath = normalizePath(path);
+
+      if (normalizedPattern === normalizedPath) return true;
+
       // Convert path pattern to regex
-      const regex = new RegExp('^' + pathPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
-      return regex.test(path);
+      const regex = new RegExp('^' + normalizedPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+      return regex.test(normalizedPath);
     };
 
     // If either path matches the other, there's a conflict
@@ -541,6 +607,58 @@ export const HeaderProvider = ({ children }) => {
           // Update local state
           setHeaderEntries(savedData);
 
+          // Check if we're currently editing the deleted entry
+          if (editMode.isEditing && editMode.entryId === entryId) {
+            // Reset edit mode
+            setEditMode({
+              isEditing: false,
+              entryId: null
+            });
+
+            // Clear the form
+            setDraftValues({
+              headerName: '',
+              headerValue: '',
+              domains: [],
+              valueType: 'static',
+              sourceId: '',
+              prefix: '',
+              suffix: '',
+              isResponse: false
+            });
+
+            // Collapse the form panel
+            setUiState(prev => ({
+              ...prev,
+              formCollapsed: false  // false = collapsed (backwards naming)
+            }));
+
+            // Clear the saved popup state
+            storage.local.get(['popupState'], (result) => {
+              if (result.popupState) {
+                const updatedState = {
+                  ...result.popupState,
+                  draftValues: {
+                    headerName: '',
+                    headerValue: '',
+                    domains: [],
+                    valueType: 'static',
+                    sourceId: '',
+                    prefix: '',
+                    suffix: '',
+                    isResponse: false
+                  },
+                  editMode: { isEditing: false, entryId: null },
+                  uiState: {
+                    ...result.popupState.uiState,
+                    formCollapsed: false  // Collapse the form
+                  }
+                };
+                storage.local.set({ popupState: updatedState });
+              }
+            });
+          }
+
           // Notify the background script to update rules
           runtime.sendMessage({ type: 'rulesUpdated' });
 
@@ -549,7 +667,7 @@ export const HeaderProvider = ({ children }) => {
         });
       }
     });
-  }, []);
+  }, [editMode]);
 
   // Start editing a header entry
   const startEditingEntry = useCallback((entryId) => {

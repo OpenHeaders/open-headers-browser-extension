@@ -9,7 +9,8 @@ import {
     Divider,
     Collapse,
     App,
-    Alert
+    Alert,
+    AutoComplete
 } from 'antd';
 import {
     SaveOutlined,
@@ -31,7 +32,12 @@ import {
 } from '@ant-design/icons';
 import { useHeader } from '../../hooks/useHeader';
 import { normalizeHeaderName } from '../../utils/utils';
-import { validateHeaderValue } from '../../utils/header-validator';
+import {
+    validateHeaderName,
+    validateHeaderValue,
+    validateDomains,
+    getSuggestedHeaders
+} from '../../utils/header-validator';
 import { storage } from '../../utils/browser-api';
 import DomainTags from './DomainTags';
 
@@ -95,6 +101,7 @@ const HeaderForm = () => {
     const prevEditModeRef = useRef(null);
     const [dynamicSourceAlertDismissed, setDynamicSourceAlertDismissed] = useState(false);
     const [lastConnectionState, setLastConnectionState] = useState(null);
+    const [headerSuggestions, setHeaderSuggestions] = useState([]);
 
     const {
         dynamicSources = [],
@@ -211,21 +218,59 @@ const HeaderForm = () => {
         const isResponse = values.headerType === 'response';
         const isDynamic = values.valueType === 'dynamic';
 
-        // Validate header value if it's static
+        // Validate header name - only check for errors, not warnings
+        const headerNameValidation = validateHeaderName(values.headerName, isResponse);
+        if (!headerNameValidation.valid) {
+            message.error(headerNameValidation.message);
+            return;
+        }
+        // Don't show warning here - already shown during typing
+
+        // Use the sanitized header name
+        const headerName = headerNameValidation.sanitized || normalizeHeaderName(values.headerName);
+
+        // Validate domains - only check for errors, not warnings
+        const domainsValidation = validateDomains(values.domains);
+        if (!domainsValidation.valid) {
+            message.error(domainsValidation.message);
+            return;
+        }
+        // Don't show warning here - already shown during typing
+
+        // Validate header value if it's static - only check for errors, not warnings
         if (!isDynamic) {
-            const validation = validateHeaderValue(values.headerValue);
+            const validation = validateHeaderValue(values.headerValue, headerName);
             if (!validation.valid) {
-                message.warning(validation.message);
+                message.error(validation.message);
+                return;
+            }
+            // Don't show warning here - already shown during typing
+        } else {
+            // For dynamic values, validate the current concatenated result if available
+            if (isConnected && values.sourceId) {
+                const source = dynamicSources.find(s =>
+                    (s.sourceId || s.locationId) === values.sourceId
+                );
+                if (source) {
+                    const dynamicContent = source.sourceContent || source.locationContent || '';
+                    const fullValue = `${values.prefix || ''}${dynamicContent}${values.suffix || ''}`;
+                    const validation = validateHeaderValue(fullValue, headerName);
+                    if (!validation.valid) {
+                        message.error(`Dynamic value validation failed: ${validation.message}`);
+                        return;
+                    }
+                    // Don't show warning here - already shown during typing
+                }
             }
         }
 
-        // Show warning if saving with disconnected dynamic source
+        // Only show this warning since it's specific to the save action
         if (isDynamic && !isConnected) {
             message.warning('Dynamic source saved but local app is not connected. The value will be empty until reconnected.');
         }
 
         saveHeaderEntry({
-                headerName: normalizeHeaderName(values.headerName),
+                headerName: headerName,
                 headerValue: values.headerValue,
                 domains: values.domains,
                 isDynamic,
@@ -236,7 +281,6 @@ const HeaderForm = () => {
             },
             (successMsg) => {
                 message.success(successMsg);
-                // Don't force close the panel - let user control it
             },
             (errorMsg) => message.error(errorMsg)
         );
@@ -252,6 +296,14 @@ const HeaderForm = () => {
             if ('headerType' in changedValues) {
                 transformedValues.isResponse = changedValues.headerType === 'response';
                 // Don't delete headerType - keep it for form control
+
+                // Update header suggestions when type changes
+                const currentHeaderName = form.getFieldValue('headerName');
+                if (currentHeaderName) {
+                    const isResponse = changedValues.headerType === 'response';
+                    const suggestions = getSuggestedHeaders(currentHeaderName, isResponse);
+                    setHeaderSuggestions(suggestions);
+                }
             }
 
             updateDraftValues(transformedValues);
@@ -317,21 +369,99 @@ const HeaderForm = () => {
                                 <Form.Item
                                     label="Header Name"
                                     name="headerName"
-                                    rules={[{ required: true, message: 'Please enter a header name' }]}
+                                    rules={[
+                                        { required: true, message: 'Please enter a header name' },
+                                        {
+                                            validator: async (_, value) => {
+                                                if (!value) return;
+
+                                                const isResponse = form.getFieldValue('headerType') === 'response';
+                                                const validation = validateHeaderName(value, isResponse);
+
+                                                if (!validation.valid) {
+                                                    throw new Error(validation.message);
+                                                }
+
+                                                if (validation.warning) {
+                                                    // Store warning to show after field validation
+                                                    setTimeout(() => message.warning(validation.warning), 0);
+                                                }
+                                            }
+                                        }
+                                    ]}
                                     style={{ flex: 2, marginBottom: 0 }}
+                                    extra={
+                                        <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                                            {draftValues.isResponse
+                                                ? 'e.g., Access-Control-Allow-Origin, Set-Cookie, X-Custom-Header'
+                                                : 'e.g., Authorization, X-API-Key, X-Custom-Header'
+                                            }
+                                        </span>
+                                    }
                                 >
-                                    <Input placeholder="e.g. Authorization" size="small" />
+                                    <AutoComplete
+                                        options={headerSuggestions.map(h => ({ value: h }))}
+                                        onSearch={(value) => {
+                                            const isResponse = form.getFieldValue('headerType') === 'response';
+                                            const suggestions = getSuggestedHeaders(value, isResponse);
+                                            setHeaderSuggestions(suggestions);
+                                        }}
+                                        placeholder="e.g. Authorization"
+                                        size="small"
+                                        filterOption={false}
+                                    />
                                 </Form.Item>
 
                                 <Form.Item
                                     label="Direction"
-                                    name="headerType"
                                     style={{ flex: 1, marginBottom: 0 }}
+                                    dependencies={['headerName']}
                                 >
-                                    <Radio.Group size="small" buttonStyle="solid">
-                                        <Radio.Button value="request">Request</Radio.Button>
-                                        <Radio.Button value="response">Response</Radio.Button>
-                                    </Radio.Group>
+                                    {({ getFieldValue }) => {
+                                        const headerName = getFieldValue('headerName');
+                                        const currentType = getFieldValue('headerType');
+
+                                        // Check if changing direction would make the header invalid
+                                        let warningMessage = null;
+                                        if (headerName) {
+                                            const requestValidation = validateHeaderName(headerName, false);
+                                            const responseValidation = validateHeaderName(headerName, true);
+
+                                            if (currentType === 'request' && requestValidation.valid && !responseValidation.valid) {
+                                                warningMessage = 'This header cannot be used as a response header';
+                                            } else if (currentType === 'response' && responseValidation.valid && !requestValidation.valid) {
+                                                warningMessage = 'This header cannot be used as a request header';
+                                            }
+                                        }
+
+                                        return (
+                                            <>
+                                                <Form.Item
+                                                    name="headerType"
+                                                    noStyle
+                                                >
+                                                    <Radio.Group
+                                                        size="small"
+                                                        buttonStyle="solid"
+                                                        onChange={(e) => {
+                                                            // Re-validate header name when direction changes
+                                                            if (headerName) {
+                                                                form.validateFields(['headerName']);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Radio.Button value="request">Request</Radio.Button>
+                                                        <Radio.Button value="response">Response</Radio.Button>
+                                                    </Radio.Group>
+                                                </Form.Item>
+                                                {warningMessage && (
+                                                    <div style={{ fontSize: '11px', color: '#ff7875', marginTop: 4 }}>
+                                                        {warningMessage}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    }}
                                 </Form.Item>
                             </div>
 
@@ -359,10 +489,37 @@ const HeaderForm = () => {
                                                 <Form.Item
                                                     label="Header Value"
                                                     name="headerValue"
-                                                    rules={[{ required: true, message: 'Please enter a header value' }]}
+                                                    rules={[
+                                                        {
+                                                            required: true,
+                                                            message: 'Header value is required'
+                                                        },
+                                                        {
+                                                            validator: async (_, value) => {
+                                                                if (!value) return; // Let required rule handle empty values
+
+                                                                const headerName = form.getFieldValue('headerName');
+                                                                const validation = validateHeaderValue(value, headerName);
+
+                                                                if (!validation.valid) {
+                                                                    throw new Error(validation.message);
+                                                                }
+
+                                                                if (validation.warning) {
+                                                                    // Only show warning for actual issues, not empty values
+                                                                    setTimeout(() => message.warning(validation.warning), 0);
+                                                                }
+                                                            }
+                                                        }
+                                                    ]}
                                                     style={{ flex: 1, marginBottom: 0 }}
                                                 >
-                                                    <Input placeholder="e.g. Bearer token123" size="small" />
+                                                    <Input
+                                                        placeholder="e.g. Bearer token123"
+                                                        size="small"
+                                                        autoComplete="off"
+                                                        maxLength={8192}
+                                                    />
                                                 </Form.Item>
                                             )}
 
@@ -489,6 +646,37 @@ const HeaderForm = () => {
                                                     <Form.Item
                                                         name="prefix"
                                                         style={{ flex: 1, marginBottom: 0, marginRight: -1 }}
+                                                        rules={[
+                                                            {
+                                                                validator: async (_, value) => {
+                                                                    if (!value) return; // Prefix is optional
+
+                                                                    // Check for null bytes
+                                                                    if (value.includes('\0')) {
+                                                                        throw new Error('Prefix cannot contain null bytes');
+                                                                    }
+
+                                                                    // Check for line breaks
+                                                                    if (/[\r\n]/.test(value)) {
+                                                                        throw new Error('Prefix cannot contain line breaks');
+                                                                    }
+
+                                                                    // Check for control characters (except tab)
+                                                                    if (/[\x00-\x08\x0A-\x1F\x7F]/.test(value)) {
+                                                                        throw new Error('Prefix contains invalid control characters');
+                                                                    }
+
+                                                                    if (value.length > 1000) {
+                                                                        throw new Error('Prefix is too long (max 1000 characters)');
+                                                                    }
+
+                                                                    // Warn about non-ASCII characters
+                                                                    if (/[\x80-\xFF]/.test(value)) {
+                                                                        setTimeout(() => message.warning('Prefix contains non-ASCII characters that may cause compatibility issues'), 0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        ]}
                                                     >
                                                         <Input
                                                             placeholder="Prefix (optional)"
@@ -498,6 +686,7 @@ const HeaderForm = () => {
                                                                 borderRight: 'none',
                                                                 textAlign: 'right'
                                                             }}
+                                                            maxLength={1000}
                                                         />
                                                     </Form.Item>
 
@@ -521,6 +710,37 @@ const HeaderForm = () => {
                                                     <Form.Item
                                                         name="suffix"
                                                         style={{ flex: 1, marginBottom: 0, marginLeft: -1 }}
+                                                        rules={[
+                                                            {
+                                                                validator: async (_, value) => {
+                                                                    if (!value) return; // Suffix is optional
+
+                                                                    // Check for null bytes
+                                                                    if (value.includes('\0')) {
+                                                                        throw new Error('Suffix cannot contain null bytes');
+                                                                    }
+
+                                                                    // Check for line breaks
+                                                                    if (/[\r\n]/.test(value)) {
+                                                                        throw new Error('Suffix cannot contain line breaks');
+                                                                    }
+
+                                                                    // Check for control characters (except tab)
+                                                                    if (/[\x00-\x08\x0A-\x1F\x7F]/.test(value)) {
+                                                                        throw new Error('Suffix contains invalid control characters');
+                                                                    }
+
+                                                                    if (value.length > 1000) {
+                                                                        throw new Error('Suffix is too long (max 1000 characters)');
+                                                                    }
+
+                                                                    // Warn about non-ASCII characters
+                                                                    if (/[\x80-\xFF]/.test(value)) {
+                                                                        setTimeout(() => message.warning('Suffix contains non-ASCII characters that may cause compatibility issues'), 0);
+                                                                    }
+                                                                }
+                                                            }
+                                                        ]}
                                                     >
                                                         <Input
                                                             placeholder="Suffix (optional)"
@@ -529,6 +749,7 @@ const HeaderForm = () => {
                                                                 borderRadius: '0 4px 4px 0',
                                                                 borderLeft: 'none'
                                                             }}
+                                                            maxLength={1000}
                                                         />
                                                     </Form.Item>
                                                 </div>
