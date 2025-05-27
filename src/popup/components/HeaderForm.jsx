@@ -393,8 +393,8 @@ const HeaderForm = () => {
                                     extra={
                                         <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
                                             {draftValues.isResponse
-                                                ? 'e.g., Access-Control-Allow-Origin, Set-Cookie, X-Custom-Header'
-                                                : 'e.g., Authorization, X-API-Key, X-Custom-Header'
+                                                ? 'Examples: Access-Control-Allow-Origin • Set-Cookie • X-Custom-Header'
+                                                : 'Examples: Authorization • X-API-Key • X-Custom-Header'
                                             }
                                         </span>
                                     }
@@ -406,7 +406,10 @@ const HeaderForm = () => {
                                             const suggestions = getSuggestedHeaders(value, isResponse);
                                             setHeaderSuggestions(suggestions);
                                         }}
-                                        placeholder="e.g. Authorization"
+                                        placeholder={draftValues.isResponse
+                                            ? 'example: X-Custom-Header'
+                                            : 'example: Authorization'
+                                        }
                                         size="small"
                                         filterOption={false}
                                     />
@@ -492,7 +495,7 @@ const HeaderForm = () => {
                                                     rules={[
                                                         {
                                                             required: true,
-                                                            message: 'Header value is required'
+                                                            message: 'Please enter a header value'
                                                         },
                                                         {
                                                             validator: async (_, value) => {
@@ -515,7 +518,7 @@ const HeaderForm = () => {
                                                     style={{ flex: 1, marginBottom: 0 }}
                                                 >
                                                     <Input
-                                                        placeholder="e.g. Bearer token123"
+                                                        placeholder="example: Bearer token123"
                                                         size="small"
                                                         autoComplete="off"
                                                         maxLength={8192}

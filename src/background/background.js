@@ -2,10 +2,112 @@
  * Main background service worker
  */
 
+import { connectWebSocket, getCurrentSources, isWebSocketConnected } from './websocket.js';
+import { updateNetworkRules } from './header-manager.js';
+import { alarms, runtime, storage, tabs, isFirefox, isChrome, isEdge, isSafari } from '../utils/browser-api.js';
+
+// Store a hash or timestamp of the last update to avoid redundant processing
+let lastSourcesHash = '';
+let lastRulesUpdateTime = 0;
+
+// Track last saved data hash to avoid redundant updates
+let lastSavedDataHash = '';
+
+// Track if we're currently opening a welcome page to prevent duplicates
+let welcomePageBeingOpened = false;
+
+// Track last badge state to avoid unnecessary updates
+let lastBadgeState = null;
+
+// Function to generate a simple hash of sources to detect changes
+function generateSourcesHash(sources) {
+    if (!sources || !Array.isArray(sources)) return '';
+
+    // Create a simplified representation of the sources to compare
+    const simplifiedSources = sources.map(source => {
+        return {
+            id: source.sourceId || source.locationId,
+            content: source.sourceContent || source.locationContent
+        };
+    });
+
+    return JSON.stringify(simplifiedSources);
+}
+
+// Function to generate a hash of saved data to detect meaningful changes
+function generateSavedDataHash(savedData) {
+    if (!savedData) return '';
+
+    // Create a simplified representation of the saved data to compare
+    const simplifiedData = Object.entries(savedData).map(([id, entry]) => {
+        return {
+            id,
+            name: entry.headerName,
+            value: entry.headerValue,
+            isDynamic: entry.isDynamic,
+            sourceId: entry.sourceId,
+            sourceMissing: entry.sourceMissing
+        };
+    });
+
+    return JSON.stringify(simplifiedData);
+}
+
+/**
+ * Updates the extension badge based on connection status
+ * @param {boolean} connected - Whether the WebSocket is connected
+ */
+function updateExtensionBadge(connected) {
+    // Get the appropriate API (chrome.action for MV3, chrome.browserAction for MV2/Firefox)
+    const actionAPI = typeof browser !== 'undefined' && browser.browserAction
+        ? browser.browserAction
+        : (chrome?.action || chrome?.browserAction);
+
+    if (!actionAPI) {
+        console.log('Badge API not available');
+        return;
+    }
+
+    if (!connected) {
+        // Show a red dot/exclamation when disconnected
+        actionAPI.setBadgeText({ text: '!' }, () => {
+            if (chrome.runtime.lastError) {
+                console.log('Badge text error:', chrome.runtime.lastError);
+            }
+        });
+        actionAPI.setBadgeBackgroundColor({ color: '#FF4444' }, () => {
+            if (chrome.runtime.lastError) {
+                console.log('Badge color error:', chrome.runtime.lastError);
+            }
+        });
+
+        // Optional: Update the tooltip
+        if (actionAPI.setTitle) {
+            actionAPI.setTitle({
+                title: 'Open Headers - App Disconnected\nDynamic header rules are affected.'
+            });
+        }
+    } else {
+        // Clear the badge when connected
+        actionAPI.setBadgeText({ text: '' });
+
+        // Reset the tooltip to default
+        if (actionAPI.setTitle) {
+            actionAPI.setTitle({
+                title: 'Open Headers'
+            });
+        }
+    }
+}
+
 /**
  * Initialize the extension.
  */
 async function initializeExtension() {
+    // Set initial badge state to disconnected
+    updateExtensionBadge(false);
+    lastBadgeState = false;
+
     // First try to restore any previous dynamic sources
     storage.local.get(['dynamicSources'], (result) => {
         if (result.dynamicSources && Array.isArray(result.dynamicSources) && result.dynamicSources.length > 0) {
@@ -54,53 +156,6 @@ async function initializeExtension() {
             updateNetworkRules([]);
         }
     }, 1000);
-}
-import { connectWebSocket, getCurrentSources, isWebSocketConnected } from './websocket.js';
-import { updateNetworkRules } from './header-manager.js';
-import { alarms, runtime, storage, tabs, isFirefox, isChrome, isEdge, isSafari } from '../utils/browser-api.js';
-
-// Store a hash or timestamp of the last update to avoid redundant processing
-let lastSourcesHash = '';
-let lastRulesUpdateTime = 0;
-
-// Track last saved data hash to avoid redundant updates
-let lastSavedDataHash = '';
-
-// Track if we're currently opening a welcome page to prevent duplicates
-let welcomePageBeingOpened = false;
-
-// Function to generate a simple hash of sources to detect changes
-function generateSourcesHash(sources) {
-    if (!sources || !Array.isArray(sources)) return '';
-
-    // Create a simplified representation of the sources to compare
-    const simplifiedSources = sources.map(source => {
-        return {
-            id: source.sourceId || source.locationId,
-            content: source.sourceContent || source.locationContent
-        };
-    });
-
-    return JSON.stringify(simplifiedSources);
-}
-
-// Function to generate a hash of saved data to detect meaningful changes
-function generateSavedDataHash(savedData) {
-    if (!savedData) return '';
-
-    // Create a simplified representation of the saved data to compare
-    const simplifiedData = Object.entries(savedData).map(([id, entry]) => {
-        return {
-            id,
-            name: entry.headerName,
-            value: entry.headerValue,
-            isDynamic: entry.isDynamic,
-            sourceId: entry.sourceId,
-            sourceMissing: entry.sourceMissing
-        };
-    });
-
-    return JSON.stringify(simplifiedData);
 }
 
 /**
@@ -172,6 +227,13 @@ const debouncedUpdateRulesFromSavedData = debounce((savedData) => {
 
 // Set up alarms to keep the service worker alive
 alarms.create('keepAlive', { periodInMinutes: 0.5 }); // Every 30 seconds
+
+// Create a more frequent alarm for badge updates
+alarms.create('updateBadge', {
+    delayInMinutes: 0.01,  // Start after 0.6 seconds
+    periodInMinutes: 0.033 // Repeat every ~2 seconds
+});
+
 alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'keepAlive') {
         // This will keep the service worker alive
@@ -192,6 +254,15 @@ alarms.onAlarm.addListener((alarm) => {
         updateNetworkRules(currentSources);
         lastSourcesHash = currentHash;
         lastRulesUpdateTime = Date.now();
+    } else if (alarm.name === 'updateBadge') {
+        // Check connection state and update badge if changed
+        const isConnected = isWebSocketConnected();
+
+        if (isConnected !== lastBadgeState) {
+            console.log('Info: Badge state changed from', lastBadgeState, 'to', isConnected);
+            updateExtensionBadge(isConnected);
+            lastBadgeState = isConnected;
+        }
     }
 });
 
@@ -343,7 +414,15 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ type: 'sourcesUpdated', sources: getCurrentSources() });
     } else if (message.type === 'checkConnection') {
         // Respond with current connection status
-        sendResponse({ connected: isWebSocketConnected() });
+        const connected = isWebSocketConnected();
+
+        // Update badge if state changed
+        if (connected !== lastBadgeState) {
+            updateExtensionBadge(connected);
+            lastBadgeState = connected;
+        }
+
+        sendResponse({ connected: connected });
     } else if (message.type === 'getDynamicSources') {
         // Get the current sources and send them back
         const currentSources = getCurrentSources();
