@@ -227,69 +227,98 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Check if the local app is running
+     * Check if the local app is running by asking the background script
      */
     function checkAppRunning() {
-        console.log('Checking if local app is running...');
+        console.log('Checking if local app is running via background script...');
 
-        const xhr = new XMLHttpRequest();
-        xhr.timeout = 2000;
+        // Use browser messaging to check connection status
+        const messageAPI = typeof browser !== 'undefined' ? browser : chrome;
 
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200 || xhr.status === 426) {
-                    // App is running
-                    appRunning = true;
+        messageAPI.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
+            if (response && response.connected) {
+                // App is running and connected
+                appRunning = true;
 
-                    // Update UI
-                    if (appStatus) {
-                        appStatus.className = 'app-status success';
-                        appStatus.querySelector('.loading-spinner').style.display = 'none';
+                // Update UI
+                if (appStatus) {
+                    appStatus.className = 'app-status success';
+                    appStatus.querySelector('.loading-spinner').style.display = 'none';
+                }
+                if (appStatusText) appStatusText.textContent = '✓ App is running';
+                if (downloadAppButton) downloadAppButton.style.display = 'none';
+
+                // Mark step as completed
+                if (stepAppInstall) {
+                    const marker = stepAppInstall.querySelector('.step-marker');
+                    if (marker) marker.classList.add('completed');
+                }
+
+                // Clear the app check interval if it exists
+                if (appCheckInterval) {
+                    clearInterval(appCheckInterval);
+                    appCheckInterval = null;
+                }
+
+                // For Firefox, handle certificate steps intelligently
+                if (currentBrowser === 'firefox') {
+                    // If already connected, the certificate must be accepted
+                    if (stepCertificate) {
+                        const marker = stepCertificate.querySelector('.step-marker');
+                        if (marker) marker.classList.add('completed');
+                        stepCertificate.classList.add('active');
                     }
-                    if (appStatusText) appStatusText.textContent = '✓ App is running';
-                    if (downloadAppButton) downloadAppButton.style.display = 'none';
 
-                    // Mark step as completed
-                    if (stepAppInstall) {
-                        const marker = stepAppInstall.querySelector('.step-marker');
+                    if (stepCertVerify) {
+                        const marker = stepCertVerify.querySelector('.step-marker');
+                        if (marker) marker.classList.add('completed');
+                        stepCertVerify.classList.add('active');
+                    }
+
+                    // Since we're already connected, go directly to connection verification
+                    if (stepConnection) stepConnection.classList.add('active');
+
+                    // Mark connection as successful immediately
+                    connectionSuccessful = true;
+                    if (connectionStatus) connectionStatus.className = 'connection-status status-connected';
+                    if (connectionStatusText) connectionStatusText.textContent = '✓ Connection successful!';
+
+                    // Mark the connection step as completed
+                    if (stepConnection) {
+                        const marker = stepConnection.querySelector('.step-marker');
                         if (marker) marker.classList.add('completed');
                     }
 
-                    // Clear the app check interval if it exists
-                    if (appCheckInterval) {
-                        clearInterval(appCheckInterval);
-                        appCheckInterval = null;
-                    }
-
-                    // For Firefox, proceed to certificate step
-                    // For others, proceed to connection check
-                    if (currentBrowser === 'firefox') {
-                        if (stepCertificate) stepCertificate.classList.add('active');
-                    } else {
-                        if (stepConnection) stepConnection.classList.add('active');
-                        startConnectionCheck();
-                    }
+                    // Update navigation buttons
+                    updateNavigationButtons();
                 } else {
-                    // App not running
-                    appRunning = false;
+                    // For non-Firefox browsers
+                    if (stepConnection) stepConnection.classList.add('active');
 
-                    // Set up automatic retry
-                    if (!appCheckInterval) {
-                        appCheckInterval = setInterval(checkAppRunning, 2000);
+                    // Mark connection as successful immediately
+                    connectionSuccessful = true;
+                    if (connectionStatus) connectionStatus.className = 'connection-status status-connected';
+                    if (connectionStatusText) connectionStatusText.textContent = '✓ Connection successful!';
+
+                    // Mark the connection step as completed
+                    if (stepConnection) {
+                        const marker = stepConnection.querySelector('.step-marker');
+                        if (marker) marker.classList.add('completed');
                     }
+
+                    // Update navigation buttons
+                    updateNavigationButtons();
+                }
+            } else {
+                // App not running
+                appRunning = false;
+
+                // Set up automatic retry
+                if (!appCheckInterval) {
+                    appCheckInterval = setInterval(checkAppRunning, 2000);
                 }
             }
-        };
-
-        xhr.ontimeout = function() { appRunning = false; };
-        xhr.onerror = function() { appRunning = false; };
-
-        try {
-            xhr.open('HEAD', 'http://127.0.0.1:59210/ping', true);
-            xhr.send();
-        } catch (e) {
-            appRunning = false;
-        }
+        });
     }
 
     /**
@@ -322,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Check connection
+     * Check connection using the background script
      */
     function checkConnection() {
         // Skip if already successful or beyond max attempts
@@ -336,20 +365,15 @@ document.addEventListener('DOMContentLoaded', function() {
             connectionStatusText.textContent = `Checking connection (${connectionCheckCount}/${MAX_CONNECTION_CHECKS})...`;
         }
 
-        // Choose appropriate endpoint based on browser
-        const endpoint = currentBrowser === 'firefox'
-            ? 'https://127.0.0.1:59211/ping'
-            : 'http://127.0.0.1:59210/ping';
+        // Use browser messaging to check connection status
+        const messageAPI = typeof browser !== 'undefined' ? browser : chrome;
 
-        const xhr = new XMLHttpRequest();
-        xhr.timeout = 2000;
-
-        xhr.onreadystatechange = function() {
-            if (connectionSuccessful || xhr.readyState !== 4) {
-                return;
+        messageAPI.runtime.sendMessage({ type: 'checkConnection' }, (response) => {
+            if (connectionSuccessful) {
+                return; // Already successful, ignore
             }
 
-            if (xhr.status === 200 || xhr.status === 426) {
+            if (response && response.connected) {
                 // Connection successful - set flag first to prevent races
                 connectionSuccessful = true;
 
@@ -400,18 +424,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (certWindowReference && !certWindowReference.closed) {
                     certWindowReference.close();
                 }
+            } else {
+                handleConnectionProgress();
             }
-        };
-
-        xhr.ontimeout = handleConnectionProgress;
-        xhr.onerror = handleConnectionProgress;
-
-        try {
-            xhr.open('GET', endpoint + '?t=' + Date.now(), true);
-            xhr.send();
-        } catch (e) {
-            handleConnectionProgress();
-        }
+        });
     }
 
     /**

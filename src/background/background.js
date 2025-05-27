@@ -84,7 +84,7 @@ function updateExtensionBadge(connected) {
         // Optional: Update the tooltip
         if (actionAPI.setTitle) {
             actionAPI.setTitle({
-                title: 'Open Headers - App Disconnected\nDynamic header rules are affected.'
+                title: 'Open Headers - Disconnected\nDynamic header rules may not work'
             });
         }
     } else {
@@ -349,13 +349,26 @@ runtime.onStartup.addListener(() => {
 // Keep track of when we're active by listening for install/update events
 runtime.onInstalled.addListener((details) => {
     console.log('Info: Extension installed or updated:', details.reason);
+    console.log('Info: Browser detected:', isFirefox ? 'Firefox' : 'Other');
 
-    // Only show welcome page on fresh install, not on updates
+    // Show welcome page on fresh install OR if it's Firefox and we haven't shown it yet
     if (details.reason === 'install') {
         console.log('Info: Fresh install detected, opening welcome page');
         setTimeout(() => {
             openWelcomePageOnInstall();
         }, 500);
+    } else if (isFirefox && details.reason === 'update') {
+        // In Firefox dev mode, sometimes it reports as 'update' instead of 'install'
+        storage.local.get(['hasSeenWelcome', 'setupCompleted'], (result) => {
+            if (!result.setupCompleted) {
+                console.log('Info: Firefox update detected but setup not completed, opening welcome page');
+                storage.local.set({ hasSeenWelcome: true }, () => {
+                    setTimeout(() => {
+                        openWelcomePageOnInstall();
+                    }, 500);
+                });
+            }
+        });
     }
 
     // Always initialize the extension regardless of install/update
@@ -365,6 +378,24 @@ runtime.onInstalled.addListener((details) => {
 // Start the extension when loaded
 console.log('Info: Background script started, initializing...');
 initializeExtension();
+
+// For Firefox development - check if this is a first run
+if (isFirefox) {
+    storage.local.get(['hasSeenWelcome', 'setupCompleted'], (result) => {
+        // If we haven't seen the welcome page and setup isn't completed
+        if (!result.hasSeenWelcome && !result.setupCompleted) {
+            console.log('Info: First run detected in Firefox, opening welcome page');
+
+            // Mark that we've attempted to show the welcome page
+            storage.local.set({ hasSeenWelcome: true }, () => {
+                // Open the welcome page after a short delay
+                setTimeout(() => {
+                    openWelcomePageOnInstall();
+                }, 1000);
+            });
+        }
+    });
+}
 
 // Listen for changes to dynamic sources in storage
 storage.onChanged.addListener((changes, area) => {
