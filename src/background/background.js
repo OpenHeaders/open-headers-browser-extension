@@ -75,7 +75,7 @@ function updateExtensionBadge(connected) {
                 console.log('Badge text error:', chrome.runtime.lastError);
             }
         });
-        actionAPI.setBadgeBackgroundColor({ color: '#FF4444' }, () => {
+        actionAPI.setBadgeBackgroundColor({ color: '#ffcd04' }, () => {
             if (chrome.runtime.lastError) {
                 console.log('Badge color error:', chrome.runtime.lastError);
             }

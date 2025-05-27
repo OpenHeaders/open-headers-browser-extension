@@ -327,7 +327,7 @@ const HeaderTable = () => {
                     title={
                       record.sourceConnected
                           ? "Dynamic source not found. The configured source no longer exists."
-                          : "Local app is offline. Dynamic value will be empty until reconnected."
+                          : "Local app is disconnected. Reconnect to use dynamic values."
                     }
                 >
                   <Tag
