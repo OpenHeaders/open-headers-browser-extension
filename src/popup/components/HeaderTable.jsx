@@ -20,7 +20,8 @@ import {
   SearchOutlined,
   FileTextOutlined,
   DisconnectOutlined,
-  WarningOutlined
+  WarningOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useHeader } from '../../hooks/useHeader';
 
@@ -78,7 +79,9 @@ const HeaderTable = () => {
       sourceInfo: dynamicInfo.sourceInfo,
       sourceTag: dynamicInfo.sourceTag,
       sourceAvailable: dynamicInfo.available,
-      sourceConnected: dynamicInfo.connected
+      sourceConnected: dynamicInfo.connected,
+      placeholderType: dynamicInfo.placeholderType,
+      actualValue: dynamicInfo.actualValue
     };
   });
 
@@ -96,16 +99,31 @@ const HeaderTable = () => {
   // Get dynamic value and source info for an entry
   function getDynamicValueInfo(entry, sources, connected) {
     if (!entry.isDynamic || !entry.sourceId) {
-      return { value: '', sourceInfo: '', sourceTag: '', available: true, connected: true };
+      return {
+        value: entry.headerValue,
+        sourceInfo: '',
+        sourceTag: '',
+        available: true,
+        connected: true,
+        placeholderType: null,
+        actualValue: entry.headerValue
+      };
     }
 
+    let placeholderType = null;
+    let actualValue = '';
+
     if (!connected) {
+      actualValue = '[APP_DISCONNECTED]';
+      placeholderType = 'app_disconnected';
       return {
-        value: 'App disconnected',
+        value: actualValue,
         sourceInfo: 'App disconnected',
         sourceTag: '',
         available: false,
-        connected: false
+        connected: false,
+        placeholderType,
+        actualValue
       };
     }
 
@@ -115,17 +133,27 @@ const HeaderTable = () => {
     );
 
     if (!source) {
+      actualValue = `[SOURCE_NOT_FOUND:${entry.sourceId}]`;
+      placeholderType = 'source_not_found';
       return {
-        value: `Source #${entry.sourceId} (removed)`,
+        value: actualValue,
         sourceInfo: `Source #${entry.sourceId} (removed)`,
         sourceTag: '',
         available: false,
-        connected: true
+        connected: true,
+        placeholderType,
+        actualValue
       };
     }
 
     const content = source.sourceContent || source.locationContent || '';
-    const value = `${entry.prefix || ''}${content}${entry.suffix || ''}`;
+
+    if (!content) {
+      actualValue = `[EMPTY_SOURCE:${entry.sourceId}]`;
+      placeholderType = 'empty_source';
+    } else {
+      actualValue = `${entry.prefix || ''}${content}${entry.suffix || ''}`;
+    }
 
     // Separate source tag and source path
     const sourceTag = source.sourceTag || source.locationTag || '';
@@ -137,7 +165,15 @@ const HeaderTable = () => {
         ? `$${sourcePath}`
         : sourcePath;
 
-    return { value, sourceInfo: displayPath, sourceTag, available: true, connected: true };
+    return {
+      value: actualValue,
+      sourceInfo: displayPath,
+      sourceTag,
+      available: true,
+      connected: true,
+      placeholderType,
+      actualValue
+    };
   }
 
   // Handle table changes (pagination, filters, sorter)
@@ -209,32 +245,57 @@ const HeaderTable = () => {
       filterSearch: true,
       onFilter: (value, record) => record.headerName === value,
       sortOrder: sortedInfo.columnKey === 'headerName' ? sortedInfo.order : null,
-      render: (text) => (
-          <Text strong style={{ fontSize: '13px' }}>{text}</Text>
-      ),
+      render: (text, record) => {
+        const hasPlaceholder = record.placeholderType && record.isEnabled;
+
+        return (
+            <Space align="center">
+              <Text strong style={{ fontSize: '13px' }}>{text}</Text>
+              {hasPlaceholder && (
+                  <Tooltip title="This header is being sent with a diagnostic placeholder value">
+                    <ExclamationCircleOutlined style={{ color: '#ff4d4f', fontSize: '12px' }} />
+                  </Tooltip>
+              )}
+            </Space>
+        );
+      },
     },
     {
       title: 'Value',
-      dataIndex: 'headerValue',
-      key: 'headerValue',
-      width: 170,
+      dataIndex: 'actualValue',
+      key: 'actualValue',
+      width: 200,
       sorter: (a, b) => {
-        const valueA = a.isDynamic ? a.dynamicValue : a.headerValue;
-        const valueB = b.isDynamic ? b.dynamicValue : b.headerValue;
+        const valueA = a.actualValue || '';
+        const valueB = b.actualValue || '';
         return valueA.localeCompare(valueB);
       },
-      sortOrder: sortedInfo.columnKey === 'headerValue' ? sortedInfo.order : null,
+      sortOrder: sortedInfo.columnKey === 'actualValue' ? sortedInfo.order : null,
       render: (text, record) => {
-        const displayValue = record.isDynamic ? record.dynamicValue : text;
-        const hasIssue = record.isDynamic && (!record.sourceAvailable || !record.sourceConnected);
+        const hasPlaceholder = record.placeholderType;
 
-        // Determine the tooltip message
+        // Determine tooltip based on placeholder type
         let tooltipMessage = null;
-        if (hasIssue) {
-          if (!record.sourceConnected) {
-            tooltipMessage = "Value is empty because the local app is disconnected";
-          } else {
-            tooltipMessage = "Value is empty because the source no longer exists";
+        let textColor = undefined;
+        let icon = null;
+
+        if (hasPlaceholder) {
+          switch (record.placeholderType) {
+            case 'app_disconnected':
+              tooltipMessage = "Sending '[APP_DISCONNECTED]' because the local app is not connected";
+              textColor = "warning";
+              icon = <DisconnectOutlined style={{ marginRight: 4 }} />;
+              break;
+            case 'source_not_found':
+              tooltipMessage = `Sending '[SOURCE_NOT_FOUND:${record.sourceId}]' because the source was deleted`;
+              textColor = "danger";
+              icon = <WarningOutlined style={{ marginRight: 4 }} />;
+              break;
+            case 'empty_source':
+              tooltipMessage = `Sending '[EMPTY_SOURCE:${record.sourceId}]' because the source value is empty`;
+              textColor = "secondary";
+              icon = <ExclamationCircleOutlined style={{ marginRight: 4 }} />;
+              break;
           }
         }
 
@@ -242,18 +303,16 @@ const HeaderTable = () => {
             <Tooltip title={tooltipMessage}>
               <Text
                   ellipsis
-                  type={hasIssue ? "secondary" : undefined}
+                  type={textColor}
                   style={{
                     display: 'block',
                     fontSize: '13px',
-                    fontStyle: hasIssue ? 'italic' : 'normal',
-                    opacity: hasIssue ? 0.7 : 1
+                    fontFamily: hasPlaceholder ? 'monospace' : 'inherit',
+                    opacity: record.isEnabled ? 1 : 0.5
                   }}
               >
-                {hasIssue && (
-                    <WarningOutlined style={{ marginRight: 4, color: '#ff7875' }} />
-                )}
-                {displayValue}
+                {icon}
+                {text}
               </Text>
             </Tooltip>
         );
@@ -291,7 +350,7 @@ const HeaderTable = () => {
     {
       title: 'Tags',
       key: 'tags',
-      width: 80,
+      width: 70,
       align: 'center',
       sorter: (a, b) => {
         const tagA = `${a.isResponse ? 'Response' : 'Request'}${a.isDynamic ? '-D' : ''}${a.sourceTag ? `-${a.sourceTag}` : ''}`;
@@ -302,7 +361,7 @@ const HeaderTable = () => {
         ...new Set([
           ...dataSource.map(item => item.isResponse ? 'Response' : 'Request'),
           ...dataSource.filter(item => item.sourceTag).map(item => item.sourceTag),
-          ...dataSource.filter(item => item.isDynamic && !item.sourceAvailable).map(() => 'Unavailable')
+          ...dataSource.filter(item => item.placeholderType).map(() => 'Offline')
         ])
       ].map(tag => ({
         text: tag,
@@ -314,7 +373,7 @@ const HeaderTable = () => {
         const tags = [
           record.isResponse ? 'Response' : 'Request',
           ...(record.sourceTag ? [record.sourceTag] : []),
-          ...(record.isDynamic && !record.sourceAvailable ? ['Unavailable'] : [])
+          ...(record.placeholderType ? ['Offline'] : [])
         ];
         return tags.includes(value);
       },
@@ -324,24 +383,18 @@ const HeaderTable = () => {
             <Tag color={record.isResponse ? 'blue' : 'green'} size="small">
               {record.isResponse ? 'Response' : 'Request'}
             </Tag>
-            {record.sourceTag && record.sourceAvailable && (
+            {record.sourceTag && !record.placeholderType && (
                 <Tag color="orange" size="small">{record.sourceTag}</Tag>
             )}
-            {record.isDynamic && !record.sourceAvailable && (
-                <Tooltip
-                    title={
-                      record.sourceConnected
-                          ? "Dynamic source not found. The configured source no longer exists."
-                          : "Local app is disconnected. Reconnect to use dynamic values."
-                    }
-                >
+            {record.placeholderType && (
+                <Tooltip title="Local app is disconnected. Reconnect to use dynamic values.">
                   <Tag
                       color="error"
                       size="small"
                       icon={<DisconnectOutlined />}
                       style={{ cursor: 'help' }}
                   >
-                    {!record.sourceConnected ? 'Offline' : 'Missing'}
+                    Offline
                   </Tag>
                 </Tooltip>
             )}
@@ -373,15 +426,21 @@ const HeaderTable = () => {
           );
         }
 
-        const hasIssue = !record.sourceAvailable || !record.sourceConnected;
+        const hasPlaceholder = record.placeholderType;
 
-        // Determine tooltip based on connection state
+        // Determine tooltip based on placeholder type
         let tooltipContent = sourceInfo;
-        if (hasIssue) {
-          if (!record.sourceConnected) {
-            tooltipContent = "Local app is disconnected. Reconnect to use dynamic values.";
-          } else {
-            tooltipContent = `Source #${record.sourceId} was removed from the companion app`;
+        if (hasPlaceholder) {
+          switch (record.placeholderType) {
+            case 'app_disconnected':
+              tooltipContent = "Local app is disconnected. Reconnect to use dynamic values.";
+              break;
+            case 'source_not_found':
+              tooltipContent = `Source #${record.sourceId} was removed from the companion app`;
+              break;
+            case 'empty_source':
+              tooltipContent = `Source #${record.sourceId} exists but has no content`;
+              break;
           }
         }
 
@@ -389,16 +448,16 @@ const HeaderTable = () => {
             <Tooltip title={tooltipContent}>
               <Text
                   ellipsis
-                  type={hasIssue ? "secondary" : undefined}
+                  type={hasPlaceholder ? "secondary" : undefined}
                   style={{
                     display: 'block',
                     fontSize: '12px',
-                    fontStyle: hasIssue ? 'italic' : 'normal',
-                    opacity: hasIssue ? 0.7 : 1,
-                    cursor: hasIssue ? 'help' : 'default'
+                    fontStyle: hasPlaceholder ? 'italic' : 'normal',
+                    opacity: hasPlaceholder ? 0.7 : 1,
+                    cursor: hasPlaceholder ? 'help' : 'default'
                   }}
               >
-                {hasIssue && <WarningOutlined style={{ marginRight: 4, color: '#ff7875' }} />}
+                {hasPlaceholder && <ExclamationCircleOutlined style={{ marginRight: 4, color: '#ff7875' }} />}
                 {sourceInfo}
               </Text>
             </Tooltip>
@@ -409,19 +468,21 @@ const HeaderTable = () => {
       title: 'Status',
       dataIndex: 'isEnabled',
       key: 'isEnabled',
-      width: 70,
+      width: 80,
       align: 'center',
       fixed: 'right',
       sorter: (a, b) => Number(b.isEnabled) - Number(a.isEnabled),
       sortOrder: sortedInfo.columnKey === 'isEnabled' ? sortedInfo.order : null,
-      render: (enabled, record) => (
-          <Switch
-              checked={enabled}
-              onChange={(checked) => toggleEntryEnabled(record.id, checked)}
-              disabled={editMode.entryId === record.id}
-              size="small"
-          />
-      ),
+      render: (enabled, record) => {
+        return (
+            <Switch
+                checked={enabled}
+                onChange={(checked) => toggleEntryEnabled(record.id, checked)}
+                disabled={editMode.entryId === record.id}
+                size="small"
+            />
+        );
+      },
     },
     {
       title: 'Actions',

@@ -1,5 +1,5 @@
 /**
- * Main background service worker
+ * Main background service worker with placeholder header tracking
  */
 
 import { connectWebSocket, getCurrentSources, isWebSocketConnected } from './websocket.js';
@@ -19,6 +19,9 @@ let welcomePageBeingOpened = false;
 
 // Track last badge state to avoid unnecessary updates
 let lastBadgeState = null;
+
+// Track headers using placeholders
+let headersUsingPlaceholders = [];
 
 // Function to generate a simple hash of sources to detect changes
 function generateSourcesHash(sources) {
@@ -132,11 +135,12 @@ function doesUrlMatchPattern(url, pattern) {
 }
 
 /**
- * Updates the extension badge based on connection status and active rules
+ * Updates the extension badge based on connection status, active rules, and placeholder usage
  * @param {boolean} connected - Whether the WebSocket is connected
  * @param {string} currentTabUrl - The URL of the current active tab
+ * @param {boolean} hasPlaceholders - Whether any headers are using placeholders
  */
-async function updateExtensionBadge(connected, currentTabUrl) {
+async function updateExtensionBadge(connected, currentTabUrl, hasPlaceholders) {
     // Get the appropriate API (chrome.action for MV3, chrome.browserAction for MV2/Firefox)
     const actionAPI = typeof browser !== 'undefined' && browser.browserAction
         ? browser.browserAction
@@ -150,7 +154,10 @@ async function updateExtensionBadge(connected, currentTabUrl) {
     // Determine badge state
     let badgeState = 'none';
 
-    if (!connected) {
+    // Priority: placeholders > disconnected > active > none
+    if (hasPlaceholders) {
+        badgeState = 'placeholders';
+    } else if (!connected) {
         badgeState = 'disconnected';
     } else if (currentTabUrl) {
         // Check if any rules apply to current tab
@@ -167,7 +174,36 @@ async function updateExtensionBadge(connected, currentTabUrl) {
 
     lastBadgeState = badgeState;
 
-    if (badgeState === 'disconnected') {
+    if (badgeState === 'placeholders') {
+        // Show a red exclamation when headers are using placeholders
+        actionAPI.setBadgeText({ text: '!' }, () => {
+            if (chrome.runtime.lastError) {
+                console.log('Badge text error:', chrome.runtime.lastError);
+            }
+        });
+        actionAPI.setBadgeBackgroundColor({ color: '#ff4d4f' }, () => {
+            if (chrome.runtime.lastError) {
+                console.log('Badge color error:', chrome.runtime.lastError);
+            }
+        });
+
+        // Update the tooltip with specific information
+        if (actionAPI.setTitle) {
+            const placeholderReasons = headersUsingPlaceholders.map(h => h.reason);
+            const hasDisconnected = placeholderReasons.includes('app_disconnected');
+            const hasNotFound = placeholderReasons.includes('source_not_found');
+            const hasEmpty = placeholderReasons.includes('empty_source');
+
+            let messages = [];
+            if (hasDisconnected) messages.push('App disconnected');
+            if (hasNotFound) messages.push('Sources missing');
+            if (hasEmpty) messages.push('Sources empty');
+
+            actionAPI.setTitle({
+                title: `Open Headers - Warning\n${headersUsingPlaceholders.length} headers using placeholder values\n${messages.join(', ')}`
+            });
+        }
+    } else if (badgeState === 'disconnected') {
         // Show a yellow dot/exclamation when disconnected
         actionAPI.setBadgeText({ text: '!' }, () => {
             if (chrome.runtime.lastError) {
@@ -223,13 +259,14 @@ async function updateExtensionBadge(connected, currentTabUrl) {
  */
 async function updateBadgeForCurrentTab() {
     const isConnected = isWebSocketConnected();
+    const hasPlaceholders = headersUsingPlaceholders.length > 0;
 
     // Get current active tab
     tabs.query({ active: true, currentWindow: true }, async (tabList) => {
         const currentTab = tabList[0];
         const currentUrl = currentTab?.url || '';
 
-        await updateExtensionBadge(isConnected, currentUrl);
+        await updateExtensionBadge(isConnected, currentUrl, hasPlaceholders);
     });
 }
 
@@ -238,7 +275,7 @@ async function updateBadgeForCurrentTab() {
  */
 async function initializeExtension() {
     // Set initial badge state to disconnected
-    await updateExtensionBadge(false, null);
+    await updateExtensionBadge(false, null, false);
 
     // First try to restore any previous dynamic sources
     storage.local.get(['dynamicSources'], (result) => {
@@ -266,18 +303,11 @@ async function initializeExtension() {
     await connectWebSocket((sources) => {
         console.log('Info: WebSocket provided fresh sources, updating rules immediately');
 
-        // Check if sources have actually changed
-        const newSourcesHash = generateSourcesHash(sources);
-        if (newSourcesHash === lastSourcesHash) {
-            console.log('Info: Received identical sources from WebSocket, skipping rule update');
-            return;
-        }
-
-        // Update rules with the new sources
+        // Always update rules when we get sources from a fresh connection
         updateNetworkRules(sources);
 
         // Update tracking variables
-        lastSourcesHash = newSourcesHash;
+        lastSourcesHash = generateSourcesHash(sources);
         lastRulesUpdateTime = Date.now();
     });
 
@@ -588,7 +618,7 @@ storage.onChanged.addListener((changes, area) => {
     }
 });
 
-// Listen for messages from popup
+// Listen for messages from popup and header-manager
 runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'popupOpen') {
         console.log('Info: Popup opened, sending current sources');
@@ -622,6 +652,17 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Send response if callback provided
         if (sendResponse) {
             sendResponse({ success: true });
+        }
+    } else if (message.type === 'headersUsingPlaceholders') {
+        // Update placeholder tracking from header-manager
+        headersUsingPlaceholders = message.headers || [];
+        console.log('Info: Headers using placeholders:', headersUsingPlaceholders.length);
+
+        // Update badge immediately
+        updateBadgeForCurrentTab();
+
+        if (sendResponse) {
+            sendResponse({ acknowledged: true });
         }
     } else if (message.type === 'configurationImported') {
         // Handle configuration import

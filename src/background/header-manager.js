@@ -1,6 +1,5 @@
 /**
- * Enhanced header-manager.js with specialized response header support
- * and disconnected dynamic source handling
+ * Enhanced header-manager.js with diagnostic placeholders for missing/disconnected sources
  */
 import { isValidHeaderValue, sanitizeHeaderValue } from './rule-validator.js';
 import { normalizeHeaderName } from '../utils/utils.js';
@@ -8,15 +7,24 @@ import { storage, declarativeNetRequest, runtime } from '../utils/browser-api.js
 import { isWebSocketConnected } from './websocket.js';
 import { validateHeaderName } from '../utils/header-validator.js';
 
+// Track headers using placeholders for badge notification
+let headersWithPlaceholders = [];
+
 /**
  * Updates the network request rules based on saved data and dynamic sources.
  * Implements specialized handling for response headers to maximize compatibility.
- * Handles disconnected dynamic sources by skipping them.
+ * Uses diagnostic placeholders for disconnected/missing dynamic sources.
  * @param {Array} dynamicSources - The current dynamic sources from WebSocket
  */
 export function updateNetworkRules(dynamicSources) {
+    // Reset placeholder tracking
+    headersWithPlaceholders = [];
+
     // Check if we're connected
     const isConnected = isWebSocketConnected();
+
+    // If not connected, we should not use any dynamic sources
+    const effectiveSources = isConnected ? dynamicSources : [];
 
     // Get all saved headers
     storage.sync.get(['savedData'], (result) => {
@@ -40,8 +48,8 @@ export function updateNetworkRules(dynamicSources) {
                 continue;
             }
 
-            // Process entry and add to appropriate array
-            const processedEntry = processEntry(entry, dynamicSources, isConnected);
+            // Process entry (now returns entry with placeholder if needed)
+            const processedEntry = processEntry(entry, effectiveSources, isConnected);
             if (processedEntry) {
                 if (processedEntry.isResponse) {
                     responseEntries.push(processedEntry);
@@ -64,6 +72,27 @@ export function updateNetworkRules(dynamicSources) {
             rules.push(...responseRules);
             ruleId += responseRules.length;
         });
+
+        // Log diagnostic placeholder usage
+        if (headersWithPlaceholders.length > 0) {
+            console.warn(`Info: ${headersWithPlaceholders.length} headers using diagnostic placeholders:`, headersWithPlaceholders);
+
+            // Notify background script to update badge
+            runtime.sendMessage({
+                type: 'headersUsingPlaceholders',
+                headers: headersWithPlaceholders
+            }).catch(() => {
+                // Ignore errors when no listeners
+            });
+        } else {
+            // Clear badge if no placeholders
+            runtime.sendMessage({
+                type: 'headersUsingPlaceholders',
+                headers: []
+            }).catch(() => {
+                // Ignore errors when no listeners
+            });
+        }
 
         // Log response header details for debugging
         if (responseEntries.length > 0) {
@@ -97,6 +126,7 @@ export function updateNetworkRules(dynamicSources) {
 
 /**
  * Process an entry and determine if it's valid
+ * Now returns entries with diagnostic placeholders instead of null
  * @param {Object} entry - The header entry
  * @param {Array} dynamicSources - Available dynamic sources
  * @param {boolean} isConnected - Whether the local app is connected
@@ -111,37 +141,59 @@ function processEntry(entry, dynamicSources, isConnected) {
     }
 
     let headerValue = entry.headerValue;
+    let usingPlaceholder = false;
+    let placeholderReason = null;
 
     // Handle dynamic values
     if (entry.isDynamic && entry.sourceId) {
-        // If not connected, skip dynamic headers
+        // ALWAYS check connection status first for dynamic headers
         if (!isConnected) {
-            console.log(`Info: Skipping dynamic header ${entry.headerName} - local app not connected`);
-            return null;
+            // APP_DISCONNECTED state - always use placeholder when disconnected
+            headerValue = '[APP_DISCONNECTED]';
+            usingPlaceholder = true;
+            placeholderReason = 'app_disconnected';
+            console.warn(`Header "${entry.headerName}" using placeholder - app disconnected`);
+        } else {
+            // Only look for sources when connected
+            const source = dynamicSources.find(s =>
+                s.sourceId?.toString() === entry.sourceId?.toString() ||
+                s.locationId?.toString() === entry.sourceId?.toString()
+            );
+
+            if (!source) {
+                // SOURCE_NOT_FOUND state
+                headerValue = `[SOURCE_NOT_FOUND:${entry.sourceId}]`;
+                usingPlaceholder = true;
+                placeholderReason = 'source_not_found';
+                console.warn(`Header "${entry.headerName}" using placeholder - source #${entry.sourceId} not found`);
+            } else {
+                const dynamicContent = source.sourceContent || source.locationContent || '';
+
+                if (!dynamicContent) {
+                    // EMPTY_SOURCE state
+                    headerValue = `[EMPTY_SOURCE:${entry.sourceId}]`;
+                    usingPlaceholder = true;
+                    placeholderReason = 'empty_source';
+                    console.warn(`Header "${entry.headerName}" using placeholder - source #${entry.sourceId} is empty`);
+                } else {
+                    // Normal case - source has content
+                    headerValue = `${entry.prefix || ''}${dynamicContent}${entry.suffix || ''}`;
+                }
+            }
         }
 
-        const source = dynamicSources.find(s => s.sourceId?.toString() === entry.sourceId?.toString() ||
-            s.locationId?.toString() === entry.sourceId?.toString());
-
-        if (source) {
-            const dynamicContent = source.sourceContent || source.locationContent;
-
-            // If dynamic content is empty, skip this header
-            if (!dynamicContent) {
-                console.log(`Info: Skipping rule for ${entry.headerName} - dynamic source ${entry.sourceId} has empty content`);
-                return null;
-            }
-
-            const prefix = entry.prefix || '';
-            const suffix = entry.suffix || '';
-            headerValue = `${prefix}${dynamicContent}${suffix}`;
-        } else {
-            console.log(`Info: Skipping rule for ${entry.headerName} - dynamic source ${entry.sourceId} not found`);
-            return null;
+        // Track headers using placeholders
+        if (usingPlaceholder) {
+            headersWithPlaceholders.push({
+                headerName: entry.headerName,
+                sourceId: entry.sourceId,
+                reason: placeholderReason,
+                domains: entry.domains
+            });
         }
     }
 
-    // Validate the header value
+    // Validate the header value (including placeholders)
     if (!isValidHeaderValue(headerValue, entry.headerName)) {
         headerValue = sanitizeHeaderValue(headerValue);
         if (!isValidHeaderValue(headerValue, entry.headerName)) {
@@ -164,7 +216,9 @@ function processEntry(entry, dynamicSources, isConnected) {
         headerName: headerNameValidation.sanitized || normalizeHeaderName(entry.headerName),
         headerValue: headerValue,
         domains: domains,
-        isResponse: entry.isResponse === true
+        isResponse: entry.isResponse === true,
+        usingPlaceholder: usingPlaceholder,
+        placeholderReason: placeholderReason
     };
 }
 
@@ -426,4 +480,12 @@ function formatUrlPattern(domain) {
     }
 
     return urlFilter;
+}
+
+/**
+ * Get information about headers using placeholders
+ * @returns {Array} - Array of headers with placeholder information
+ */
+export function getHeadersWithPlaceholders() {
+    return [...headersWithPlaceholders];
 }

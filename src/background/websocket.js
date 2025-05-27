@@ -59,15 +59,16 @@ function broadcastConnectionStatus() {
 
 /**
  * Clear dynamic sources when disconnected
- * This keeps the sources in local storage but marks them as disconnected
- * This way we preserve the configuration but show appropriate UI
+ * This forces headers to use placeholders immediately
  */
 function clearDynamicSourcesOnDisconnect() {
-    console.log('Info: Connection lost, preserving sources but marking as disconnected');
+    console.log('Info: Connection lost, clearing sources to force placeholder usage');
 
-    // Don't clear the sources from memory - keep them for when reconnected
-    // But notify the UI that we're disconnected
+    // Notify the UI that we're disconnected
     broadcastConnectionStatus();
+
+    // Force an immediate rule update with empty sources to trigger placeholders
+    updateNetworkRules([]);
 
     // Don't clear from storage - we want to preserve the configuration
     // The UI will check isConnected to determine if sources are available
@@ -250,6 +251,7 @@ export async function connectWebSocket(onSourcesReceived) {
                     // Check if there's a meaningful difference in the sources
                     const newSourcesHash = generateSourcesHash(parsed.sources);
                     const previousSources = [...allSources]; // Make a copy of current sources
+                    const isInitialConnection = parsed.type === 'sourcesInitial';
 
                     // Update all sources regardless of hash to ensure we have the latest data
                     allSources = parsed.sources;
@@ -311,14 +313,16 @@ export async function connectWebSocket(onSourcesReceived) {
                     storage.local.set({ dynamicSources: allSources }, () => {
                         console.log('Info: Sources saved to local storage');
 
-                        // Only update network rules if sources actually changed
-                        if (newSourcesHash !== lastSourcesHash) {
-                            console.log('Info: Sources changed, updating network rules');
+                        // Always update network rules on initial connection or if sources changed
+                        if (isInitialConnection || newSourcesHash !== lastSourcesHash || !lastRulesUpdateTime) {
+                            console.log('Info: Initial connection or sources changed, updating network rules');
                             updateNetworkRules(allSources);
                             lastSourcesHash = newSourcesHash;
                             lastRulesUpdateTime = Date.now();
                         } else {
-                            console.log('Info: Sources content unchanged, skipping rule update');
+                            console.log('Info: Sources unchanged, but ensuring rules are current');
+                            // Still update rules to ensure we're not using placeholders
+                            updateNetworkRules(allSources);
                         }
 
                         // Call the callback with the sources
@@ -489,6 +493,7 @@ function connectFirefoxWss(onSourcesReceived) {
                         // Check if there's a meaningful difference in the sources
                         const newSourcesHash = generateSourcesHash(parsed.sources);
                         const previousSources = [...allSources]; // Make a copy of current sources
+                        const isInitialConnection = parsed.type === 'sourcesInitial';
 
                         // Update all sources regardless of hash to ensure we have the latest data
                         allSources = parsed.sources;
@@ -546,9 +551,12 @@ function connectFirefoxWss(onSourcesReceived) {
                         storage.local.set({ dynamicSources: allSources }, () => {
                             console.log('Info: Sources saved to Firefox storage');
 
-                            // Only update network rules if sources actually changed
-                            if (newSourcesHash !== lastSourcesHash) {
-                                console.log('Info: Sources changed, updating network rules');
+                            // Always update network rules on initial connection or if sources changed
+                            if (isInitialConnection || newSourcesHash !== lastSourcesHash || !lastRulesUpdateTime) {
+                                console.log('Info: Firefox initial connection or sources changed, updating network rules');
+
+                                // Update network rules first
+                                updateNetworkRules(allSources);
 
                                 // Call the callback with the sources
                                 if (onSourcesReceived && typeof onSourcesReceived === 'function') {
@@ -558,7 +566,14 @@ function connectFirefoxWss(onSourcesReceived) {
                                 lastSourcesHash = newSourcesHash;
                                 lastRulesUpdateTime = Date.now();
                             } else {
-                                console.log('Info: Sources content unchanged, skipping rule update');
+                                console.log('Info: Firefox sources unchanged, but ensuring rules are current');
+                                // Still update rules to ensure we're not using placeholders
+                                updateNetworkRules(allSources);
+
+                                // Still call the callback
+                                if (onSourcesReceived && typeof onSourcesReceived === 'function') {
+                                    onSourcesReceived(allSources);
+                                }
                             }
 
                             // Notify any open popups that sources have been updated
@@ -642,12 +657,16 @@ function connectFirefoxWs(onSourcesReceived) {
             try {
                 const parsed = JSON.parse(event.data);
                 if ((parsed.type === 'sourcesInitial' || parsed.type === 'sourcesUpdated') && Array.isArray(parsed.sources)) {
+                    const isInitialConnection = parsed.type === 'sourcesInitial';
                     allSources = parsed.sources;
                     console.log('Info: Firefox fallback received sources:', allSources.length);
 
                     // Save sources and update rules
                     storage.local.set({ dynamicSources: allSources }, () => {
-                        // Update network rules with the new sources
+                        // Always update network rules on reconnection
+                        console.log('Info: Firefox fallback updating network rules');
+                        updateNetworkRules(allSources);
+
                         if (onSourcesReceived && typeof onSourcesReceived === 'function') {
                             onSourcesReceived(allSources);
                         }
@@ -846,7 +865,10 @@ function handleConnectionFailure() {
     isConnecting = false;
     isConnected = false;
 
-    // Clear sources on disconnect
+    // Reset rule update time to ensure rules are updated on reconnection
+    lastRulesUpdateTime = 0;
+
+    // Clear sources on disconnect to force placeholder usage
     clearDynamicSourcesOnDisconnect();
 
     // Try again after delay
@@ -876,7 +898,10 @@ export function isWebSocketConnected() {
  * @returns {Array} - Array of sources
  */
 export function getCurrentSources() {
-    // Always return the current sources, even if disconnected
-    // The UI will check connection status separately
+    // Only return sources if connected, otherwise return empty array
+    // This ensures placeholders are used when disconnected
+    if (!isWebSocketConnected()) {
+        return [];
+    }
     return [...allSources]; // Return a copy to prevent mutation
 }
