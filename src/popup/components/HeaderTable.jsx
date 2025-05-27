@@ -350,7 +350,7 @@ const HeaderTable = () => {
     {
       title: 'Tags',
       key: 'tags',
-      width: 70,
+      width: 100,
       align: 'center',
       sorter: (a, b) => {
         const tagA = `${a.isResponse ? 'Response' : 'Request'}${a.isDynamic ? '-D' : ''}${a.sourceTag ? `-${a.sourceTag}` : ''}`;
@@ -361,7 +361,18 @@ const HeaderTable = () => {
         ...new Set([
           ...dataSource.map(item => item.isResponse ? 'Response' : 'Request'),
           ...dataSource.filter(item => item.sourceTag).map(item => item.sourceTag),
-          ...dataSource.filter(item => item.placeholderType).map(() => 'Offline')
+          ...dataSource.filter(item => item.placeholderType).map(item => {
+            switch (item.placeholderType) {
+              case 'app_disconnected':
+                return 'Offline';
+              case 'source_not_found':
+                return 'Missing';
+              case 'empty_source':
+                return 'Empty';
+              default:
+                return 'Offline';
+            }
+          })
         ])
       ].map(tag => ({
         text: tag,
@@ -372,34 +383,103 @@ const HeaderTable = () => {
       onFilter: (value, record) => {
         const tags = [
           record.isResponse ? 'Response' : 'Request',
-          ...(record.sourceTag ? [record.sourceTag] : []),
-          ...(record.placeholderType ? ['Offline'] : [])
+          ...(record.sourceTag ? [record.sourceTag] : [])
         ];
+
+        // Add the appropriate placeholder tag based on type
+        if (record.placeholderType) {
+          switch (record.placeholderType) {
+            case 'app_disconnected':
+              tags.push('Offline');
+              break;
+            case 'source_not_found':
+              tags.push('Missing');
+              break;
+            case 'empty_source':
+              tags.push('Empty');
+              break;
+          }
+        }
+
         return tags.includes(value);
       },
       sortOrder: sortedInfo.columnKey === 'tags' ? sortedInfo.order : null,
-      render: (_, record) => (
-          <Space size={3} direction="vertical">
-            <Tag color={record.isResponse ? 'blue' : 'green'} size="small">
+      render: (_, record) => {
+        // Determine which tags to show
+        const tags = [];
+
+        // Always show Request/Response tag
+        tags.push(
+            <Tag
+                key="type"
+                color={record.isResponse ? 'blue' : 'green'}
+                size="small"
+                style={{ margin: '0 0 2px 0', fontSize: '11px' }}
+            >
               {record.isResponse ? 'Response' : 'Request'}
             </Tag>
-            {record.sourceTag && !record.placeholderType && (
-                <Tag color="orange" size="small">{record.sourceTag}</Tag>
-            )}
-            {record.placeholderType && (
-                <Tooltip title="Local app is disconnected. Reconnect to use dynamic values.">
-                  <Tag
-                      color="error"
-                      size="small"
-                      icon={<DisconnectOutlined />}
-                      style={{ cursor: 'help' }}
-                  >
-                    Offline
-                  </Tag>
-                </Tooltip>
-            )}
-          </Space>
-      ),
+        );
+
+        // Show appropriate tag based on placeholder type or source tag
+        if (record.placeholderType) {
+          switch (record.placeholderType) {
+            case 'app_disconnected':
+              tags.push(
+                  <Tooltip key="offline" title="Local app is disconnected. Reconnect to use dynamic values.">
+                    <Tag
+                        color="error"
+                        size="small"
+                        icon={<DisconnectOutlined />}
+                        style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}
+                    >
+                      Offline
+                    </Tag>
+                  </Tooltip>
+              );
+              break;
+            case 'source_not_found':
+              tags.push(
+                  <Tooltip key="missing" title={`Source #${record.sourceId} was removed from the companion app`}>
+                    <Tag
+                        color="error"
+                        size="small"
+                        icon={<WarningOutlined />}
+                        style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}
+                    >
+                      Missing
+                    </Tag>
+                  </Tooltip>
+              );
+              break;
+            case 'empty_source':
+              tags.push(
+                  <Tooltip key="empty" title={`Source #${record.sourceId} exists but has no content`}>
+                    <Tag
+                        color="warning"
+                        size="small"
+                        icon={<ExclamationCircleOutlined />}
+                        style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}
+                    >
+                      Empty
+                    </Tag>
+                  </Tooltip>
+              );
+              break;
+          }
+        } else if (record.sourceTag) {
+          tags.push(
+              <Tag key="source" color="orange" size="small" style={{ margin: '0 0 2px 0', fontSize: '11px' }}>
+                {record.sourceTag}
+              </Tag>
+          );
+        }
+
+        return (
+            <div style={{ textAlign: 'center' }}>
+              {tags}
+            </div>
+        );
+      },
     },
     {
       title: 'Source',

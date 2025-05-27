@@ -361,7 +361,7 @@ const HeaderForm = () => {
                                         message="Dynamic Source Unavailable"
                                         description={
                                             !isConnected
-                                                ? "The local app is not connected. This header's dynamic value will be empty until the app is reconnected."
+                                                ? "The local app is not connected. This header's dynamic value will be unavailable until the app is reconnected."
                                                 : "The selected dynamic source is no longer available. Please select a different source or change to static value."
                                         }
                                         type="warning"
@@ -643,7 +643,7 @@ const HeaderForm = () => {
                                                     Example: for "Bearer token123", type "Bearer " (with space) in prefix
                                                     {!isConnected && (
                                                         <div style={{ color: '#ff7875', marginTop: 4 }}>
-                                                            <WarningOutlined /> Dynamic value will be empty until local app is connected
+                                                            <WarningOutlined /> Dynamic value will be unavailable until local app is connected
                                                         </div>
                                                     )}
                                                 </div>

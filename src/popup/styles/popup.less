@@ -229,6 +229,41 @@ body {
         color: var(--text-secondary) !important;
       }
     }
+
+    .ant-table-tbody > tr > td {
+      border-bottom-color: var(--border-light) !important;
+      color: var(--text-primary) !important;
+      background: var(--bg-primary) !important;
+      overflow: hidden;
+      padding: 8px;
+      vertical-align: middle;
+    }
+
+    /* Ensure the column headers don't wrap unnecessarily */
+    .ant-table-thead > tr > th {
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    /* Fix for tag display in the Tags column */
+    .ant-tag {
+      display: inline-block;
+      margin-bottom: 2px !important;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      &:last-child {
+        margin-bottom: 0 !important;
+      }
+    }
+
+    /* Prevent cell content from overflowing into adjacent cells */
+    .ant-table-cell {
+      position: relative;
+      overflow: hidden;
+    }
   }
 }
 
