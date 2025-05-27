@@ -14,6 +14,7 @@ let lastRulesUpdateTime = 0;
 let lastSavedDataHash = '';
 
 // Track if we're currently opening a welcome page to prevent duplicates
+let welcomePageOpenedBySocket = false;
 let welcomePageBeingOpened = false;
 
 // Track last badge state to avoid unnecessary updates
@@ -54,10 +55,88 @@ function generateSavedDataHash(savedData) {
 }
 
 /**
- * Updates the extension badge based on connection status
- * @param {boolean} connected - Whether the WebSocket is connected
+ * Check if any rules apply to the current tab
+ * @param {string} tabUrl - The URL of the current tab
+ * @returns {Promise<boolean>} - Whether any active rules apply
  */
-function updateExtensionBadge(connected) {
+async function checkRulesForTab(tabUrl) {
+    if (!tabUrl) return false;
+
+    return new Promise((resolve) => {
+        storage.sync.get(['savedData'], (result) => {
+            const savedData = result.savedData || {};
+
+            // Check if any enabled rules match the current tab URL
+            for (const id in savedData) {
+                const entry = savedData[id];
+
+                // Skip disabled rules
+                if (entry.isEnabled === false) continue;
+
+                // Check if any domain pattern matches the current tab
+                const domains = entry.domains || [];
+                for (const domain of domains) {
+                    if (doesUrlMatchPattern(tabUrl, domain)) {
+                        resolve(true);
+                        return;
+                    }
+                }
+            }
+
+            resolve(false);
+        });
+    });
+}
+
+/**
+ * Check if a URL matches a domain pattern
+ * @param {string} url - The URL to check
+ * @param {string} pattern - The domain pattern (can include wildcards)
+ * @returns {boolean} - Whether the URL matches the pattern
+ */
+function doesUrlMatchPattern(url, pattern) {
+    try {
+        // Normalize the pattern
+        let urlFilter = pattern.trim();
+
+        // Convert pattern to a regex
+        // Handle different pattern formats
+        if (urlFilter === '*') {
+            return true; // Matches everything
+        }
+
+        // If pattern doesn't have protocol, add wildcard
+        if (!urlFilter.includes('://')) {
+            urlFilter = '*://' + urlFilter;
+        }
+
+        // Ensure pattern has a path
+        if (!urlFilter.includes('/', urlFilter.indexOf('://') + 3)) {
+            urlFilter = urlFilter + '/*';
+        }
+
+        // Convert to regex pattern
+        let regexPattern = urlFilter
+            .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
+            .replace(/\*/g, '.*'); // Replace * with .*
+
+        // Create regex
+        const regex = new RegExp('^' + regexPattern + '$');
+
+        // Test the URL
+        return regex.test(url);
+    } catch (e) {
+        console.log('Error matching URL pattern:', e);
+        return false;
+    }
+}
+
+/**
+ * Updates the extension badge based on connection status and active rules
+ * @param {boolean} connected - Whether the WebSocket is connected
+ * @param {string} currentTabUrl - The URL of the current active tab
+ */
+async function updateExtensionBadge(connected, currentTabUrl) {
     // Get the appropriate API (chrome.action for MV3, chrome.browserAction for MV2/Firefox)
     const actionAPI = typeof browser !== 'undefined' && browser.browserAction
         ? browser.browserAction
@@ -68,8 +147,28 @@ function updateExtensionBadge(connected) {
         return;
     }
 
+    // Determine badge state
+    let badgeState = 'none';
+
     if (!connected) {
-        // Show a red dot/exclamation when disconnected
+        badgeState = 'disconnected';
+    } else if (currentTabUrl) {
+        // Check if any rules apply to current tab
+        const hasActiveRules = await checkRulesForTab(currentTabUrl);
+        if (hasActiveRules) {
+            badgeState = 'active';
+        }
+    }
+
+    // Only update if state changed
+    if (badgeState === lastBadgeState) {
+        return;
+    }
+
+    lastBadgeState = badgeState;
+
+    if (badgeState === 'disconnected') {
+        // Show a yellow dot/exclamation when disconnected
         actionAPI.setBadgeText({ text: '!' }, () => {
             if (chrome.runtime.lastError) {
                 console.log('Badge text error:', chrome.runtime.lastError);
@@ -81,14 +180,33 @@ function updateExtensionBadge(connected) {
             }
         });
 
-        // Optional: Update the tooltip
+        // Update the tooltip
         if (actionAPI.setTitle) {
             actionAPI.setTitle({
                 title: 'Open Headers - Disconnected\nDynamic header rules may not work'
             });
         }
+    } else if (badgeState === 'active') {
+        // Show a green checkmark when rules are active for current site
+        actionAPI.setBadgeText({ text: '✓' }, () => {
+            if (chrome.runtime.lastError) {
+                console.log('Badge text error:', chrome.runtime.lastError);
+            }
+        });
+        actionAPI.setBadgeBackgroundColor({ color: '#52c41a' }, () => {
+            if (chrome.runtime.lastError) {
+                console.log('Badge color error:', chrome.runtime.lastError);
+            }
+        });
+
+        // Update the tooltip
+        if (actionAPI.setTitle) {
+            actionAPI.setTitle({
+                title: 'Open Headers - Active\nHeader rules are active for this site'
+            });
+        }
     } else {
-        // Clear the badge when connected
+        // Clear the badge when connected but no active rules
         actionAPI.setBadgeText({ text: '' });
 
         // Reset the tooltip to default
@@ -101,12 +219,26 @@ function updateExtensionBadge(connected) {
 }
 
 /**
+ * Update badge for the current active tab
+ */
+async function updateBadgeForCurrentTab() {
+    const isConnected = isWebSocketConnected();
+
+    // Get current active tab
+    tabs.query({ active: true, currentWindow: true }, async (tabList) => {
+        const currentTab = tabList[0];
+        const currentUrl = currentTab?.url || '';
+
+        await updateExtensionBadge(isConnected, currentUrl);
+    });
+}
+
+/**
  * Initialize the extension.
  */
 async function initializeExtension() {
     // Set initial badge state to disconnected
-    updateExtensionBadge(false);
-    lastBadgeState = false;
+    await updateExtensionBadge(false, null);
 
     // First try to restore any previous dynamic sources
     storage.local.get(['dynamicSources'], (result) => {
@@ -223,6 +355,14 @@ const debouncedUpdateRulesFromSavedData = debounce((savedData) => {
     console.log('Info: Debounced rule update from saved data changes');
     updateNetworkRules(getCurrentSources());
     lastSavedDataHash = generateSavedDataHash(savedData);
+
+    // Update badge when rules change
+    updateBadgeForCurrentTab();
+}, 100);
+
+// Create a debounced version of badge update
+const debouncedUpdateBadge = debounce(() => {
+    updateBadgeForCurrentTab();
 }, 100);
 
 // Set up alarms to keep the service worker alive
@@ -255,14 +395,25 @@ alarms.onAlarm.addListener((alarm) => {
         lastSourcesHash = currentHash;
         lastRulesUpdateTime = Date.now();
     } else if (alarm.name === 'updateBadge') {
-        // Check connection state and update badge if changed
-        const isConnected = isWebSocketConnected();
+        // Update badge for current tab
+        updateBadgeForCurrentTab();
+    }
+});
 
-        if (isConnected !== lastBadgeState) {
-            console.log('Info: Badge state changed from', lastBadgeState, 'to', isConnected);
-            updateExtensionBadge(isConnected);
-            lastBadgeState = isConnected;
-        }
+// Listen for tab updates and activations
+tabs.onActivated?.addListener((activeInfo) => {
+    // Update badge when user switches tabs
+    setTimeout(() => {
+        debouncedUpdateBadge();
+    }, 100);
+});
+
+tabs.onUpdated?.addListener((tabId, changeInfo, tab) => {
+    // Update badge when tab URL changes
+    if (changeInfo.url && tab.active) {
+        setTimeout(() => {
+            debouncedUpdateBadge();
+        }, 100);
     }
 });
 
@@ -446,13 +597,6 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.type === 'checkConnection') {
         // Respond with current connection status
         const connected = isWebSocketConnected();
-
-        // Update badge if state changed
-        if (connected !== lastBadgeState) {
-            updateExtensionBadge(connected);
-            lastBadgeState = connected;
-        }
-
         sendResponse({ connected: connected });
     } else if (message.type === 'getDynamicSources') {
         // Get the current sources and send them back
@@ -471,6 +615,9 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Update tracking variables
         lastSourcesHash = generateSourcesHash(getCurrentSources());
         lastRulesUpdateTime = Date.now();
+
+        // Update badge for current tab
+        updateBadgeForCurrentTab();
 
         // Send response if callback provided
         if (sendResponse) {
@@ -507,6 +654,9 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.savedData) {
             lastSavedDataHash = generateSavedDataHash(message.savedData);
         }
+
+        // Update badge for current tab
+        updateBadgeForCurrentTab();
 
         // Send response if callback provided
         if (sendResponse) {
