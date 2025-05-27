@@ -338,10 +338,19 @@ const HeaderForm = () => {
                 size="small"
                 activeKey={(editMode.isEditing && editMode.entryId) || uiState?.formCollapsed ? ['add-header'] : []}
                 onChange={(keys) => updateUiState && updateUiState({ formCollapsed: keys.includes('add-header') })}
-                style={{ marginBottom: 8 }}
+                className="header-form-collapse"
+                style={{ marginBottom: 12 }}
                 items={[{
                     key: 'add-header',
-                    label: editMode.isEditing ? 'Edit Header Rule' : 'Add New Header Rule',
+                    label: (
+                        <span style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: editMode.isEditing ? '#faad14' : 'var(--text-primary)'
+                        }}>
+                            {editMode.isEditing ? 'Edit Header Rule' : 'Add New Header Rule'}
+                        </span>
+                    ),
                     children: (
                         <>
                             {/* Show warning if editing a header with unavailable dynamic source */}
@@ -391,7 +400,7 @@ const HeaderForm = () => {
                                     ]}
                                     style={{ flex: 2, marginBottom: 0 }}
                                     extra={
-                                        <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
                                             {draftValues.isResponse
                                                 ? 'Examples: Access-Control-Allow-Origin • Set-Cookie • X-Custom-Header'
                                                 : 'Examples: Authorization • X-API-Key • X-Custom-Header'
@@ -626,7 +635,7 @@ const HeaderForm = () => {
                                             >
                                                 <div style={{
                                                     fontSize: '12px',
-                                                    color: '#8c8c8c',
+                                                    color: 'var(--text-tertiary)',
                                                     marginBottom: '8px',
                                                     lineHeight: '1.5'
                                                 }}>
@@ -641,10 +650,10 @@ const HeaderForm = () => {
                                                 <div style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    backgroundColor: '#f5f5f5',
+                                                    backgroundColor: 'var(--bg-tertiary)',
                                                     borderRadius: '6px',
                                                     padding: '4px',
-                                                    border: '1px solid #e8e9ea'
+                                                    border: '1px solid var(--border-color)'
                                                 }}>
                                                     <Form.Item
                                                         name="prefix"
@@ -695,9 +704,9 @@ const HeaderForm = () => {
 
                                                     <div style={{
                                                         padding: '4px 12px',
-                                                        backgroundColor: '#f0f0f0',
-                                                        border: '1px solid #d9d9d9',
-                                                        color: '#8c8c8c',
+                                                        backgroundColor: 'var(--bg-hover)',
+                                                        border: '1px solid var(--border-color)',
+                                                        color: 'var(--text-tertiary)',
                                                         fontSize: '13px',
                                                         fontWeight: 500,
                                                         display: 'flex',

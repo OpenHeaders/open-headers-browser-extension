@@ -11,7 +11,8 @@ import {
   Typography,
   Skeleton,
   Empty,
-  App
+  App,
+  Badge
 } from 'antd';
 import {
   EditOutlined,
@@ -24,7 +25,7 @@ import {
 import { useHeader } from '../../hooks/useHeader';
 
 const { Search } = Input;
-const { Text } = Typography;
+const { Text, Paragraph } = Typography;
 
 /**
  * Professional table component for displaying header entries
@@ -87,6 +88,10 @@ const HeaderTable = () => {
       item.domains.some(domain => domain.toLowerCase().includes(searchText.toLowerCase())) ||
       item.headerValue.toLowerCase().includes(searchText.toLowerCase())
   );
+
+  // Count enabled rules
+  const enabledCount = dataSource.filter(item => item.isEnabled).length;
+  const totalCount = dataSource.length;
 
   // Get dynamic value and source info for an entry
   function getDynamicValueInfo(entry, sources, connected) {
@@ -360,7 +365,7 @@ const HeaderTable = () => {
               <Text
                   style={{
                     fontSize: '12px',
-                    color: '#bfbfbf'
+                    color: 'var(--text-tertiary)'
                   }}
               >
                 Static value
@@ -455,18 +460,29 @@ const HeaderTable = () => {
   ];
 
   return (
-      <div>
-        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text strong>Header Rules</Text>
+      <div className="header-rules-section">
+        <div className="header-rules-title">
+          <Space align="center" size={8}>
+            <Text style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Header Rules
+            </Text>
+            {totalCount > 0 && (
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  {enabledCount} of {totalCount} active
+                </Text>
+            )}
+          </Space>
           <Space>
-            <Button onClick={clearAll} size="small">
-              Clear filters and sorting
-            </Button>
+            {(searchText || Object.keys(filteredInfo).length > 0 || sortedInfo.columnKey) && (
+                <Button onClick={clearAll} size="small">
+                  Clear filters and sorting
+                </Button>
+            )}
             <Search
                 placeholder="Search headers, values, or domains..."
                 allowClear
                 size="small"
-                style={{ width: 350 }}
+                style={{ width: 300 }}
                 value={searchText}
                 onChange={(e) => handleSearchChange(e.target.value)}
             />
@@ -484,17 +500,20 @@ const HeaderTable = () => {
               locale={{
                 emptyText: (
                     <Empty
-                        image={<FileTextOutlined style={{ fontSize: 24, color: '#bfbfbf' }} />}
+                        image={<FileTextOutlined style={{ fontSize: 28, color: 'var(--text-tertiary)' }} />}
                         description={
-                          searchText ? 'No matching headers found' : 'No header rules yet'
+                          <Text type="secondary">
+                            {searchText ? 'No matching headers found' : 'No header rules yet'}
+                          </Text>
                         }
-                        style={{ padding: '20px 0' }}
+                        style={{ padding: '32px 0' }}
                     />
                 )
               }}
               rowClassName={(record) =>
                   editMode.entryId === record.id ? 'ant-table-row-selected' : ''
               }
+              className="header-rules-table"
               style={{ width: '100%', height: '100%' }}
           />
         </div>
