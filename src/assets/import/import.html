@@ -5,37 +5,174 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Import Configuration - Open Headers</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f5f7fa;
+        :root {
+            --primary-color: #4285F4;
+            --primary-hover: #3b77db;
+            --secondary-color: #34A853;
+            --text-color: #333333;
+            --text-light: #666666;
+            --background-color: #F5F7FA;
+            --panel-background: #FFFFFF;
+            --border-color: #E0E0E0;
+            --success-color: #34A853;
+            --warning-color: #FBBC05;
+            --error-color: #EA4335;
+        }
+
+        * {
+            box-sizing: border-box;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.5;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            height: 100vh;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            min-height: 100vh;
+            justify-content: center;
         }
 
         .import-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            max-width: 500px;
             width: 100%;
+            max-width: 780px;
+            background-color: var(--panel-background);
+            border-radius: 12px;
+            box-shadow: 0px 2px 12px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .import-content {
+            padding: 48px 50px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             text-align: center;
         }
 
-        h1 {
-            color: #1890ff;
-            margin-bottom: 10px;
+        .import-logo {
+            width: 96px;
+            height: 96px;
+            margin: 0 auto 24px;
+            display: block;
         }
 
-        p {
-            color: #666;
-            margin-bottom: 30px;
+        .page-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-align: center;
         }
 
+        .page-subtitle {
+            font-size: 16px;
+            color: var(--text-light);
+            margin-bottom: 32px;
+            text-align: center;
+        }
+
+        /* Import illustration similar to welcome page */
+        .import-illustration {
+            width: 100%;
+            max-width: 340px;
+            height: 200px;
+            margin: 30px auto;
+            position: relative;
+        }
+
+        .browser-frame {
+            width: 100%;
+            height: 100%;
+            background-color: #FFFFFF;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .browser-header {
+            background-color: #F5F7FA;
+            height: 36px;
+            border-bottom: 1px solid #E0E0E0;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+        }
+
+        .browser-dots {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-right: 12px;
+        }
+
+        .browser-dots span {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #E0E0E0;
+        }
+
+        .browser-dots span:nth-child(1) {
+            background-color: #FBBC05;
+        }
+
+        .browser-dots span:nth-child(2) {
+            background-color: #34A853;
+        }
+
+        .browser-dots span:nth-child(3) {
+            background-color: #EA4335;
+        }
+
+        .browser-address-bar {
+            flex: 1;
+            height: 24px;
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            border: 1px solid #E0E0E0;
+        }
+
+        .browser-content {
+            flex: 1;
+            padding: 20px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .import-visual {
+            text-align: center;
+        }
+
+        .file-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+        }
+
+        .arrow-icon {
+            width: 48px;
+            height: 24px;
+            margin: 0 auto;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* File input styling */
         .file-input-wrapper {
             position: relative;
             display: inline-block;
@@ -51,26 +188,54 @@
             cursor: pointer;
         }
 
-        .file-input-button {
-            background-color: #1890ff;
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary-color);
             color: white;
-            padding: 12px 24px;
-            border-radius: 6px;
             border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
             font-size: 16px;
+            font-weight: 500;
             cursor: pointer;
-            transition: background-color 0.3s;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            min-width: 120px;
         }
 
-        .file-input-button:hover {
-            background-color: #40a9ff;
+        .button:hover {
+            background-color: var(--primary-hover);
         }
 
+        .button.secondary {
+            background-color: transparent;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+
+        .button.secondary:hover {
+            background-color: rgba(66, 133, 244, 0.05);
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        /* Status messages */
         .status-message {
             margin-top: 20px;
-            padding: 12px;
+            padding: 12px 20px;
             border-radius: 6px;
             display: none;
+            font-size: 14px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .status-message.success {
@@ -109,37 +274,92 @@
             font-size: 16px;
         }
 
-        .close-button {
-            margin-top: 20px;
-            padding: 8px 16px;
-            background-color: #f0f0f0;
-            border: 1px solid #d9d9d9;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
         }
 
-        .close-button:hover {
-            background-color: #e8e8e8;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--text-light);
+            font-size: 12px;
+            padding: 16px 0;
+        }
+
+        .footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
 <div class="import-container">
-    <h1>Import Configuration</h1>
-    <p>Select a JSON configuration file to import your Open Headers rules.</p>
+    <div class="import-content">
+        <img src="images/icon128.png" alt="Open Headers Logo" class="import-logo">
+        <h1 class="page-title">Import Configuration</h1>
+        <p class="page-subtitle">Select a JSON configuration file to import your Open Headers rules.</p>
 
-    <div class="file-input-wrapper">
-        <input type="file" accept=".json" class="file-input" id="fileInput">
-        <button class="file-input-button" id="chooseFileButton">Choose File</button>
+        <div class="import-illustration">
+            <div class="browser-frame">
+                <div class="browser-header">
+                    <div class="browser-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <div class="browser-address-bar"></div>
+                </div>
+                <div class="browser-content">
+                    <div class="import-visual">
+                        <svg class="file-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M40 8H16C13.7909 8 12 9.79086 12 12V52C12 54.2091 13.7909 56 16 56H48C50.2091 56 52 54.2091 52 52V20L40 8Z" fill="#E8F0FE"/>
+                            <path d="M40 8V20H52L40 8Z" fill="#C9DDFC"/>
+                            <path d="M20 28H44M20 36H44M20 44H36" stroke="#4285F4" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M40 8H16C13.7909 8 12 9.79086 12 12V52C12 54.2091 13.7909 56 16 56H48C50.2091 56 52 54.2091 52 52V20L40 8Z" stroke="#4285F4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <svg class="arrow-icon" viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M24 2L24 22M24 22L14 12M24 22L34 12" stroke="#34A853" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="file-input-wrapper">
+            <input type="file" accept=".json" class="file-input" id="fileInput">
+            <button class="button" id="chooseFileButton">Choose File</button>
+        </div>
+
+        <div id="statusMessage" class="status-message"></div>
+        <div id="countdown" class="countdown">
+            Closing in <span class="countdown-number" id="countdownNumber">3</span> seconds...
+        </div>
+
+        <div class="button-container">
+            <button class="button secondary" id="closeButton">Cancel</button>
+        </div>
     </div>
+</div>
 
-    <div id="statusMessage" class="status-message"></div>
-    <div id="countdown" class="countdown">
-        Closing in <span class="countdown-number" id="countdownNumber">3</span> seconds...
-    </div>
-
-    <button class="close-button" id="closeButton">Close</button>
+<div class="footer">
+    <p>Open Headers v2.0.0 • <a href="https://github.com/OpenHeaders/open-headers-browser-extension" target="_blank">GitHub</a></p>
 </div>
 
 <script src="js/import.js"></script>
