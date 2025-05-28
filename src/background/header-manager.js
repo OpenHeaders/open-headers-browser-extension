@@ -10,6 +10,19 @@ import { validateHeaderName } from '../utils/header-validator.js';
 // Track headers using placeholders for badge notification
 let headersWithPlaceholders = [];
 
+// Helper function for safe message sending
+const sendMessageSafely = (message, callback) => {
+    runtime.sendMessage(message, (response) => {
+        const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+        if (browserAPI.runtime.lastError) {
+            // This is expected when no listeners are available
+            if (callback) callback(null, browserAPI.runtime.lastError);
+        } else {
+            if (callback) callback(response, null);
+        }
+    });
+};
+
 /**
  * Updates the network request rules based on saved data and dynamic sources.
  * Implements specialized handling for response headers to maximize compatibility.
@@ -78,18 +91,18 @@ export function updateNetworkRules(dynamicSources) {
             console.warn(`Info: ${headersWithPlaceholders.length} headers using diagnostic placeholders:`, headersWithPlaceholders);
 
             // Notify background script to update badge
-            runtime.sendMessage({
+            sendMessageSafely({
                 type: 'headersUsingPlaceholders',
                 headers: headersWithPlaceholders
-            }).catch(() => {
+            }, (response, error) => {
                 // Ignore errors when no listeners
             });
         } else {
             // Clear badge if no placeholders
-            runtime.sendMessage({
+            sendMessageSafely({
                 type: 'headersUsingPlaceholders',
                 headers: []
-            }).catch(() => {
+            }, (response, error) => {
                 // Ignore errors when no listeners
             });
         }
@@ -114,10 +127,10 @@ export function updateNetworkRules(dynamicSources) {
             }
         }).catch(e => {
             console.error('Error updating rules:', e.message || 'Unknown error');
-            runtime.sendMessage({
+            sendMessageSafely({
                 type: 'ruleUpdateError',
                 error: e.message || 'Unknown error'
-            }).catch(() => {
+            }, (response, error) => {
                 // Ignore errors when no popup is listening
             });
         });

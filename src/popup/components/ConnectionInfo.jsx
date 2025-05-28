@@ -4,6 +4,19 @@ import { InfoCircleOutlined, DownloadOutlined, CloseOutlined } from '@ant-design
 import { useHeader } from '../../hooks/useHeader';
 import { runtime, storage } from '../../utils/browser-api';
 
+// Helper function for safe message sending
+const sendMessageSafely = (message, callback) => {
+  runtime.sendMessage(message, (response) => {
+    const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+    if (browserAPI.runtime.lastError) {
+      console.log(`Info: Message '${message.type}' failed:`, browserAPI.runtime.lastError.message);
+      if (callback) callback(null, browserAPI.runtime.lastError);
+    } else {
+      if (callback) callback(response, null);
+    }
+  });
+};
+
 /**
  * Component showing connection information or instructions when disconnected
  */
@@ -35,9 +48,11 @@ const ConnectionInfo = () => {
 
   const handleOpenWelcomePage = () => {
     // Send message to background script to open welcome page
-    runtime.sendMessage({ type: 'forceOpenWelcomePage' }, () => {
-      // Close the popup after sending the message
-      window.close();
+    sendMessageSafely({ type: 'forceOpenWelcomePage' }, (response, error) => {
+      if (!error) {
+        // Close the popup after sending the message
+        window.close();
+      }
     });
   };
 

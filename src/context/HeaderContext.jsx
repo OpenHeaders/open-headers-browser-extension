@@ -3,6 +3,19 @@ import { storage, runtime } from '../utils/browser-api';
 import { generateUniqueId } from '../utils/utils';
 import { validateDomain } from '../utils/header-validator';
 
+// Helper function for safe message sending
+const sendMessageSafely = (message, callback) => {
+  runtime.sendMessage(message, (response) => {
+    const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+    if (browserAPI.runtime.lastError) {
+      console.log(`Info: Message '${message.type}' failed:`, browserAPI.runtime.lastError.message);
+      if (callback) callback(null, browserAPI.runtime.lastError);
+    } else {
+      if (callback) callback(response, null);
+    }
+  });
+};
+
 // Create context with default values
 const defaultContextValue = {
   headerEntries: {},
@@ -299,8 +312,8 @@ export const HeaderProvider = ({ children }) => {
         setDynamicSources(result.dynamicSources);
 
         // Check connection status
-        runtime.sendMessage({ type: 'checkConnection' }, (response) => {
-          if (response && response.connected === true) {
+        sendMessageSafely({ type: 'checkConnection' }, (response, error) => {
+          if (!error && response && response.connected === true) {
             setIsConnected(true);
           } else {
             setIsConnected(false);
@@ -564,8 +577,10 @@ export const HeaderProvider = ({ children }) => {
         });
 
         // Notify the background script to update rules
-        runtime.sendMessage({ type: 'rulesUpdated' }, (response) => {
-          console.log('Background notified of rule save/update', response);
+        sendMessageSafely({ type: 'rulesUpdated' }, (response, error) => {
+          if (!error) {
+            console.log('Background notified of rule save/update');
+          }
         });
 
         // Show success message
@@ -589,7 +604,7 @@ export const HeaderProvider = ({ children }) => {
           setHeaderEntries(savedData);
 
           // Notify the background script to update rules
-          runtime.sendMessage({ type: 'rulesUpdated' });
+          sendMessageSafely({ type: 'rulesUpdated' }, null);
         });
       }
     });
@@ -662,8 +677,10 @@ export const HeaderProvider = ({ children }) => {
           }
 
           // Notify the background script to update rules AND clear tracking
-          runtime.sendMessage({ type: 'rulesUpdated' }, (response) => {
-            console.log('Background notified of rule deletion', response);
+          sendMessageSafely({ type: 'rulesUpdated' }, (response, error) => {
+            if (!error) {
+              console.log('Background notified of rule deletion');
+            }
           });
 
           // Show success message
@@ -792,16 +809,25 @@ export const HeaderProvider = ({ children }) => {
     loadPopupState();
 
     // Notify background script that popup is open
-    runtime.sendMessage({ type: 'popupOpen' }, (response) => {
-      if (response && response.sources) {
+    sendMessageSafely({ type: 'popupOpen' }, (response, error) => {
+      if (!error && response && response.sources) {
         setDynamicSources(response.sources);
+      } else if (error) {
+        // Retry once after a short delay
+        setTimeout(() => {
+          sendMessageSafely({ type: 'popupOpen' }, (retryResponse, retryError) => {
+            if (!retryError && retryResponse && retryResponse.sources) {
+              setDynamicSources(retryResponse.sources);
+            }
+          });
+        }, 100);
       }
     });
 
     // Start connection status checker
     const connectionCheckInterval = setInterval(() => {
-      runtime.sendMessage({ type: 'checkConnection' }, (response) => {
-        if (response) {
+      sendMessageSafely({ type: 'checkConnection' }, (response, error) => {
+        if (!error && response) {
           setIsConnected(response.connected === true);
         }
       });

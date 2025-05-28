@@ -84,18 +84,41 @@ export const storage = {
   }
 };
 
-// Cross-browser runtime API
+// Cross-browser runtime API with improved error handling
 export const runtime = {
   getURL: (path) => browserAPI.runtime.getURL(path),
   sendMessage: (message, callback) => {
     if (isFirefox) {
-      return browserAPI.runtime.sendMessage(message).then(callback || (() => {})).catch(error => {
-        if (callback) {
-          callback({ error });
-        }
-      });
+      // Firefox uses promises
+      const promise = browserAPI.runtime.sendMessage(message);
+
+      if (callback) {
+        promise
+            .then(response => callback(response))
+            .catch(error => {
+              console.log('Info: Firefox message error:', error.message);
+              // Call callback with no response to maintain compatibility
+              callback(undefined);
+            });
+      }
+
+      return promise;
     } else {
-      return browserAPI.runtime.sendMessage(message, callback);
+      // Chrome/Edge use callbacks
+      try {
+        return browserAPI.runtime.sendMessage(message, (response) => {
+          // Chrome sets lastError if there was a problem
+          if (callback) {
+            callback(response);
+          }
+        });
+      } catch (error) {
+        console.log('Info: Chrome message error:', error.message);
+        if (callback) {
+          // Call callback with no response
+          setTimeout(() => callback(undefined), 0);
+        }
+      }
     }
   },
   onMessage: {
@@ -111,7 +134,16 @@ export const runtime = {
   onStartup: {
     addListener: (listener) => browserAPI.runtime.onStartup.addListener(listener),
     removeListener: (listener) => browserAPI.runtime.onStartup.removeListener(listener)
-  }
+  },
+  onConnect: browserAPI.runtime.onConnect ? {
+    addListener: (listener) => browserAPI.runtime.onConnect.addListener(listener),
+    removeListener: (listener) => browserAPI.runtime.onConnect.removeListener(listener)
+  } : null,
+  onSuspend: browserAPI.runtime.onSuspend ? {
+    addListener: (listener) => browserAPI.runtime.onSuspend.addListener(listener),
+    removeListener: (listener) => browserAPI.runtime.onSuspend.removeListener(listener)
+  } : null,
+  connect: (connectInfo) => browserAPI.runtime.connect(connectInfo)
 };
 
 // Cross-browser tabs API
@@ -136,7 +168,12 @@ export const tabs = {
     } else {
       return browserAPI.tabs.update(tabId, options, callback);
     }
-  }
+  },
+  onActivated: browserAPI.tabs.onActivated,
+  onUpdated: browserAPI.tabs.onUpdated,
+  onRemoved: browserAPI.tabs.onRemoved,
+  onReplaced: browserAPI.tabs.onReplaced,
+  onCreated: browserAPI.tabs.onCreated
 };
 
 // Cross-browser alarms API

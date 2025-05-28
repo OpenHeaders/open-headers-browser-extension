@@ -10,6 +10,19 @@ import { storage, runtime } from '../../utils/browser-api';
 
 const { Text, Link } = Typography;
 
+// Helper function for safe message sending
+const sendMessageSafely = (message, callback) => {
+  runtime.sendMessage(message, (response) => {
+    const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+    if (browserAPI.runtime.lastError) {
+      console.log(`Info: Message '${message.type}' failed:`, browserAPI.runtime.lastError.message);
+      if (callback) callback(null, browserAPI.runtime.lastError);
+    } else {
+      if (callback) callback(response, null);
+    }
+  });
+};
+
 /**
  * Professional footer component with labeled actions and version info
  */
@@ -84,22 +97,30 @@ const Footer = () => {
             if (config.dynamicSources && Array.isArray(config.dynamicSources)) {
               storage.local.set({ dynamicSources: config.dynamicSources }, () => {
                 // Notify the background script about the import
-                runtime.sendMessage({
+                sendMessageSafely({
                   type: 'configurationImported',
                   savedData: config.savedData,
                   dynamicSources: config.dynamicSources
+                }, (response, error) => {
+                  if (!error) {
+                    message.success('Configuration imported successfully');
+                  } else {
+                    message.warning('Configuration imported but background update failed');
+                  }
                 });
-
-                message.success('Configuration imported successfully');
               });
             } else {
               // Notify without dynamic sources
-              runtime.sendMessage({
+              sendMessageSafely({
                 type: 'configurationImported',
                 savedData: config.savedData
+              }, (response, error) => {
+                if (!error) {
+                  message.success('Configuration imported successfully');
+                } else {
+                  message.warning('Configuration imported but background update failed');
+                }
               });
-
-              message.success('Configuration imported successfully');
             }
           });
         } catch (parseError) {
@@ -120,19 +141,23 @@ const Footer = () => {
 
   // Handle opening the welcome page
   const handleOpenWelcomePage = () => {
-    runtime.sendMessage({ type: 'forceOpenWelcomePage' }, () => {
-      // Close the popup after sending the message
-      window.close();
+    sendMessageSafely({ type: 'forceOpenWelcomePage' }, (response, error) => {
+      if (!error) {
+        // Close the popup after sending the message
+        window.close();
+      }
     });
   };
 
   // Handle opening GitHub page
   const handleOpenGitHub = () => {
-    runtime.sendMessage({
+    sendMessageSafely({
       type: 'openTab',
       url: 'https://github.com/OpenHeaders/open-headers-browser-extension'
-    }, () => {
-      window.close();
+    }, (response, error) => {
+      if (!error) {
+        window.close();
+      }
     });
   };
 

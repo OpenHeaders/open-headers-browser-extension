@@ -21,6 +21,19 @@ let isConnected = false;
 let allSources = [];
 let welcomePageOpenedBySocket = false;
 
+// Helper function for safe message sending
+const sendMessageSafely = (message, callback) => {
+    runtime.sendMessage(message, (response) => {
+        const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+        if (browserAPI.runtime.lastError) {
+            // This is expected when no listeners are available
+            if (callback) callback(null, browserAPI.runtime.lastError);
+        } else {
+            if (callback) callback(response, null);
+        }
+    });
+};
+
 /**
  * Function to generate a simple hash of sources to detect changes
  * @param {Array} sources - Array of source objects
@@ -46,14 +59,11 @@ let lastRulesUpdateTime = 0;
 
 // Function to broadcast connection status to any open popups
 function broadcastConnectionStatus() {
-    runtime.sendMessage({
+    sendMessageSafely({
         type: 'connectionStatus',
         connected: isConnected
-    }).catch(err => {
-        // This error is expected when no popup is open
-        if (!err.message.includes("Could not establish connection")) {
-            console.log("Info: Could not send connection status - no listeners");
-        }
+    }, (response, error) => {
+        // Ignore errors - this is expected when no popup is open
     });
 }
 
@@ -331,18 +341,14 @@ export async function connectWebSocket(onSourcesReceived) {
                         }
 
                         // Notify any open popups that sources have been updated
-                        runtime.sendMessage({
+                        sendMessageSafely({
                             type: 'sourcesUpdated',
                             sources: allSources,
                             timestamp: Date.now(),
                             removedSourceIds: removedSourceIds.length > 0 ? removedSourceIds : undefined
-                        })
-                            .catch(err => {
-                                // This error is expected when no popup is listening
-                                if (!err.message.includes("Could not establish connection")) {
-                                    console.log("Info: No popup listening for source updates");
-                                }
-                            });
+                        }, (response, error) => {
+                            // Ignore errors - expected when no popup is listening
+                        });
                     });
                 }
             } catch (err) {
@@ -577,12 +583,14 @@ function connectFirefoxWss(onSourcesReceived) {
                             }
 
                             // Notify any open popups that sources have been updated
-                            runtime.sendMessage({
+                            sendMessageSafely({
                                 type: 'sourcesUpdated',
                                 sources: allSources,
                                 timestamp: Date.now(),
                                 removedSourceIds: removedSourceIds.length > 0 ? removedSourceIds : undefined
-                            }).catch(() => {});
+                            }, (response, error) => {
+                                // Ignore errors - expected when no popup is listening
+                            });
                         });
                     }
                 } catch (err) {
@@ -676,11 +684,13 @@ function connectFirefoxWs(onSourcesReceived) {
                         lastRulesUpdateTime = Date.now();
 
                         // Notify popups
-                        runtime.sendMessage({
+                        sendMessageSafely({
                             type: 'sourcesUpdated',
                             sources: allSources,
                             timestamp: Date.now()
-                        }).catch(() => {});
+                        }, (response, error) => {
+                            // Ignore errors - expected when no popup is listening
+                        });
                     });
                 }
             } catch (err) {
@@ -876,10 +886,9 @@ function handleConnectionFailure() {
         console.log('Info: Attempting to reconnect WebSocket...');
         connectWebSocket((sources) => {
             // This is the callback that will be used when reconnected
-            runtime.sendMessage({ type: 'sourcesUpdated', sources: sources })
-                .catch(() => {
-                    // Ignore errors when no popup is listening
-                });
+            sendMessageSafely({ type: 'sourcesUpdated', sources: sources }, (response, error) => {
+                // Ignore errors when no popup is listening
+            });
         });
     }, RECONNECT_DELAY_MS);
 }

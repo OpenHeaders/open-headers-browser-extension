@@ -1208,7 +1208,14 @@ runtime.onConnect?.addListener((port) => {
         }
 
         port.onDisconnect.addListener(() => {
-            console.log('Info: Popup closed, updating badge');
+            // Check for errors when popup disconnects
+            const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+            if (browserAPI.runtime.lastError) {
+                console.log('Info: Popup disconnect error:', browserAPI.runtime.lastError.message);
+            } else {
+                console.log('Info: Popup closed, updating badge');
+            }
+
             setTimeout(() => {
                 updateBadgeForCurrentTab();
             }, 100);
@@ -1464,130 +1471,150 @@ storage.onChanged.addListener((changes, area) => {
 
 // Listen for messages from popup and header-manager
 runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'popupOpen') {
-        console.log('Info: Popup opened, sending current sources');
-        // Send current sources to popup immediately
-        sendResponse({ type: 'sourcesUpdated', sources: getCurrentSources() });
-    } else if (message.type === 'checkConnection') {
-        // Respond with current connection status
-        const connected = isWebSocketConnected();
-        sendResponse({ connected: connected });
-    } else if (message.type === 'getDynamicSources') {
-        // Get the current sources and send them back
-        const currentSources = getCurrentSources();
-        sendResponse({
-            sources: currentSources,
-            connected: isWebSocketConnected()
-        });
-    } else if (message.type === 'rulesUpdated') {
-        // Handle rule update request (for enable/disable toggle)
-        console.log('Info: Rule update requested due to enable/disable toggle');
+    // Create a safe response function that checks if the channel is still open
+    const safeResponse = (data) => {
+        try {
+            sendResponse(data);
+        } catch (error) {
+            console.log('Info: Could not send response, channel closed');
+        }
+    };
 
-        // First revalidate tracked requests
-        revalidateTrackedRequests().then(() => {
-            // Update network rules with the current sources
-            updateNetworkRules(getCurrentSources());
+    // Handle each message type
+    try {
+        if (message.type === 'popupOpen') {
+            console.log('Info: Popup opened, sending current sources');
+            // Send current sources to popup immediately
+            const response = {
+                type: 'sourcesUpdated',
+                sources: getCurrentSources(),
+                connected: isWebSocketConnected()
+            };
+            safeResponse(response);
+        } else if (message.type === 'checkConnection') {
+            // Respond with current connection status
+            const connected = isWebSocketConnected();
+            safeResponse({ connected: connected });
+        } else if (message.type === 'getDynamicSources') {
+            // Get the current sources and send them back
+            const currentSources = getCurrentSources();
+            safeResponse({
+                sources: currentSources,
+                connected: isWebSocketConnected()
+            });
+        } else if (message.type === 'rulesUpdated') {
+            // Handle rule update request (for enable/disable toggle)
+            console.log('Info: Rule update requested');
 
-            // Update tracking variables
-            lastSourcesHash = generateSourcesHash(getCurrentSources());
-            lastRulesUpdateTime = Date.now();
+            // First revalidate tracked requests
+            revalidateTrackedRequests().then(() => {
+                // Update network rules with the current sources
+                updateNetworkRules(getCurrentSources());
 
-            // Force immediate badge update
+                // Update tracking variables
+                lastSourcesHash = generateSourcesHash(getCurrentSources());
+                lastRulesUpdateTime = Date.now();
+
+                // Force immediate badge update
+                updateBadgeForCurrentTab();
+
+                // Send response
+                safeResponse({ success: true });
+            }).catch(error => {
+                console.log('Info: Error updating rules:', error.message);
+                safeResponse({ success: false, error: error.message });
+            });
+
+            // Return true to indicate async response
+            return true;
+        } else if (message.type === 'headersUsingPlaceholders') {
+            // Update placeholder tracking from header-manager
+            headersUsingPlaceholders = message.headers || [];
+            console.log('Info: Headers using placeholders:', headersUsingPlaceholders.length);
+
+            // Update badge immediately
             updateBadgeForCurrentTab();
 
-            // Send response if callback provided
-            if (sendResponse) {
-                sendResponse({ success: true });
+            safeResponse({ acknowledged: true });
+        } else if (message.type === 'configurationImported') {
+            // Handle configuration import
+            console.log('Info: Configuration imported, updating rules');
+
+            // Clear all request tracking when importing new config
+            tabsWithActiveRules.clear();
+            console.log('Info: Cleared all request tracking after configuration import');
+
+            // If dynamic sources were provided, update them in storage
+            if (message.dynamicSources && Array.isArray(message.dynamicSources)) {
+                storage.local.set({ dynamicSources: message.dynamicSources }, () => {
+                    console.log('Info: Imported dynamic sources saved to storage:', message.dynamicSources.length);
+                });
             }
-        });
 
-        // Return true to indicate async response
-        return true;
-    } else if (message.type === 'headersUsingPlaceholders') {
-        // Update placeholder tracking from header-manager
-        headersUsingPlaceholders = message.headers || [];
-        console.log('Info: Headers using placeholders:', headersUsingPlaceholders.length);
+            // Update network rules with the current sources
+            // First try to get dynamic sources from the message
+            let dynamicSources = message.dynamicSources || [];
 
-        // Update badge immediately
-        updateBadgeForCurrentTab();
+            // If no sources in the message, get them from getCurrentSources()
+            if (dynamicSources.length === 0) {
+                dynamicSources = getCurrentSources();
+            }
 
-        if (sendResponse) {
-            sendResponse({ acknowledged: true });
-        }
-    } else if (message.type === 'configurationImported') {
-        // Handle configuration import
-        console.log('Info: Configuration imported, updating rules');
+            // Apply the rules
+            updateNetworkRules(dynamicSources);
 
-        // Clear all request tracking when importing new config
-        tabsWithActiveRules.clear();
-        console.log('Info: Cleared all request tracking after configuration import');
+            // Update tracking variables
+            lastSourcesHash = generateSourcesHash(dynamicSources);
+            lastRulesUpdateTime = Date.now();
 
-        // If dynamic sources were provided, update them in storage
-        if (message.dynamicSources && Array.isArray(message.dynamicSources)) {
-            storage.local.set({ dynamicSources: message.dynamicSources }, () => {
-                console.log('Info: Imported dynamic sources saved to storage:', message.dynamicSources.length);
+            // Update saved data hash if available
+            if (message.savedData) {
+                lastSavedDataHash = generateSavedDataHash(message.savedData);
+            }
+
+            // Update badge for current tab
+            updateBadgeForCurrentTab();
+
+            // Send response
+            safeResponse({ success: true });
+        } else if (message.type === 'sourcesUpdated') {
+            // This catches messages sent from the WebSocket to ensure the background
+            // script stays active and processes the updates immediately
+            console.log('Info: Background received sources update notification:',
+                message.sources ? message.sources.length : 0, 'sources at',
+                new Date(message.timestamp).toISOString());
+
+            // No need to update rules here as the WebSocket handler already does this
+            safeResponse({ acknowledged: true });
+        } else if (message.type === 'openWelcomePage') {
+            // This message type is no longer used - we don't want to open welcome page randomly
+            console.log('Info: Ignoring openWelcomePage request - welcome page should only open on install');
+            safeResponse({ acknowledged: true });
+        } else if (message.type === 'forceOpenWelcomePage') {
+            // FORCE open the welcome page (from the Guide button in popup)
+            console.log('Info: Force opening welcome page requested from popup');
+            openWelcomePageDirectly();
+            safeResponse({ acknowledged: true });
+        } else if (message.type === 'openTab') {
+            // Open a new tab with the specified URL
+            tabs.create({ url: message.url }, (tab) => {
+                if (chrome.runtime.lastError) {
+                    safeResponse({ success: false, error: chrome.runtime.lastError.message });
+                } else {
+                    safeResponse({ success: true, tabId: tab.id });
+                }
             });
+            return true; // Keep channel open for async response
+        } else {
+            // Unknown message type
+            console.log('Info: Unknown message type:', message.type);
+            safeResponse({ error: 'Unknown message type' });
         }
-
-        // Update network rules with the current sources
-        // First try to get dynamic sources from the message
-        let dynamicSources = message.dynamicSources || [];
-
-        // If no sources in the message, get them from getCurrentSources()
-        if (dynamicSources.length === 0) {
-            dynamicSources = getCurrentSources();
-        }
-
-        // Apply the rules
-        updateNetworkRules(dynamicSources);
-
-        // Update tracking variables
-        lastSourcesHash = generateSourcesHash(dynamicSources);
-        lastRulesUpdateTime = Date.now();
-
-        // Update saved data hash if available
-        if (message.savedData) {
-            lastSavedDataHash = generateSavedDataHash(message.savedData);
-        }
-
-        // Update badge for current tab
-        updateBadgeForCurrentTab();
-
-        // Send response if callback provided
-        if (sendResponse) {
-            sendResponse({ success: true });
-        }
-    } else if (message.type === 'sourcesUpdated') {
-        // This catches messages sent from the WebSocket to ensure the background
-        // script stays active and processes the updates immediately
-        console.log('Info: Background received sources update notification:',
-            message.sources ? message.sources.length : 0, 'sources at',
-            new Date(message.timestamp).toISOString());
-
-        // No need to update rules here as the WebSocket handler already does this
-        if (sendResponse) {
-            sendResponse({ acknowledged: true });
-        }
-    } else if (message.type === 'openWelcomePage') {
-        // This message type is no longer used - we don't want to open welcome page randomly
-        console.log('Info: Ignoring openWelcomePage request - welcome page should only open on install');
-        if (sendResponse) {
-            sendResponse({ acknowledged: true });
-        }
-    } else if (message.type === 'forceOpenWelcomePage') {
-        // FORCE open the welcome page (from the Guide button in popup)
-        console.log('Info: Force opening welcome page requested from popup');
-        openWelcomePageDirectly();
-        if (sendResponse) {
-            sendResponse({ acknowledged: true });
-        }
-    } else if (message.type === 'openTab') {
-        // Open a new tab with the specified URL
-        tabs.create({ url: message.url }, (tab) => {
-            sendResponse({ success: true, tabId: tab.id });
-        });
+    } catch (error) {
+        console.log('Info: Error handling message:', error.message);
+        safeResponse({ error: error.message });
     }
 
-    // Return true to indicate we'll use sendResponse asynchronously
+    // Return true for any async operations
     return true;
 });
