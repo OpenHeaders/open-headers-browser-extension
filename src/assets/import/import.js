@@ -33,7 +33,7 @@ const showStatus = (message, type) => {
 };
 
 // Show countdown and auto-close
-const showCountdownAndClose = (seconds = 3) => {
+const showCountdownAndClose = (seconds = 5) => {
     const countdownEl = document.getElementById('countdown');
     const countdownNumberEl = document.getElementById('countdownNumber');
 
@@ -110,7 +110,7 @@ const handleFileSelect = async (event) => {
             showStatus(successMessage, 'success');
 
             // Show countdown and auto-close
-            showCountdownAndClose(3);
+            showCountdownAndClose(5);
         } else {
             showStatus('Import failed: Unknown error', 'error');
         }

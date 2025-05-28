@@ -157,6 +157,14 @@ module.exports = {
                 {
                     from: 'src/assets/import/import.js',
                     to: 'js/import.js'
+                },
+                {
+                    from: 'src/assets/export/export.html',
+                    to: 'export.html'
+                },
+                {
+                    from: 'src/assets/export/export.js',
+                    to: 'js/export.js'
                 }
             ]
         })

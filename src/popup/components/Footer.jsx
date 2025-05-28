@@ -52,26 +52,62 @@ const Footer = () => {
 
       const data = await getDataPromise;
 
+      // Calculate stats
+      const ruleCount = Object.keys(data.savedData).length;
+      const sourceCount = data.dynamicSources.length;
+
       // Format timestamp for filename
       const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
       const filename = `open-headers-config-${timestamp}.json`;
 
-      // Create a blob and download link
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      // Create a blob
+      const jsonString = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const fileSize = (blob.size / 1024).toFixed(1) + ' KB';
 
-      // Create and click a download link
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
+      // For Firefox, show export success page
+      if (isFirefox) {
+        // First download the file
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
 
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 100);
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 100);
+
+        // Then open the export success page
+        const exportUrl = runtime.getURL(`export.html?filename=${encodeURIComponent(filename)}&rules=${ruleCount}&sources=${sourceCount}&size=${encodeURIComponent(fileSize)}`);
+        const response = await sendMessageSafely({
+          type: 'openTab',
+          url: exportUrl
+        });
+
+        if (!response.error) {
+          window.close();
+        }
+      } else {
+        // Chrome/Edge - just download as before
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 100);
+
+        message.success('Configuration exported successfully');
+      }
     } catch (error) {
       console.error('Export error:', error);
       message.error('Failed to export configuration');
