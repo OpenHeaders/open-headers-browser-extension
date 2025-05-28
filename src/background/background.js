@@ -1577,6 +1577,86 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
 
             // Send response
             safeResponse({ success: true });
+        } else if (message.type === 'importConfiguration') {
+            // Handle configuration import in the background script
+            console.log('Info: Handling configuration import in background');
+
+            try {
+                const { savedData, dynamicSources } = message.config;
+
+                if (!savedData) {
+                    safeResponse({ success: false, error: 'Invalid configuration: savedData missing' });
+                    return true;
+                }
+
+                // Save data to storage
+                storage.sync.set({ savedData }, () => {
+                    const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+
+                    if (browserAPI.runtime.lastError) {
+                        console.log('Info: Error saving savedData:', browserAPI.runtime.lastError.message);
+                        safeResponse({ success: false, error: 'Failed to save configuration' });
+                        return;
+                    }
+
+                    // Save dynamic sources if present
+                    if (dynamicSources && Array.isArray(dynamicSources)) {
+                        storage.local.set({ dynamicSources }, () => {
+                            if (browserAPI.runtime.lastError) {
+                                console.log('Info: Error saving dynamicSources:', browserAPI.runtime.lastError.message);
+                                safeResponse({ success: false, error: 'Failed to save dynamic sources' });
+                                return;
+                            }
+
+                            console.log('Info: Configuration imported successfully');
+
+                            // Clear all request tracking when importing new config
+                            tabsWithActiveRules.clear();
+                            console.log('Info: Cleared all request tracking after configuration import');
+
+                            // Update network rules with the imported sources
+                            updateNetworkRules(dynamicSources || getCurrentSources());
+
+                            // Update tracking variables
+                            lastSourcesHash = generateSourcesHash(dynamicSources || []);
+                            lastRulesUpdateTime = Date.now();
+                            lastSavedDataHash = generateSavedDataHash(savedData);
+
+                            // Update badge for current tab
+                            updateBadgeForCurrentTab();
+
+                            // Send success response
+                            safeResponse({ success: true });
+                        });
+                    } else {
+                        // No dynamic sources, just update rules
+                        console.log('Info: Configuration imported successfully (no dynamic sources)');
+
+                        // Clear all request tracking
+                        tabsWithActiveRules.clear();
+
+                        // Update network rules
+                        updateNetworkRules(getCurrentSources());
+
+                        // Update tracking variables
+                        lastRulesUpdateTime = Date.now();
+                        lastSavedDataHash = generateSavedDataHash(savedData);
+
+                        // Update badge
+                        updateBadgeForCurrentTab();
+
+                        // Send success response
+                        safeResponse({ success: true });
+                    }
+                });
+
+            } catch (error) {
+                console.log('Info: Import error in background:', error.message);
+                safeResponse({ success: false, error: error.message });
+            }
+
+            // Return true to indicate async response
+            return true;
         } else if (message.type === 'sourcesUpdated') {
             // This catches messages sent from the WebSocket to ensure the background
             // script stays active and processes the updates immediately

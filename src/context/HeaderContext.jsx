@@ -796,7 +796,44 @@ export const HeaderProvider = ({ children }) => {
         setIsConnected(message.connected);
       } else if (message.type === 'configurationImported') {
         // Refresh entries when configuration is imported
-        refreshHeaderEntries();
+        console.log('Info: Configuration imported, refreshing header entries');
+
+        // Update saved data if provided
+        if (message.savedData) {
+          setHeaderEntries(message.savedData);
+        } else {
+          // Otherwise refresh from storage
+          refreshHeaderEntries();
+        }
+
+        // Update dynamic sources if provided
+        if (message.dynamicSources && Array.isArray(message.dynamicSources)) {
+          setDynamicSources(message.dynamicSources);
+        }
+
+        // Clear any edit mode
+        setEditMode({
+          isEditing: false,
+          entryId: null
+        });
+
+        // Reset draft values
+        setDraftValues({
+          headerName: '',
+          headerValue: '',
+          domains: [],
+          valueType: 'static',
+          sourceId: '',
+          prefix: '',
+          suffix: '',
+          isResponse: false
+        });
+
+        // Collapse the form
+        setUiState(prev => ({
+          ...prev,
+          formCollapsed: false  // false = collapsed
+        }));
       }
     };
 

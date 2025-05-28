@@ -149,6 +149,14 @@ module.exports = {
                 {
                     from: 'src/assets/welcome/welcome.js',
                     to: 'js/welcome.js'
+                },
+                {
+                    from: 'src/assets/import/import.html',
+                    to: 'import.html'
+                },
+                {
+                    from: 'src/assets/import/import.js',
+                    to: 'js/import.js'
                 }
             ]
         })
