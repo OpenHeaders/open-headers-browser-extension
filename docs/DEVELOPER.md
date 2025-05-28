@@ -1,466 +1,500 @@
 # Open Headers - Developer Documentation
 
-This document contains technical information for developers who want to contribute to the Open Headers browser extension.
+This document contains technical information for developers who want to understand, build, or contribute to the Open Headers browser extension.
 
-## Architecture
+## 🏗️ Architecture Overview
 
-### Overview
-
-Open Headers is a modern browser extension built with **React 18** and **Ant Design 5**, featuring an Apple-like minimalist design. The extension uses a hybrid architecture combining React for the frontend UI with vanilla JavaScript for the background service worker to ensure maximum browser compatibility.
+Open Headers is a modern browser extension built with **React 18** and **Ant Design 5**, featuring a professional, Apple-inspired design. The extension uses a hybrid architecture combining React for the frontend UI with vanilla JavaScript for the background service worker to ensure maximum browser compatibility.
 
 ### Technology Stack
 
 - **Frontend Framework**: React 18 with functional components and hooks
-- **UI Library**: Ant Design 5 with custom Apple-like theming
+- **UI Library**: Ant Design 5 with custom theming
 - **Build System**: Webpack 5 with Babel for ES6+ and JSX compilation
 - **State Management**: React Context API for global application state
 - **Styling**: LESS with CSS custom properties for theming
 - **Background Service**: Vanilla JavaScript for cross-browser compatibility
 - **Module Bundling**: Browser-specific webpack configurations
+- **Package Management**: npm
+- **Version Control**: Git
 
-### Components
+### Core Components
 
-The extension consists of these main components:
+1. **React Popup UI** (`src/popup/`)
+   - Modern React-based interface with Ant Design components
+   - Component-based architecture with reusable UI elements
+   - Real-time state updates and validation
 
-- **React Popup UI**: Modern React-based interface with Ant Design components
-- **Background Service Worker**: Vanilla JS that manages header rules and WebSocket connections
-- **React Context System**: Global state management for header entries and dynamic sources
-- **Header Rule System**: Applies headers to matching requests using declarativeNetRequest API
-- **Welcome Page**: Interactive vanilla JS multi-step onboarding experience
-- **WebSocket Client**: Connects to the companion app for dynamic sources
+2. **Background Service Worker** (`src/background/`)
+   - Manages header rules using browser's declarativeNetRequest API
+   - WebSocket client for companion app communication
+   - Request tracking and badge updates
 
-### Modules
+3. **React Context System** (`src/context/`)
+   - `HeaderContext`: Global state for header entries and dynamic sources
+   - `ThemeContext`: Dark/light mode management
 
-| Module | Technology | Description |
-|--------|------------|-------------|
-| `src/popup/App.jsx` | React 18 | Main popup application component with routing and context providers |
-| `src/popup/components/` | React + Ant Design | Reusable UI components (HeaderForm, HeaderList, etc.) |
-| `src/context/HeaderContext.jsx` | React Context | Global state management for headers and dynamic sources |
-| `src/hooks/useHeader.js` | React Hooks | Custom hook for header management logic |
-| `src/background/background.js` | Vanilla JS | Main background service worker coordinator |
-| `src/background/header-manager.js` | Vanilla JS | Creates and updates browser's declarativeNetRequest rules |
-| `src/background/websocket.js` | Vanilla JS | Manages WebSocket connection to companion app |
-| `src/background/rule-validator.js` | Vanilla JS | Validates and sanitizes header values |
-| `src/utils/browser-api.js` | Vanilla JS | Browser detection and compatibility layer |
-| `src/assets/welcome/welcome.js` | Vanilla JS | Interactive welcome page functionality |
+4. **Welcome Experience** (`src/assets/welcome/`)
+   - Interactive multi-step onboarding
+   - Browser-specific setup instructions
+   - Connection verification flow
 
-### Data Flow
+5. **Import/Export System** (`src/assets/import/`, `src/assets/export/`)
+   - Dedicated pages for configuration management
+   - Browser-specific implementations (Firefox uses separate pages)
 
-1. **User Interaction**: User configures headers through React components
-2. **State Management**: React Context manages application state and form data
-3. **Persistence**: Configurations saved to browser storage via React effects
-4. **Background Processing**: Background service worker creates declarativeNetRequest rules
-5. **Dynamic Updates**: WebSocket connection receives source updates from companion app
-6. **UI Synchronization**: React components re-render with updated data from context
+## 📁 Project Structure
 
-### React Architecture
-
-#### Component Structure
 ```
-src/popup/
-├── App.jsx                    # Main app wrapper with providers
-├── index.jsx                  # React app entry point
-├── components/
-│   ├── HeaderForm.jsx         # Form for adding/editing headers
-│   ├── HeaderList.jsx         # List of saved header entries
-│   ├── HeaderTable.jsx        # Table view for header management
-│   ├── DomainTags.jsx         # Multi-domain input component
-│   ├── ConnectionInfo.jsx     # Connection status display
-│   ├── Header.jsx             # App header component
-│   └── Footer.jsx             # App footer component
-└── styles/
-    └── popup.less             # Main stylesheet with Ant Design theming
+open-headers-browser-extension/
+├── src/                          # Source code
+│   ├── popup/                    # React popup application
+│   │   ├── App.jsx              # Main app component with providers
+│   │   ├── index.jsx            # React entry point
+│   │   ├── popup.html           # HTML template
+│   │   ├── components/          # React components
+│   │   │   ├── Header.jsx       # App header with theme toggle
+│   │   │   ├── HeaderForm.jsx   # Form for adding/editing headers
+│   │   │   ├── HeaderTable.jsx  # Professional table view
+│   │   │   ├── HeaderList.jsx   # Wrapper for table
+│   │   │   ├── DomainTags.jsx   # Multi-domain input component
+│   │   │   ├── ConnectionInfo.jsx # Connection status alerts
+│   │   │   └── Footer.jsx       # Import/export and links
+│   │   └── styles/
+│   │       └── popup.less       # Main stylesheet with Ant Design theming
+│   │
+│   ├── background/              # Background service worker
+│   │   ├── index.js            # Entry point
+│   │   ├── background.js       # Main background logic
+│   │   ├── header-manager.js   # DeclarativeNetRequest rule management
+│   │   ├── websocket.js        # WebSocket client
+│   │   ├── rule-validator.js   # Header validation
+│   │   └── safari-websocket-adapter.js # Safari-specific handling
+│   │
+│   ├── context/                 # React Context providers
+│   │   ├── HeaderContext.jsx    # Global header state management
+│   │   ├── ThemeContext.jsx     # Theme management
+│   │   └── index.js            # Context exports
+│   │
+│   ├── hooks/                   # Custom React hooks
+│   │   └── useHeader.js        # Header context hook
+│   │
+│   ├── components/              # Shared components
+│   │   └── ErrorBoundary.jsx   # Error handling wrapper
+│   │
+│   ├── utils/                   # Shared utilities
+│   │   ├── browser-api.js      # Cross-browser API wrapper
+│   │   ├── header-validator.js  # Validation functions
+│   │   └── utils.js            # Common utilities
+│   │
+│   └── assets/                  # Static assets
+│       ├── images/             # Extension icons
+│       ├── welcome/            # Welcome page
+│       ├── import/             # Import page
+│       └── export/             # Export success page
+│
+├── config/                      # Build configuration
+│   ├── webpack/                # Webpack configs
+│   │   ├── webpack.common.js   # Shared config
+│   │   ├── webpack.chrome.js   # Chrome-specific
+│   │   ├── webpack.firefox.js  # Firefox-specific
+│   │   ├── webpack.edge.js     # Edge-specific
+│   │   └── webpack.safari.js   # Safari-specific
+│   └── scripts/                # Build scripts
+│       ├── build-utils.js      # Build helpers
+│       └── release.js          # Release packaging
+│
+├── manifests/                   # Browser manifests
+│   ├── chrome/manifest.json
+│   ├── firefox/manifest.json
+│   ├── edge/manifest.json
+│   └── safari/
+│       ├── manifest.json
+│       └── SafariAPIs.js       # Safari compatibility layer
+│
+├── docs/                        # Documentation
+├── package.json                 # Dependencies and scripts
+└── .babelrc                     # Babel configuration
 ```
 
-#### State Management
-- **React Context**: Global state for header entries, dynamic sources, and connection status
-- **Local State**: Component-level state for forms, UI interactions, and temporary data
-- **Browser Storage**: Persistent storage managed through React effects and custom hooks
+## 🔄 Data Flow Architecture
 
-#### Styling and Theming
-- **Design System**: Apple-like minimalist aesthetic with clean typography
-- **Primary Color**: #4285F4 (Google Blue) used throughout the interface
-- **Typography**: SF Pro Text font family for iOS/macOS feel
-- **Components**: Ant Design 5 components with custom theming via ConfigProvider
-- **Responsive Design**: Optimized for browser extension popup dimensions (400px width)
+### State Management Flow
 
-## Development
+1. **User Interaction** → React Components
+2. **State Updates** → React Context (HeaderContext)
+3. **Persistence** → Browser Storage API
+4. **Background Sync** → Service Worker
+5. **Rule Application** → DeclarativeNetRequest API
+6. **Dynamic Updates** → WebSocket → Companion App
+
+### Component Communication
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   React Popup   │────▶│  Header Context │────▶│ Browser Storage │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                       │                         │
+         │                       ▼                         ▼
+         │              ┌─────────────────┐     ┌─────────────────┐
+         └─────────────▶│ Background SW   │────▶│ Network Rules   │
+                        └─────────────────┘     └─────────────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │ WebSocket Client│
+                        └─────────────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │ Companion App   │
+                        └─────────────────┘
+```
+
+## 🛠️ Development Setup
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 16.0 or higher
-- [npm](https://www.npmjs.com/) 8.0 or higher
-- Basic knowledge of React 18, hooks, and modern JavaScript
-- Familiarity with Ant Design 5 components
+- Node.js 16.0 or higher
+- npm 8.0 or higher
+- Git
+- A code editor (VS Code recommended)
+- Browser(s) for testing
 
-### Setup
+### Initial Setup
 
-1. Clone the repository:
+1. **Clone the repository**
    ```bash
    git clone https://github.com/OpenHeaders/open-headers-browser-extension.git
    cd open-headers-browser-extension
    ```
 
-2. Install dependencies:
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-3. Start the development build:
+3. **Start development build**
    ```bash
-   npm run dev           # Watch mode for all browsers
-   # Or for specific browsers:
-   npm run dev:chrome    # Watch mode for Chrome
-   npm run dev:firefox   # Watch mode for Firefox
-   npm run dev:edge      # Watch mode for Edge
-   npm run dev:safari    # Watch mode for Safari
+   # Watch mode for all browsers
+   npm run dev
+
+   # Or for specific browser
+   npm run dev:chrome    # Chrome development
+   npm run dev:firefox   # Firefox development
+   npm run dev:edge      # Edge development
+   npm run dev:safari    # Safari development
    ```
 
-4. Build production versions:
-   ```bash
-   npm run build         # Build for all browsers
-   # Or for specific browsers:
-   npm run build:chrome  # Build for Chrome
-   npm run build:firefox # Build for Firefox
-   npm run build:edge    # Build for Edge
-   npm run build:safari  # Build for Safari
-   ```
+4. **Load the extension**
+   - Chrome/Edge: Navigate to extensions page, enable Developer Mode, click "Load unpacked", select `dist/chrome` or `dist/edge`
+   - Firefox: Navigate to `about:debugging`, click "Load Temporary Add-on", select `manifest.json` in `dist/firefox`
+   - Safari: Run `npm run safari:convert` after building, then open in Xcode
 
-### Project Structure
+### Build Commands
 
-```
-open-headers/
-├── src/                     # Modern React application source
-│   ├── popup/               # React popup application
-│   │   ├── App.jsx          # Main popup component with providers
-│   │   ├── index.jsx        # React app entry point
-│   │   ├── popup.html       # HTML template for popup
-│   │   ├── components/      # Reusable React components
-│   │   │   ├── HeaderForm.jsx    # Form for adding/editing headers
-│   │   │   ├── HeaderList.jsx    # List component for headers
-│   │   │   ├── HeaderTable.jsx   # Table view for header management
-│   │   │   ├── DomainTags.jsx    # Multi-domain input component
-│   │   │   ├── ConnectionInfo.jsx # Connection status component
-│   │   │   ├── Header.jsx        # App header
-│   │   │   └── Footer.jsx        # App footer
-│   │   └── styles/          # LESS stylesheets
-│   │       └── popup.less   # Main stylesheet with Ant Design theming
-│   │
-│   ├── background/          # Background service worker (vanilla JS)
-│   │   ├── index.js         # Entry point for background script
-│   │   ├── background.js    # Main background worker logic
-│   │   ├── header-manager.js # Header rule management
-│   │   ├── rule-validator.js # Header validation
-│   │   ├── websocket.js     # WebSocket client
-│   │   └── safari-websocket-adapter.js # Safari-specific handling
-│   │
-│   ├── context/             # React Context providers
-│   │   └── HeaderContext.jsx # Global state management
-│   │
-│   ├── hooks/               # Custom React hooks
-│   │   └── useHeader.js     # Header management hook
-│   │
-│   ├── utils/               # Shared utility functions
-│   │   ├── browser-api.js   # Browser compatibility layer
-│   │   ├── utils.js         # Common utilities
-│   │   └── header-validator.js # Header validation utilities
-│   │
-│   └── assets/              # Static assets
-│       ├── images/          # Extension icons and images
-│       └── welcome/         # Welcome page files (vanilla JS)
-│           ├── welcome.html # Welcome page HTML
-│           └── welcome.js   # Welcome page JavaScript
-│
-├── manifests/               # Browser-specific manifest files
-│   ├── chrome/manifest.json # Chrome manifest
-│   ├── firefox/manifest.json # Firefox manifest
-│   ├── edge/manifest.json   # Edge manifest
-│   └── safari/manifest.json # Safari manifest
-│
-├── config/                  # Build configuration
-│   ├── webpack/             # Webpack configurations
-│   │   ├── webpack.common.js # Common webpack config
-│   │   ├── webpack.chrome.js # Chrome-specific config
-│   │   ├── webpack.firefox.js # Firefox-specific config
-│   │   ├── webpack.edge.js   # Edge-specific config
-│   │   └── webpack.safari.js # Safari-specific config
-│   └── scripts/             # Build and utility scripts
-│
-├── docs/                    # Documentation
-├── dist/                    # Build output (gitignored)
-├── releases/                # Release packages (gitignored)
-├── package.json
-└── README.md
+```bash
+# Production builds
+npm run build          # Build all browsers
+npm run build:chrome   # Chrome only
+npm run build:firefox  # Firefox only
+npm run build:edge     # Edge only
+npm run build:safari   # Safari only
+
+# Create release packages
+npm run release        # Creates .zip files in releases/
 ```
 
-### React Development Workflow
+## 🏛️ Architecture Details
 
-1. **Component Development**:
-   - Create new components in `src/popup/components/`
-   - Use functional components with hooks
-   - Follow Ant Design component patterns
-   - Implement proper TypeScript-like prop validation
+### React Components
 
-2. **State Management**:
-   - Use React Context for global state
-   - Leverage custom hooks for reusable logic
-   - Manage side effects with useEffect
+#### Core Components
 
-3. **Styling**:
-   - Use Ant Design components as base
-   - Customize with LESS variables and CSS custom properties
-   - Follow the Apple-like design system
-   - Ensure responsive design for popup constraints
+1. **App.jsx**
+   - Main application wrapper
+   - Provides context providers and error boundary
+   - Handles popup lifecycle events
 
-4. **Testing Changes**:
-   ```bash
-   npm run build:chrome  # Build for testing
-   # Load extension in Chrome developer mode
-   # Test React components and state management
-   ```
+2. **HeaderForm.jsx**
+   - Complex form with real-time validation
+   - Dynamic source selection
+   - Domain pattern management
+   - Prefix/suffix formatting
 
-### Development Guidelines
+3. **HeaderTable.jsx**
+   - Advanced table with sorting and filtering
+   - Real-time status indicators
+   - Inline enable/disable toggles
+   - Search functionality
 
-#### React Best Practices
-- Use functional components with hooks exclusively
-- Implement proper error boundaries for robust UX
-- Use React.memo for performance optimization where needed
-- Follow React 18 concurrent features best practices
-- Maintain clean component separation of concerns
+4. **DomainTags.jsx**
+   - Tag-based domain input
+   - Comma/Enter separated input
+   - Validation on input
+   - Edit capabilities
 
-#### Ant Design Integration
-- Use Ant Design components as the foundation
-- Customize theme through ConfigProvider
-- Follow Ant Design design principles
-- Ensure accessibility through proper ARIA attributes
-- Use consistent spacing and typography scales
+#### State Management
 
-#### State Management Patterns
-- Use React Context for truly global state
-- Keep component state local when possible
-- Implement proper error handling in state updates
-- Use custom hooks to encapsulate complex logic
-- Maintain predictable state updates
+**HeaderContext** manages:
+- Header entries (CRUD operations)
+- Dynamic sources from companion app
+- Connection status
+- Edit mode state
+- Form draft values
+- UI state persistence
 
-## Browser Compatibility
+**ThemeContext** manages:
+- Theme mode (light/dark/auto)
+- System preference detection
+- Ant Design theme configuration
 
-Open Headers supports multiple browsers with specific adaptations for each:
+### Background Service Architecture
 
-### Cross-Browser Implementation
+#### Key Modules
 
-#### React Frontend Compatibility
-- **All Browsers**: React components work consistently across all supported browsers
-- **Webpack Builds**: Browser-specific optimizations in webpack configurations
-- **Ant Design**: Full compatibility across Chrome, Firefox, Edge, and Safari
-- **CSS**: LESS compilation with browser-specific vendor prefixes
+1. **background.js**
+   - Main coordination point
+   - Message handling from popup
+   - Request monitoring
+   - Badge updates
 
-#### Background Service Worker
-- **Chrome/Edge**: Full React dev tools support, optimal performance
-- **Firefox**: Enhanced CSP handling, proper source map generation
-- **Safari**: WebKit-specific optimizations, memory management
+2. **header-manager.js**
+   - Creates declarativeNetRequest rules
+   - Handles dynamic value substitution
+   - Manages placeholder values
 
-### WebSocket Security Implementation
+3. **websocket.js**
+   - WebSocket client implementation
+   - Browser-specific connection handling
+   - Automatic reconnection
+   - Source synchronization
 
-**Firefox Enhanced Security (v1.2.0+)**:
-- Secure WebSocket (`wss://`) on port 59211 with certificate handling
-- Fallback to standard WebSocket (`ws://`) on port 59210
-- Interactive certificate acceptance through welcome page
-- Connection state persistence across sessions
+4. **rule-validator.js**
+   - Header name/value validation
+   - Browser API compliance
+   - Sanitization functions
 
-**Chrome/Edge Standard Implementation**:
+### Browser-Specific Implementations
+
+#### Chrome/Edge
 - Standard WebSocket on port 59210
-- Simplified connection flow
-- Optimal performance for React state updates
+- Direct file input for import
+- Service worker with full API support
 
-**Safari WebKit Adaptations**:
-- Custom WebSocket adapter for Safari's security model
-- Special handling for WebKit memory management
-- React performance optimizations for Safari
+#### Firefox
+- Secure WebSocket (wss://) on port 59211
+- Certificate acceptance flow
+- Separate import/export pages
+- Enhanced CSP handling
 
-### Testing Cross-Browser
+#### Safari
+- Custom API adapters in SafariAPIs.js
+- Xcode project generation
+- WebKit-specific optimizations
 
-When testing React components and functionality:
+## 🔧 Key Implementation Details
 
-1. **React DevTools**: Use React Developer Tools in each browser
-2. **Component Rendering**: Verify React components render consistently
-3. **State Management**: Test React Context state updates
-4. **Ant Design Components**: Verify UI component behavior
-5. **WebSocket Integration**: Test real-time state updates from background
-6. **Form Validation**: Test React form validation across browsers
+### Dynamic Source System
 
-## Testing
+1. **Source Types**
+   - HTTP requests
+   - Environment variables
+   - Local files
 
-### React Component Testing
+2. **Value Resolution**
+   ```javascript
+   // When connected and source available
+   finalValue = prefix + sourceContent + suffix
 
-1. **Component Rendering**:
-   ```bash
-   # Load extension in browser
-   # Open popup and verify React components render
-   # Test form interactions and state updates
-   # Verify Ant Design components work properly
+   // When disconnected
+   finalValue = "[APP_DISCONNECTED]"
+
+   // When source not found
+   finalValue = "[SOURCE_NOT_FOUND:id]"
+
+   // When source empty
+   finalValue = "[EMPTY_SOURCE:id]"
    ```
 
-2. **State Management Testing**:
-   - Test React Context state updates
-   - Verify proper re-rendering on state changes
-   - Test error boundaries and error handling
-   - Validate form state management
+3. **Real-time Updates**
+   - WebSocket receives source changes
+   - Background script updates rules
+   - Badge reflects current state
 
-3. **Integration Testing**:
-   - Test background script integration with React state
-   - Verify WebSocket data updates React components
-   - Test browser storage integration with React state
-   - Validate cross-tab state synchronization
+### Validation System
 
-### Manual Testing with React DevTools
+The extension implements comprehensive validation:
+
+1. **Header Names**
+   - Checks against browser-forbidden headers
+   - RFC 7230 compliance
+   - Context-aware (request vs response)
+
+2. **Header Values**
+   - Character validation
+   - Length limits (8192 chars)
+   - Control character detection
+
+3. **Domain Patterns**
+   - URL pattern validation
+   - Wildcard support
+   - Conflict detection
+   - IPv4/IPv6 support
+
+### Storage Architecture
+
+```javascript
+// Sync storage (cross-device)
+{
+  savedData: {
+    "entryId": {
+      headerName: string,
+      headerValue: string,
+      domains: string[],
+      isDynamic: boolean,
+      sourceId: string,
+      prefix: string,
+      suffix: string,
+      isResponse: boolean,
+      isEnabled: boolean
+    }
+  }
+}
+
+// Local storage (device-specific)
+{
+  dynamicSources: [...],
+  popupState: {...},
+  themeMode: "light" | "dark" | "auto",
+  connectionAlertDismissed: boolean
+}
+```
+
+## 🧪 Testing & Debugging
+
+### React DevTools
 
 1. Install React Developer Tools extension
 2. Open Open Headers popup
-3. Navigate to React DevTools
-4. Inspect component tree and state
-5. Test state updates and prop changes
-6. Verify context provider data flow
+3. Inspect component tree and state
+4. Monitor re-renders and performance
 
-### Welcome Page Testing
+### Debug Mode
 
-The welcome page remains vanilla JavaScript for maximum compatibility:
-1. Reset storage to simulate first install
-2. Verify welcome page appearance and flow
-3. Test browser-specific step visibility
-4. Validate connection detection and state updates
-
-## Building for Distribution
-
-### Production Build Process
-
-```bash
-npm run build
+Enable verbose logging:
+```javascript
+// In background.js
+console.log('Info: Detailed logging enabled');
 ```
 
-**React Build Optimizations**:
-- React production build with optimizations
-- Ant Design tree-shaking for smaller bundle size
-- CSS extraction and minification
-- Browser-specific optimizations
+### Common Debugging Areas
 
-**Build Outputs**:
-- React popup bundle: Optimized for each browser
-- Background service worker: Cross-browser vanilla JS
-- Ant Design styles: Extracted and minified CSS
-- Static assets: Images and welcome page files
+1. **WebSocket Connection**
+   - Check port availability (59210/59211)
+   - Verify companion app is running
+   - Check browser console for errors
 
-### Code Splitting and Optimization
+2. **Header Application**
+   - Use browser DevTools Network tab
+   - Check for rule conflicts
+   - Verify domain patterns match
 
-- **React Components**: Bundled efficiently with Webpack
-- **Ant Design**: Tree-shaken to include only used components
-- **LESS Compilation**: Optimized CSS output with vendor prefixes
-- **Browser Targets**: Specific builds for Chrome, Firefox, Edge, Safari
+3. **State Management**
+   - Use React DevTools
+   - Check browser storage
+   - Monitor Context updates
 
-## Implementation Details
+## 🚀 Performance Considerations
 
-### React Context Architecture
+### Optimization Strategies
 
-```javascript
-// HeaderContext.jsx - Global state management
-const HeaderContext = createContext();
+1. **React Optimization**
+   - Use React.memo for expensive components
+   - Implement proper key props
+   - Avoid unnecessary re-renders
 
-export const HeaderProvider = ({ children }) => {
-  const [headers, setHeaders] = useState([]);
-  const [dynamicSources, setDynamicSources] = useState([]);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+2. **Background Script**
+   - Debounced rule updates
+   - Efficient request tracking
+   - Memory leak prevention
+
+3. **Storage**
+   - Minimal storage writes
+   - Batch updates when possible
+   - Clean up old data
+
+### Bundle Size
+
+- React + Ant Design: ~500KB (minified)
+- Background scripts: ~50KB
+- Total extension size: ~1MB
+
+## 🔒 Security Considerations
+
+1. **Content Security Policy**
+   - Strict CSP in manifest
+   - No inline scripts
+   - Limited external connections
+
+2. **Input Validation**
+   - All user inputs validated
+   - XSS prevention
+   - Injection attack protection
+
+3. **Communication**
+   - Local-only WebSocket
+   - No external data transmission
+   - Secure storage practices
+
+## 📝 Code Style Guidelines
+
+### React Components
+```jsx
+// Use functional components with hooks
+const MyComponent = ({ prop1, prop2 }) => {
+  const [state, setState] = useState(initialValue);
   
-  // Context value with state and methods
-  const contextValue = {
-    headers,
-    dynamicSources,
-    connectionStatus,
-    addHeader,
-    updateHeader,
-    deleteHeader,
-    refreshSources
-  };
+  useEffect(() => {
+    // Side effects
+  }, [dependencies]);
   
   return (
-    <HeaderContext.Provider value={contextValue}>
-      {children}
-    </HeaderContext.Provider>
+    <div>
+      {/* JSX content */}
+    </div>
   );
 };
+
+// Export with React.memo when appropriate
+export default React.memo(MyComponent);
 ```
 
-### Ant Design Theming
+### Naming Conventions
+- Components: PascalCase (e.g., `HeaderForm`)
+- Files: Match component name (e.g., `HeaderForm.jsx`)
+- Hooks: camelCase with 'use' prefix (e.g., `useHeader`)
+- Constants: UPPER_SNAKE_CASE
+- Functions: camelCase
 
-```javascript
-// App.jsx - Custom theme configuration
-const customTheme = {
-  token: {
-    colorPrimary: '#4285F4',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto',
-    borderRadius: 8,
-    colorBgContainer: '#ffffff'
-  },
-  components: {
-    Button: {
-      borderRadius: 8,
-      fontWeight: 500
-    },
-    Input: {
-      borderRadius: 6
-    }
-  }
-};
+## 🤝 Contributing
 
-<ConfigProvider theme={customTheme}>
-  <App />
-</ConfigProvider>
-```
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed contribution guidelines.
 
-### Form Management with Ant Design
+## 📚 Additional Resources
 
-```javascript
-// HeaderForm.jsx - Form component with validation
-const HeaderForm = () => {
-  const [form] = Form.useForm();
-  const { addHeader } = useContext(HeaderContext);
-  
-  const onFinish = (values) => {
-    addHeader(values);
-    form.resetFields();
-  };
-  
-  return (
-    <Form form={form} onFinish={onFinish} layout="vertical">
-      <Form.Item
-        name="headerName"
-        label="Header Name"
-        rules={[{ required: true, message: 'Please enter header name' }]}
-      >
-        <Input placeholder="e.g., Authorization" />
-      </Form.Item>
-      {/* Additional form fields */}
-    </Form>
-  );
-};
-```
+- [React Documentation](https://react.dev/)
+- [Ant Design Components](https://ant.design/components/overview)
+- [Chrome Extension APIs](https://developer.chrome.com/docs/extensions/reference/)
+- [WebExtensions API](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions)
 
-## Contributing
+## 🐛 Known Issues & Limitations
 
-### React Development Contributions
+1. **Safari WebSocket**: Limited support, may require additional permissions
+2. **Firefox CSP**: Stricter content security policy requires certificate acceptance
+3. **Response Headers**: Limited visibility in DevTools due to browser restrictions
+4. **Dynamic Sources**: Require companion app to be running
 
-When contributing React components:
+## 📄 License
 
-1. **Follow React 18 Patterns**: Use modern hooks and concurrent features
-2. **Ant Design Standards**: Follow Ant Design component guidelines
-3. **Apple Design Language**: Maintain minimalist, clean aesthetic
-4. **Performance**: Use React.memo and useMemo where appropriate
-5. **Accessibility**: Ensure proper ARIA attributes and keyboard navigation
-
-### Code Style Guidelines
-
-- **Components**: Use functional components with descriptive names
-- **Hooks**: Extract complex logic into custom hooks
-- **Props**: Use destructuring and provide default values
-- **State**: Keep state as local as possible, use Context for global state
-- **Styling**: Follow LESS conventions and maintain design consistency
-
-For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+This project is licensed under the MIT License.
