@@ -4,10 +4,10 @@ const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = merge(common, {
-    mode: 'development',  // Use development mode instead of production
+    mode: 'development',
     devtool: 'inline-source-map',
     optimization: {
-        minimize: false     // Disable minimization
+        minimize: false
     },
     output: {
         path: path.resolve(__dirname, '../../dist/dev'),
@@ -15,10 +15,8 @@ module.exports = merge(common, {
     plugins: [
         new CopyPlugin({
             patterns: [
-                { from: 'chrome/manifest.json' },
-                { from: 'shared/popup.html' },
-                { from: 'shared/popup.css' },
-                { from: 'shared/images', to: 'images' }
+                { from: 'manifests/chrome/manifest.json' },
+                { from: 'src/assets/images', to: 'images' }
             ]
         })
     ]

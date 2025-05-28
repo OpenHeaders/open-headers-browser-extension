@@ -18,11 +18,8 @@ module.exports = merge(common, {
         new CopyPlugin({
             patterns: [
                 { from: 'manifests/firefox/manifest.json' },
-                { from: 'shared/popup.html' },
-                { from: 'shared/popup.css' },
-                { from: 'shared/images', to: 'images' },
-                { from: 'shared/welcome.html' },
-                { from: 'shared/js/welcome.js', to: 'js/welcome.js' }
+                // We no longer need to copy HTML/CSS files as HtmlWebpackPlugin handles this
+                { from: 'src/assets/images', to: 'images' }
             ]
         })
     ]

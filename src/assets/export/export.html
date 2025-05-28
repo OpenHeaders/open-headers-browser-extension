@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Successful - Open Headers</title>
+    <style>
+        :root {
+            --primary-color: #4285F4;
+            --primary-hover: #3b77db;
+            --secondary-color: #34A853;
+            --text-color: #333333;
+            --text-light: #666666;
+            --background-color: #F5F7FA;
+            --panel-background: #FFFFFF;
+            --border-color: #E0E0E0;
+            --success-color: #34A853;
+            --warning-color: #FBBC05;
+            --error-color: #EA4335;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.5;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .export-container {
+            width: 100%;
+            max-width: 780px;
+            background-color: var(--panel-background);
+            border-radius: 12px;
+            box-shadow: 0px 2px 12px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .export-content {
+            padding: 48px 50px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .success-icon {
+            width: 96px;
+            height: 96px;
+            margin: 0 auto 24px;
+            display: block;
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-align: center;
+            color: var(--success-color);
+        }
+
+        .page-subtitle {
+            font-size: 16px;
+            color: var(--text-light);
+            margin-bottom: 32px;
+            text-align: center;
+        }
+
+        /* Export details box */
+        .export-details {
+            background-color: #F8F9FA;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .detail-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-label {
+            font-weight: 500;
+            color: var(--text-color);
+            font-size: 14px;
+        }
+
+        .detail-value {
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--text-light);
+            background-color: #FFFFFF;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .location-info {
+            background-color: #E8F4FD;
+            border: 1px solid #BBE0FC;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #1976D2;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .info-icon {
+            flex-shrink: 0;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        .button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 24px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--primary-color);
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-light);
+        }
+
+        /* Countdown styling */
+        .countdown {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+        }
+
+        .countdown-number {
+            font-weight: bold;
+            color: #1890ff;
+            font-size: 16px;
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--text-light);
+            font-size: 12px;
+            padding: 16px 0;
+        }
+
+        .footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Animation for success icon */
+        .checkmark {
+            animation: scaleIn 0.3s ease-in-out;
+        }
+
+        @keyframes scaleIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+<div class="export-container">
+    <div class="export-content">
+        <svg class="success-icon checkmark" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="48" cy="48" r="48" fill="#E8F5E9"/>
+            <path d="M30 48L42 60L66 36" stroke="#34A853" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+
+        <h1 class="page-title">Export Successful!</h1>
+        <p class="page-subtitle">Your Open Headers configuration has been exported.</p>
+
+        <div class="stats-row" id="statsRow">
+            <div class="stat-item">
+                <div class="stat-number" id="ruleCount">0</div>
+                <div class="stat-label">Rules</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="sourceCount">0</div>
+                <div class="stat-label">Dynamic Sources</div>
+            </div>
+        </div>
+
+        <div class="export-details">
+            <div class="detail-row">
+                <span class="detail-label">Filename:</span>
+                <span class="detail-value" id="filename">open-headers-config.json</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">File Size:</span>
+                <span class="detail-value" id="filesize">0 KB</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Export Time:</span>
+                <span class="detail-value" id="exportTime">12:00 PM</span>
+            </div>
+        </div>
+
+        <div class="location-info">
+            <svg class="info-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 7V11M8 5H8.01M14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8C2 4.68629 4.68629 2 8 2C11.3137 2 14 4.68629 14 8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>File saved to your browser's default Downloads folder</span>
+        </div>
+
+        <div class="countdown">
+            Closing in <span class="countdown-number" id="countdownNumber">5</span> seconds...
+        </div>
+
+        <div class="button-container">
+            <button class="button" id="closeButton">Close Now</button>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    <p>Open Headers v2.0.0 • <a href="https://github.com/OpenHeaders/open-headers-browser-extension" target="_blank">GitHub</a></p>
+</div>
+
+<script src="js/export.js"></script>
+</body>
+</html>

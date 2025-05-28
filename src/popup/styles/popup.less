@@ -1,0 +1,730 @@
+@import '~antd/dist/reset.css';
+
+/* CSS Variables for theming */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafbfc;
+  --bg-tertiary: #f8f9fa;
+  --bg-panel: #ffffff;
+  --bg-hover: #f5f5f5;
+  --bg-input: #ffffff;
+  --border-color: #e8e9ea;
+  --border-light: #f0f0f0;
+  --text-primary: rgba(0, 0, 0, 0.88);
+  --text-secondary: rgba(0, 0, 0, 0.65);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+  --shadow-light: rgba(0, 0, 0, 0.04);
+  --shadow-medium: rgba(0, 0, 0, 0.06);
+}
+
+/* Dark theme variables */
+body.dark-theme {
+  --bg-primary: #141414;
+  --bg-secondary: #1f1f1f;
+  --bg-tertiary: #262626;
+  --bg-panel: #1f1f1f;
+  --bg-hover: #303030;
+  --bg-input: #262626;
+  --border-color: #303030;
+  --border-light: #303030;
+  --text-primary: rgba(255, 255, 255, 0.85);
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-tertiary: rgba(255, 255, 255, 0.45);
+  --shadow-light: rgba(0, 0, 0, 0.2);
+  --shadow-medium: rgba(0, 0, 0, 0.3);
+}
+
+/* Global styles */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  width: 800px;
+  height: 540px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-sizing: border-box;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.app-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.header {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(180deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px var(--shadow-light);
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--shadow-medium) 50%, transparent 100%);
+  }
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.header h4 {
+  color: var(--text-primary) !important;
+}
+
+.header .ant-typography {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.header .ant-typography h4 {
+  margin: 0;
+  font-weight: 600;
+  text-shadow: 0 0.5px 1px var(--shadow-light);
+}
+
+.header .connection-status {
+  .ant-badge-status-dot {
+    box-shadow: 0 0 0 1px var(--bg-secondary);
+  }
+
+  .ant-typography {
+    text-shadow: 0 0.5px 1px var(--shadow-light);
+  }
+}
+
+.content {
+  flex: 1 1 auto;
+  padding: 8px 16px 50px 16px;
+  background: var(--bg-primary);
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  max-height: calc(540px - 90px);
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-tertiary) var(--bg-secondary);
+}
+
+/* Form container with theme support */
+.form-container {
+  margin: 8px 0 16px 0;
+
+  .header-form-collapse {
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    background: var(--bg-panel);
+    overflow: hidden;
+
+    &.ant-collapse > .ant-collapse-item {
+      border-bottom: none;
+    }
+
+    .ant-collapse-header {
+      background: var(--bg-panel) !important;
+      color: var(--text-primary) !important;
+      border-radius: 6px 6px 0 0;
+      padding: 10px 16px !important;
+      min-height: 42px;
+
+      &:hover {
+        background: var(--bg-hover) !important;
+      }
+
+      // Ensure the title text is visible
+      .ant-collapse-header-text {
+        color: var(--text-primary) !important;
+
+        span {
+          color: inherit !important;
+        }
+      }
+    }
+
+    .ant-collapse-content {
+      background: var(--bg-primary);
+      border-top: 1px solid var(--border-light);
+    }
+
+    .ant-collapse-content-box {
+      padding: 16px;
+      background: var(--bg-primary);
+    }
+
+    .ant-collapse-arrow {
+      color: var(--text-secondary) !important;
+    }
+  }
+}
+
+/* Header Rules Section with theme support */
+.header-rules-section {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  overflow: hidden;
+
+  .header-rules-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-light);
+
+    .ant-typography {
+      color: var(--text-primary);
+    }
+  }
+
+  .header-rules-table {
+    background: var(--bg-primary);
+
+    .ant-table {
+      background: var(--bg-primary);
+      border-radius: 0;
+      color: var(--text-primary);
+    }
+
+    .ant-table-thead > tr > th {
+      background: var(--bg-secondary) !important;
+      border-bottom: 1px solid var(--border-light) !important;
+      font-weight: 500;
+      color: var(--text-primary) !important;
+    }
+
+    .ant-table-tbody > tr > td {
+      border-bottom-color: var(--border-light) !important;
+      color: var(--text-primary) !important;
+      background: var(--bg-primary) !important;
+    }
+
+    .ant-table-tbody > tr:hover > td {
+      background: var(--bg-hover) !important;
+    }
+
+    .ant-table-row-selected > td {
+      background: var(--bg-hover) !important;
+    }
+
+    .ant-table-placeholder {
+      background: var(--bg-primary) !important;
+
+      .ant-empty-description {
+        color: var(--text-secondary) !important;
+      }
+    }
+
+    .ant-table-tbody > tr > td {
+      border-bottom-color: var(--border-light) !important;
+      color: var(--text-primary) !important;
+      background: var(--bg-primary) !important;
+      overflow: hidden;
+      padding: 8px;
+      vertical-align: middle;
+    }
+
+    /* Ensure the column headers don't wrap unnecessarily */
+    .ant-table-thead > tr > th {
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    /* Fix for tag display in the Tags column */
+    .ant-tag {
+      display: inline-block;
+      margin-bottom: 2px !important;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      &:last-child {
+        margin-bottom: 0 !important;
+      }
+    }
+
+    /* Prevent cell content from overflowing into adjacent cells */
+    .ant-table-cell {
+      position: relative;
+      overflow: hidden;
+    }
+  }
+}
+
+.entries-list {
+  margin-top: 6px;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 800px;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-color);
+  background: linear-gradient(0deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  box-shadow: 0 -1px 3px var(--shadow-light);
+  z-index: 100;
+  height: 40px;
+  box-sizing: border-box;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--shadow-medium) 50%, transparent 100%);
+  }
+
+  .ant-btn {
+    text-shadow: 0 0.5px 1px var(--shadow-light);
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+
+    &:hover {
+      background: var(--bg-hover);
+      border-radius: 6px;
+    }
+
+    &:focus {
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+    }
+  }
+
+  .ant-typography {
+    text-shadow: 0 0.5px 1px var(--shadow-light);
+    color: var(--text-secondary);
+  }
+
+  span[style*="font-size: 11px"] {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* Minimal Ant Design overrides for compactness */
+.ant-form-item {
+  margin-bottom: 6px;
+}
+
+/* Extra compact form items in collapse panel */
+.ant-collapse .ant-form-item {
+  margin-bottom: 4px;
+}
+
+.ant-collapse .ant-form-item-label {
+  padding-bottom: 0;
+}
+
+.ant-form-item-label {
+  padding: 0 0 1px;
+}
+
+.ant-form-item-label > label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  height: 20px;
+  line-height: 20px;
+}
+
+/* Use Ant Design's compact size globally */
+.ant-btn {
+  height: 32px;
+}
+
+/* Connection status */
+.connection-status {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.connection-status .status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.connection-status .connected {
+  background-color: #52c41a;
+}
+
+.connection-status .disconnected {
+  background-color: #ff4d4f;
+}
+
+/* Domain tag hover effects with theme support */
+.professional-domain-tags {
+  .ant-tag {
+    background: rgba(66, 133, 244, 0.08);
+    border-color: rgba(66, 133, 244, 0.2);
+    color: #4285F4;
+
+    &:hover {
+      background: rgba(66, 133, 244, 0.12) !important;
+    }
+  }
+
+  /* Help text styling */
+  & > div:first-child {
+    color: var(--text-tertiary);
+  }
+
+  /* Domain input field container */
+  & > div:last-child {
+    background: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+
+    input {
+      background: transparent !important;
+      color: var(--text-primary) !important;
+    }
+
+    button {
+      color: var(--text-secondary) !important;
+      border-color: var(--border-color) !important;
+
+      &:hover {
+        border-color: #1890ff !important;
+        color: #1890ff !important;
+      }
+    }
+  }
+}
+
+/* Dark theme specific overrides */
+body.dark-theme {
+  // Force collapse header text to be visible
+  .ant-collapse-header-text {
+    color: var(--text-primary) !important;
+  }
+
+  .ant-tag {
+    &.ant-tag-blue {
+      background: rgba(22, 119, 255, 0.2);
+      border-color: rgba(22, 119, 255, 0.4);
+      color: #4096ff;
+    }
+
+    &.ant-tag-green {
+      background: rgba(82, 196, 26, 0.2);
+      border-color: rgba(82, 196, 26, 0.4);
+      color: #73d13d;
+    }
+
+    &.ant-tag-orange {
+      background: rgba(250, 140, 22, 0.2);
+      border-color: rgba(250, 140, 22, 0.4);
+      color: #ffa940;
+    }
+
+    &.ant-tag-error {
+      background: rgba(255, 77, 79, 0.2);
+      border-color: rgba(255, 77, 79, 0.4);
+      color: #ff7875;
+    }
+  }
+
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-select-selector {
+    background: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+
+    &:hover {
+      border-color: #177ddc !important;
+    }
+
+    &:focus, &.ant-input-focused {
+      border-color: #177ddc !important;
+      box-shadow: 0 0 0 2px rgba(23, 125, 220, 0.2) !important;
+    }
+  }
+
+  .ant-input::placeholder {
+    color: var(--text-tertiary) !important;
+  }
+
+  .ant-select-dropdown {
+    background: var(--bg-tertiary);
+  }
+
+  .ant-btn-text:not(:disabled):hover {
+    background: var(--bg-hover);
+  }
+
+  .professional-domain-tags {
+    .ant-tag {
+      background: rgba(66, 133, 244, 0.15);
+      border-color: rgba(66, 133, 244, 0.3);
+      color: #4096ff;
+
+      &:hover {
+        background: rgba(66, 133, 244, 0.2) !important;
+      }
+    }
+  }
+
+  .ant-empty-description {
+    color: var(--text-secondary);
+  }
+
+  .ant-alert {
+    &.ant-alert-warning {
+      background: rgba(250, 173, 20, 0.1);
+      border-color: rgba(250, 173, 20, 0.3);
+    }
+
+    &.ant-alert-info {
+      background: rgba(22, 119, 255, 0.1);
+      border-color: rgba(22, 119, 255, 0.3);
+    }
+  }
+
+  .ant-collapse-arrow {
+    color: var(--text-secondary);
+  }
+
+  .ant-radio-button-wrapper {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+
+    &:hover {
+      color: #40a9ff;
+    }
+
+    &-checked {
+      background: #1677ff !important;
+      border-color: #1677ff !important;
+      color: #fff !important;
+    }
+  }
+
+  .ant-popconfirm-inner-content {
+    background: var(--bg-tertiary);
+  }
+
+  .ant-dropdown-menu {
+    background: var(--bg-tertiary);
+
+    .ant-dropdown-menu-item {
+      color: var(--text-primary);
+
+      &:hover {
+        background: var(--bg-hover);
+      }
+    }
+  }
+
+  .ant-search-input {
+    .ant-input-prefix,
+    .ant-input-suffix {
+      color: var(--text-secondary);
+    }
+  }
+
+  /* Form styling in dark mode */
+  .ant-form-item-extra {
+    color: var(--text-tertiary) !important;
+  }
+
+  /* Collapse component dark theme fixes */
+  .ant-collapse {
+    background: transparent;
+    border-color: var(--border-color);
+
+    .ant-collapse-item {
+      border-color: var(--border-color);
+    }
+
+    .ant-collapse-header {
+      color: var(--text-primary) !important;
+    }
+
+    .ant-collapse-content {
+      background: var(--bg-primary);
+      border-color: var(--border-color);
+    }
+  }
+
+  /* Select dropdown item states */
+  .ant-select-item-option-content {
+    color: var(--text-primary);
+  }
+
+  /* Table specific dark mode fixes */
+  .ant-table-wrapper {
+    .ant-table {
+      background: transparent;
+    }
+
+    .ant-table-container {
+      border-color: var(--border-color);
+    }
+  }
+
+  /* AutoComplete dark theme */
+  .ant-select-dropdown .ant-select-item {
+    color: var(--text-primary);
+
+    &:hover {
+      background: var(--bg-hover);
+    }
+
+    &-option-selected {
+      background: var(--bg-hover);
+    }
+  }
+
+  /* Typography component dark theme fix */
+  .ant-typography {
+    color: var(--text-primary) !important;
+
+    &.ant-typography-secondary {
+      color: var(--text-secondary) !important;
+    }
+
+    &.ant-typography-warning {
+      color: #faad14 !important;
+    }
+
+    &.ant-typography-danger {
+      color: #ff4d4f !important;
+    }
+  }
+
+  /* Ensure collapse panel titles are visible */
+  .ant-collapse-header-text {
+    color: var(--text-primary) !important;
+
+    & > * {
+      color: inherit !important;
+    }
+  }
+}
+
+/* Empty state enhancement */
+.ant-empty {
+  .ant-empty-description {
+    color: var(--text-secondary);
+  }
+}
+
+/* Table row hover enhancement */
+.ant-table-tbody > tr {
+  transition: background-color 0.15s ease;
+}
+
+/* Form validation message styling */
+.ant-form-item-explain-error {
+  font-size: 12px;
+  min-height: 20px;
+}
+
+/* Subtle collapse animation */
+.ant-collapse {
+  .ant-collapse-item {
+    transition: all 0.2s ease;
+  }
+
+  .ant-motion-collapse {
+    transition: height 0.2s cubic-bezier(0.215, 0.61, 0.355, 1) !important;
+  }
+}
+
+/* Small secondary button styling for filters */
+.header-rules-title .ant-btn-sm:not(.ant-btn-primary) {
+  height: 24px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+
+  &:hover {
+    color: #1890ff;
+    border-color: #1890ff;
+  }
+}
+
+/* Search input subtle styling */
+.ant-input-search {
+  .ant-input {
+    background: var(--bg-input);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+
+    &:focus {
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+    }
+  }
+}
+
+/* Alert styling enhancement */
+.ant-alert {
+  border-radius: 6px;
+}
+
+/* Tag styling in table */
+body.light-theme {
+  .ant-tag {
+    &.ant-tag-blue {
+      background: #f0f5ff;
+      border-color: #1890ff;
+      color: #1890ff;
+    }
+
+    &.ant-tag-green {
+      background: #f6ffed;
+      border-color: #52c41a;
+      color: #52c41a;
+    }
+
+    &.ant-tag-orange {
+      background: #fff7e6;
+      border-color: #fa8c16;
+      color: #fa8c16;
+    }
+
+    &.ant-tag-error {
+      background: #fff1f0;
+      border-color: #ff4d4f;
+      color: #ff4d4f;
+    }
+  }
+}
+
+/* Theme transition for smooth switching */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
