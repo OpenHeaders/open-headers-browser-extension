@@ -6,6 +6,11 @@ import { connectWebSocket, getCurrentSources, isWebSocketConnected } from './web
 import { updateNetworkRules } from './header-manager.js';
 import { alarms, runtime, storage, tabs, isFirefox, isChrome, isEdge, isSafari } from '../utils/browser-api.js';
 
+// Constants
+const MAX_TRACKED_URLS_PER_TAB = 50; // Limit tracked URLs to prevent memory leaks
+const REVALIDATION_QUEUE = new Set(); // Track pending revalidations
+let isRevalidating = false; // Prevent concurrent revalidations
+
 // Store a hash or timestamp of the last update to avoid redundant processing
 let lastSourcesHash = '';
 let lastRulesUpdateTime = 0;
@@ -61,61 +66,196 @@ function generateSavedDataHash(savedData) {
 }
 
 /**
+ * Normalize a URL for consistent tracking
+ * Removes fragments, normalizes case, handles IDN domains
+ */
+function normalizeUrlForTracking(url) {
+    try {
+        const urlObj = new URL(url);
+
+        // Remove fragment
+        urlObj.hash = '';
+
+        // Normalize hostname to lowercase
+        urlObj.hostname = urlObj.hostname.toLowerCase();
+
+        // Handle IDN domains - convert to ASCII (punycode)
+        if (urlObj.hostname.includes('xn--') || /[^\x00-\x7F]/.test(urlObj.hostname)) {
+            // Already punycoded or contains non-ASCII
+            // Browser already handles this, but ensure consistency
+        }
+
+        // Remove default ports
+        if ((urlObj.protocol === 'http:' && urlObj.port === '80') ||
+            (urlObj.protocol === 'https:' && urlObj.port === '443')) {
+            urlObj.port = '';
+        }
+
+        // Remove trailing slash from pathname if it's just /
+        if (urlObj.pathname === '/') {
+            urlObj.pathname = '';
+        }
+
+        return urlObj.toString();
+    } catch (e) {
+        // If URL parsing fails, return original
+        return url.toLowerCase();
+    }
+}
+
+/**
+ * Check if a URL should be tracked at all
+ */
+function isTrackableUrl(url) {
+    if (!url) return false;
+
+    // List of URL schemes that should not be tracked
+    const nonTrackableSchemes = [
+        'about:',
+        'chrome:',
+        'chrome-extension:',
+        'edge:',
+        'extension:',
+        'moz-extension:',
+        'opera:',
+        'vivaldi:',
+        'brave:',
+        'data:',
+        'blob:',
+        'javascript:',
+        'view-source:',
+        'ws:',
+        'wss:',
+        'ftp:',
+        'sftp:',
+        'chrome-devtools:',
+        'devtools:'
+    ];
+
+    // Check if URL starts with any non-trackable scheme
+    const lowerUrl = url.toLowerCase();
+    for (const scheme of nonTrackableSchemes) {
+        if (lowerUrl.startsWith(scheme)) {
+            console.log(`Info: Ignoring non-trackable URL scheme: ${url}`);
+            return false;
+        }
+    }
+
+    // Special handling for file:// URLs - only track if extension has file access
+    if (lowerUrl.startsWith('file://')) {
+        // You might want to check if the extension has file access permission
+        // For now, we'll allow tracking but pattern matching might need adjustment
+        console.log(`Info: File URL detected, tracking may be limited: ${url}`);
+    }
+
+    return true;
+}
+
+/**
  * Re-evaluate tracked requests when rules change
  */
 async function revalidateTrackedRequests() {
-    console.log('Info: Revalidating tracked requests after rule change');
+    // Add to queue if already revalidating
+    if (isRevalidating) {
+        REVALIDATION_QUEUE.add(Date.now());
+        console.log('Info: Revalidation already in progress, queued for later');
+        return;
+    }
 
-    // Get current saved data to check which rules are still enabled
-    return new Promise((resolve) => {
-        storage.sync.get(['savedData'], async (result) => {
-            const savedData = result.savedData || {};
-            const enabledRules = Object.entries(savedData).filter(([_, entry]) => entry.isEnabled !== false);
+    isRevalidating = true;
+    console.log('Info: Starting revalidation of tracked requests');
 
-            // If no enabled rules, clear all tracking
-            if (enabledRules.length === 0) {
-                tabsWithActiveRules.clear();
-                console.log('Info: No enabled rules, cleared all request tracking');
-                resolve();
-                return;
-            }
+    try {
+        await new Promise((resolve) => {
+            storage.sync.get(['savedData'], async (result) => {
+                const savedData = result.savedData || {};
+                const enabledRules = Object.entries(savedData).filter(([_, entry]) => entry.isEnabled !== false);
 
-            // For each tracked tab, re-evaluate if its requests still match any enabled rules
-            for (const [tabId, trackedUrls] of tabsWithActiveRules.entries()) {
-                const validUrls = new Set();
+                // If no enabled rules, clear all tracking
+                if (enabledRules.length === 0) {
+                    tabsWithActiveRules.clear();
+                    console.log('Info: No enabled rules, cleared all request tracking');
+                    resolve();
+                    return;
+                }
 
-                // Check each tracked URL against current enabled rules
-                for (const url of trackedUrls) {
-                    let stillMatches = false;
+                // For each tracked tab, re-evaluate if its requests still match any enabled rules
+                for (const [tabId, trackedUrls] of tabsWithActiveRules.entries()) {
+                    const validUrls = new Set();
 
-                    for (const [id, entry] of enabledRules) {
-                        const domains = entry.domains || [];
-                        for (const domain of domains) {
-                            if (doesUrlMatchPattern(url, domain)) {
-                                stillMatches = true;
-                                break;
+                    // Limit the number of URLs we check to prevent performance issues
+                    const urlsToCheck = Array.from(trackedUrls).slice(-MAX_TRACKED_URLS_PER_TAB);
+
+                    // Check each tracked URL against current enabled rules
+                    for (const url of urlsToCheck) {
+                        let stillMatches = false;
+
+                        for (const [id, entry] of enabledRules) {
+                            const domains = entry.domains || [];
+                            for (const domain of domains) {
+                                if (doesUrlMatchPattern(url, domain)) {
+                                    stillMatches = true;
+                                    break;
+                                }
                             }
+                            if (stillMatches) break;
                         }
-                        if (stillMatches) break;
+
+                        if (stillMatches) {
+                            validUrls.add(url);
+                        }
                     }
 
-                    if (stillMatches) {
-                        validUrls.add(url);
+                    // Update or remove the tab's tracking based on results
+                    if (validUrls.size > 0) {
+                        tabsWithActiveRules.set(tabId, validUrls);
+                        console.log(`Info: Tab ${tabId} still has ${validUrls.size} valid tracked requests`);
+                    } else {
+                        tabsWithActiveRules.delete(tabId);
+                        console.log(`Info: Tab ${tabId} no longer has valid tracked requests`);
                     }
                 }
 
-                // Update or remove the tab's tracking based on results
-                if (validUrls.size > 0) {
-                    tabsWithActiveRules.set(tabId, validUrls);
-                    console.log(`Info: Tab ${tabId} still has ${validUrls.size} valid tracked requests`);
-                } else {
-                    tabsWithActiveRules.delete(tabId);
-                    console.log(`Info: Tab ${tabId} no longer has valid tracked requests`);
+                resolve();
+            });
+        });
+    } finally {
+        isRevalidating = false;
+
+        // Process any queued revalidations
+        if (REVALIDATION_QUEUE.size > 0) {
+            REVALIDATION_QUEUE.clear();
+            console.log('Info: Processing queued revalidation');
+            setTimeout(() => revalidateTrackedRequests(), 100);
+        }
+    }
+}
+
+/**
+ * Restore tracking state after service worker restart
+ */
+async function restoreTrackingState() {
+    console.log('Info: Attempting to restore tracking state after restart');
+
+    // Get all tabs
+    tabs.query({}, async (allTabs) => {
+        for (const tab of allTabs) {
+            if (tab.url && tab.id && isTrackableUrl(tab.url)) {
+                // Check if this tab's URL matches any rules
+                const matchesRule = await checkIfUrlMatchesAnyRule(tab.url);
+                if (matchesRule) {
+                    // Add to tracking
+                    if (!tabsWithActiveRules.has(tab.id)) {
+                        tabsWithActiveRules.set(tab.id, new Set());
+                    }
+                    tabsWithActiveRules.get(tab.id).add(normalizeUrlForTracking(tab.url));
+                    console.log(`Info: Restored tracking for tab ${tab.id} - ${tab.url}`);
                 }
             }
+        }
 
-            resolve();
-        });
+        // Update badge for current tab
+        updateBadgeForCurrentTab();
     });
 }
 
@@ -133,23 +273,66 @@ function setupRequestMonitoring() {
 
     console.log('Info: Setting up request monitoring for badge updates');
 
+    // Track pending requests to handle failures
+    const pendingRequests = new Map(); // requestId -> { tabId, url, headersApplied }
+
     // Monitor all outgoing requests
     webRequestAPI.onBeforeRequest.addListener(
         async (details) => {
             // Skip non-tab requests
             if (details.tabId === -1) return;
 
+            // Skip non-trackable URLs
+            if (!isTrackableUrl(details.url)) {
+                return;
+            }
+
+            const normalizedUrl = normalizeUrlForTracking(details.url);
+
             // Check if this request URL matches any of our rules
-            const matchesRule = await checkIfUrlMatchesAnyRule(details.url);
+            const matchesRule = await checkIfUrlMatchesAnyRule(normalizedUrl);
+
+            // Track this request with whether headers were applied
+            pendingRequests.set(details.requestId, {
+                tabId: details.tabId,
+                url: normalizedUrl,
+                headersApplied: matchesRule,
+                method: details.method // Track method for debugging
+            });
+
+            // Clean up old pending requests periodically
+            if (pendingRequests.size > 1000) {
+                const oldRequests = Array.from(pendingRequests.keys()).slice(0, 500);
+                oldRequests.forEach(id => pendingRequests.delete(id));
+            }
+
+            // Skip if this is not a main frame or sub frame request
+            // This helps avoid tracking every single subresource
+            if (!['main_frame', 'sub_frame', 'xmlhttprequest', 'other'].includes(details.type)) {
+                return;
+            }
 
             if (matchesRule) {
                 // Track this tab as having active rules
                 if (!tabsWithActiveRules.has(details.tabId)) {
                     tabsWithActiveRules.set(details.tabId, new Set());
                 }
-                tabsWithActiveRules.get(details.tabId).add(details.url);
 
-                console.log(`Info: Tab ${details.tabId} made request to ${details.url} which has active rules`);
+                const trackedUrls = tabsWithActiveRules.get(details.tabId);
+
+                // Limit the number of tracked URLs per tab to prevent memory leaks
+                if (trackedUrls.size >= MAX_TRACKED_URLS_PER_TAB) {
+                    // Remove oldest entries (convert to array, remove first items, convert back)
+                    const urlArray = Array.from(trackedUrls);
+                    const newUrls = new Set(urlArray.slice(-MAX_TRACKED_URLS_PER_TAB + 1));
+                    tabsWithActiveRules.set(details.tabId, newUrls);
+                    trackedUrls.clear();
+                    newUrls.forEach(url => trackedUrls.add(url));
+                }
+
+                trackedUrls.add(normalizedUrl);
+
+                console.log(`Info: Tab ${details.tabId} made ${details.method} ${details.type} request to ${normalizedUrl} which has active rules`);
 
                 // Update badge if this is the active tab
                 tabs.query({ active: true, currentWindow: true }, (tabsList) => {
@@ -162,11 +345,218 @@ function setupRequestMonitoring() {
         { urls: ["<all_urls>"] }
     );
 
+    // Handle completed requests (successful)
+    if (webRequestAPI.onCompleted) {
+        webRequestAPI.onCompleted.addListener((details) => {
+            // Remove from pending - request succeeded
+            pendingRequests.delete(details.requestId);
+        }, { urls: ["<all_urls>"] });
+    }
+
+    // Handle errors - but DON'T remove tracking for requests where headers were applied
+    if (webRequestAPI.onErrorOccurred) {
+        webRequestAPI.onErrorOccurred.addListener((details) => {
+            const pending = pendingRequests.get(details.requestId);
+
+            if (pending) {
+                // Determine the type of error
+                const error = details.error || '';
+
+                // List of errors that indicate the request was never sent
+                // These are network-level failures where headers wouldn't have been applied
+                const networkFailureErrors = [
+                    'net::ERR_CONNECTION_REFUSED',
+                    'net::ERR_CONNECTION_RESET',
+                    'net::ERR_CONNECTION_CLOSED',
+                    'net::ERR_NAME_NOT_RESOLVED',
+                    'net::ERR_INTERNET_DISCONNECTED',
+                    'net::ERR_ADDRESS_UNREACHABLE',
+                    'net::ERR_NETWORK_CHANGED',
+                    'net::ERR_DNS_TIMED_OUT',
+                    'net::ERR_TIMED_OUT',
+                    'net::ERR_CONNECTION_TIMED_OUT',
+                    'net::ERR_SOCKET_NOT_CONNECTED',
+                    'net::ERR_NETWORK_ACCESS_DENIED',
+                    'net::ERR_CERT_AUTHORITY_INVALID',
+                    'net::ERR_CERT_COMMON_NAME_INVALID',
+                    'net::ERR_CERT_DATE_INVALID',
+                    'net::ERR_SSL_PROTOCOL_ERROR',
+                    'net::ERR_BAD_SSL_CLIENT_AUTH_CERT',
+                    'net::ERR_CERT_REVOKED',
+                    'net::ERR_CERT_INVALID',
+                    'net::ERR_CERT_WEAK_SIGNATURE_ALGORITHM',
+                    'net::ERR_CERT_NON_UNIQUE_NAME',
+                    'net::ERR_CERT_WEAK_KEY',
+                    'net::ERR_CERT_NAME_CONSTRAINT_VIOLATION',
+                    'net::ERR_CERT_VALIDITY_TOO_LONG',
+                    'net::ERR_CERTIFICATE_TRANSPARENCY_REQUIRED',
+                    'net::ERR_CERT_SYMANTEC_LEGACY',
+                    'net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH',
+                    'net::ERR_SSL_RENEGOTIATION_REQUESTED',
+                    'net::ERR_CT_CONSISTENCY_PROOF_PARSING_FAILED',
+                    'net::ERR_SSL_OBSOLETE_VERSION'
+                ];
+
+                // CORS errors and similar happen AFTER the request is sent
+                // So headers were already applied successfully
+                const clientSideErrors = [
+                    'net::ERR_FAILED', // Often CORS
+                    'net::ERR_ABORTED',
+                    'net::ERR_BLOCKED_BY_CLIENT',
+                    'net::ERR_BLOCKED_BY_RESPONSE',
+                    'net::ERR_EMPTY_RESPONSE',
+                    'net::ERR_INSECURE_RESPONSE', // Mixed content
+                    'net::ERR_BLOCKED_BY_ADMINISTRATOR',
+                    'net::ERR_BLOCKED_BY_XSS_AUDITOR',
+                    'net::ERR_CONTENT_DECODING_FAILED',
+                    'net::ERR_CONTENT_LENGTH_MISMATCH',
+                    'net::ERR_INCOMPLETE_CHUNKED_ENCODING',
+                    'net::ERR_INVALID_RESPONSE',
+                    'net::ERR_RESPONSE_HEADERS_TOO_BIG',
+                    'net::ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_LENGTH',
+                    'net::ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_DISPOSITION',
+                    'net::ERR_HTTP2_PROTOCOL_ERROR',
+                    'net::ERR_HTTP2_SERVER_REFUSED_STREAM',
+                    'net::ERR_QUIC_PROTOCOL_ERROR',
+                    'net::ERR_INVALID_CHUNKED_ENCODING',
+                    'net::ERR_REQUEST_RANGE_NOT_SATISFIABLE',
+                    'net::ERR_ENCODING_CONVERSION_FAILED',
+                    'net::ERR_UNRECOGNIZED_FTP_DIRECTORY_LISTING_FORMAT',
+                    'net::ERR_NO_SUPPORTED_PROXIES',
+                    'net::ERR_HTTP2_INADEQUATE_TRANSPORT_SECURITY',
+                    'net::ERR_HTTP2_FLOW_CONTROL_ERROR',
+                    'net::ERR_HTTP2_FRAME_SIZE_ERROR',
+                    'net::ERR_HTTP2_COMPRESSION_ERROR',
+                    'net::ERR_HTTP2_CONNECT_ERROR',
+                    'net::ERR_HTTP2_GOAWAY_FRAME',
+                    'net::ERR_HTTP2_RST_STREAM_NO_ERROR_RECEIVED',
+                    'net::ERR_HTTP2_PUSHED_STREAM_NOT_AVAILABLE',
+                    'net::ERR_HTTP2_CLAIMED_PUSHED_STREAM_RESET_BY_SERVER',
+                    'net::ERR_HTTP2_PUSHED_RESPONSE_DOES_NOT_MATCH',
+                    'net::ERR_HTTP2_FALLBACK_BEYOND_PROTOCOL_ERROR',
+                    'net::ERR_QUIC_GOAWAY_REQUEST_CAN_BE_RETRIED',
+                    'net::ERR_TOO_MANY_REDIRECTS',
+                    'net::ERR_UNSAFE_REDIRECT',
+                    'net::ERR_UNSAFE_PORT',
+                    'net::ERR_INVALID_HTTP_RESPONSE',
+                    'net::ERR_METHOD_NOT_SUPPORTED',
+                    'net::ERR_PAC_STATUS_NOT_OK',
+                    'net::ERR_PAC_SCRIPT_FAILED'
+                ];
+
+                // Only remove tracking if:
+                // 1. Headers were applied to this request AND
+                // 2. It's a network failure (not a client-side error like CORS)
+                if (pending.headersApplied && networkFailureErrors.includes(error)) {
+                    console.log(`Info: Removing tracking for failed request (${error}): ${pending.url}`);
+
+                    if (tabsWithActiveRules.has(pending.tabId)) {
+                        const trackedUrls = tabsWithActiveRules.get(pending.tabId);
+                        if (trackedUrls.has(pending.url)) {
+                            trackedUrls.delete(pending.url);
+
+                            // If no more tracked URLs, remove the tab
+                            if (trackedUrls.size === 0) {
+                                tabsWithActiveRules.delete(pending.tabId);
+                            }
+
+                            // Update badge if this is the active tab
+                            tabs.query({ active: true, currentWindow: true }, (tabsList) => {
+                                if (tabsList[0] && tabsList[0].id === pending.tabId) {
+                                    updateBadgeForCurrentTab();
+                                }
+                            });
+                        }
+                    }
+                } else if (pending.headersApplied && clientSideErrors.includes(error)) {
+                    // For client-side errors like CORS, keep the tracking
+                    console.log(`Info: Keeping tracking for request with client-side error (${error}): ${pending.url} - headers were successfully applied`);
+                } else if (pending.headersApplied && error && !networkFailureErrors.includes(error) && !clientSideErrors.includes(error)) {
+                    // Unknown error - log it but keep tracking to be safe
+                    console.log(`Info: Unknown error type (${error}) for request: ${pending.url} - keeping tracking since headers may have been applied`);
+                }
+            }
+
+            pendingRequests.delete(details.requestId);
+        }, { urls: ["<all_urls>"] });
+    }
+
+    // Also monitor response headers to detect CORS issues that don't trigger onErrorOccurred
+    if (webRequestAPI.onResponseStarted) {
+        webRequestAPI.onResponseStarted.addListener((details) => {
+            const pending = pendingRequests.get(details.requestId);
+
+            if (pending && pending.headersApplied) {
+                // The request completed with headers applied, ensure it's tracked
+                // This handles cases where CORS might block the response in the browser
+                // but the request was successfully sent with our headers
+                if (!tabsWithActiveRules.has(details.tabId)) {
+                    tabsWithActiveRules.set(details.tabId, new Set());
+                }
+
+                const trackedUrls = tabsWithActiveRules.get(details.tabId);
+                if (!trackedUrls.has(pending.url)) {
+                    trackedUrls.add(pending.url);
+                    console.log(`Info: Ensuring tracking for request that received response: ${pending.url}`);
+                }
+            }
+        }, { urls: ["<all_urls>"] });
+    }
+
+    // Monitor redirects to update tracking
+    if (webRequestAPI.onBeforeRedirect) {
+        webRequestAPI.onBeforeRedirect.addListener(
+            async (details) => {
+                if (details.tabId === -1) return;
+
+                // Skip non-trackable URLs
+                if (!isTrackableUrl(details.redirectUrl)) {
+                    return;
+                }
+
+                const normalizedRedirectUrl = normalizeUrlForTracking(details.redirectUrl);
+
+                // Check if the redirect URL matches any rules
+                const matchesRule = await checkIfUrlMatchesAnyRule(normalizedRedirectUrl);
+
+                if (matchesRule) {
+                    if (!tabsWithActiveRules.has(details.tabId)) {
+                        tabsWithActiveRules.set(details.tabId, new Set());
+                    }
+                    tabsWithActiveRules.get(details.tabId).add(normalizedRedirectUrl);
+                    console.log(`Info: Tab ${details.tabId} redirected to ${normalizedRedirectUrl} which has active rules`);
+
+                    // Update badge if active tab
+                    tabs.query({ active: true, currentWindow: true }, (tabsList) => {
+                        if (tabsList[0] && tabsList[0].id === details.tabId) {
+                            updateBadgeForCurrentTab();
+                        }
+                    });
+                }
+
+                // Update pending request with new URL and header status
+                if (pendingRequests.has(details.requestId)) {
+                    pendingRequests.get(details.requestId).url = normalizedRedirectUrl;
+                    pendingRequests.get(details.requestId).headersApplied = matchesRule;
+                }
+            },
+            { urls: ["<all_urls>"] }
+        );
+    }
+
     // Clear tracking when tab navigates (main frame only)
     if (webRequestAPI.onBeforeNavigate) {
         webRequestAPI.onBeforeNavigate.addListener((details) => {
             if (details.frameId === 0) { // Main frame
                 tabsWithActiveRules.delete(details.tabId);
+
+                // Also clean up any pending requests for this tab
+                for (const [requestId, pending] of pendingRequests) {
+                    if (pending.tabId === details.tabId) {
+                        pendingRequests.delete(requestId);
+                    }
+                }
+
                 console.log(`Info: Cleared tracking for tab ${details.tabId} due to navigation`);
 
                 // Update badge if this is the active tab
@@ -186,6 +576,8 @@ function setupRequestMonitoring() {
  * @returns {Promise<boolean>} - Whether the URL matches any active rule
  */
 async function checkIfUrlMatchesAnyRule(url) {
+    const normalizedUrl = normalizeUrlForTracking(url);
+
     return new Promise((resolve) => {
         storage.sync.get(['savedData'], (result) => {
             const savedData = result.savedData || {};
@@ -200,7 +592,7 @@ async function checkIfUrlMatchesAnyRule(url) {
                 // Check each domain pattern
                 const domains = entry.domains || [];
                 for (const domain of domains) {
-                    if (doesUrlMatchPattern(url, domain)) {
+                    if (doesUrlMatchPattern(normalizedUrl, domain)) {
                         resolve(true);
                         return;
                     }
@@ -218,7 +610,9 @@ async function checkIfUrlMatchesAnyRule(url) {
  * @returns {Promise<boolean>} - Whether any active rules apply
  */
 async function checkRulesForTab(tabUrl) {
-    if (!tabUrl) return false;
+    if (!tabUrl || !isTrackableUrl(tabUrl)) {
+        return false;
+    }
 
     // First check for direct URL match (when you're ON a domain with rules)
     const directMatch = await new Promise((resolve) => {
@@ -275,26 +669,39 @@ async function checkRulesForTab(tabUrl) {
 }
 
 /**
- * Check if a URL matches a domain pattern
+ * Enhanced URL pattern matching with better edge case handling
  * @param {string} url - The URL to check
  * @param {string} pattern - The domain pattern (can include wildcards)
  * @returns {boolean} - Whether the URL matches the pattern
  */
 function doesUrlMatchPattern(url, pattern) {
     try {
-        // Normalize the pattern
-        let urlFilter = pattern.trim();
+        // Normalize both URL and pattern for comparison
+        const normalizedUrl = normalizeUrlForTracking(url);
+        let urlFilter = pattern.trim().toLowerCase();
 
         // Convert pattern to a regex
-        // Handle different pattern formats
         if (urlFilter === '*') {
             return true; // Matches everything
         }
 
+        // Handle IDN in patterns
+        try {
+            // If pattern contains non-ASCII, try to parse it as URL
+            if (/[^\x00-\x7F]/.test(urlFilter)) {
+                const patternUrl = new URL(urlFilter.includes('://') ? urlFilter : 'http://' + urlFilter);
+                urlFilter = patternUrl.hostname.toLowerCase();
+            }
+        } catch (e) {
+            // Pattern is not a valid URL, continue with original
+        }
+
         // If pattern doesn't have protocol, add wildcard
         if (!urlFilter.includes('://')) {
-            // Handle localhost specially
-            if (urlFilter.startsWith('localhost') || urlFilter.match(/^(\d{1,3}\.){3}\d{1,3}/)) {
+            // Handle localhost and IP addresses specially
+            if (urlFilter.startsWith('localhost') ||
+                urlFilter.match(/^(\d{1,3}\.){3}\d{1,3}/) ||
+                urlFilter.includes('[') && urlFilter.includes(']')) { // IPv6
                 urlFilter = '*://' + urlFilter;
             } else {
                 urlFilter = '*://' + urlFilter;
@@ -306,20 +713,23 @@ function doesUrlMatchPattern(url, pattern) {
             urlFilter = urlFilter + '/*';
         }
 
+        // Handle port numbers in pattern - normalize default ports
+        urlFilter = urlFilter.replace(/:80\//, '/').replace(/:443\//, '/');
+
         // Convert to regex pattern
         let regexPattern = urlFilter
             .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
             .replace(/\*/g, '.*'); // Replace * with .*
 
-        // Create regex
-        const regex = new RegExp('^' + regexPattern + '$', 'i'); // Case insensitive
+        // Create regex (case insensitive)
+        const regex = new RegExp('^' + regexPattern + '$', 'i');
 
-        // Test the URL
-        const matches = regex.test(url);
+        // Test the normalized URL
+        const matches = regex.test(normalizedUrl);
 
         // Debug log for troubleshooting
         if (matches) {
-            console.log(`Info: URL "${url}" matches pattern "${pattern}"`);
+            console.log(`Info: URL "${normalizedUrl}" matches pattern "${pattern}"`);
         }
 
         return matches;
@@ -474,6 +884,11 @@ async function initializeExtension() {
 
     // Set up request monitoring
     setupRequestMonitoring();
+
+    // Restore tracking state after a short delay (to ensure tabs are loaded)
+    setTimeout(() => {
+        restoreTrackingState();
+    }, 1000);
 
     // First try to restore any previous dynamic sources
     storage.local.get(['dynamicSources'], (result) => {
@@ -637,34 +1052,76 @@ tabs.onActivated?.addListener((activeInfo) => {
 });
 
 tabs.onUpdated?.addListener((tabId, changeInfo, tab) => {
-    // Clear tracking when URL changes (main navigation)
-    if (changeInfo.url && tabsWithActiveRules.has(tabId)) {
-        const trackedUrls = tabsWithActiveRules.get(tabId);
-        if (trackedUrls && trackedUrls.size > 0) {
-            // Check if new URL is different origin than tracked URLs
-            try {
-                const newOrigin = new URL(changeInfo.url).origin;
-                let differentOrigin = true;
+    // Handle various state changes that might indicate navigation
+    if (changeInfo.url || changeInfo.status === 'loading') {
+        // For URL changes without full page load (History API)
+        if (changeInfo.url && !changeInfo.status) {
+            console.log(`Info: Detected potential SPA navigation in tab ${tabId}`);
 
-                for (const trackedUrl of trackedUrls) {
-                    try {
-                        const trackedOrigin = new URL(trackedUrl).origin;
-                        if (newOrigin === trackedOrigin) {
-                            differentOrigin = false;
-                            break;
+            // Check if this is a significant navigation (different origin or path)
+            if (tabsWithActiveRules.has(tabId)) {
+                const trackedUrls = tabsWithActiveRules.get(tabId);
+                const normalizedNewUrl = normalizeUrlForTracking(changeInfo.url);
+
+                // Parse URLs to check if it's a significant navigation
+                try {
+                    const newUrl = new URL(normalizedNewUrl);
+                    let significantChange = true;
+
+                    // Check if any tracked URL is from the same origin and path
+                    for (const trackedUrl of trackedUrls) {
+                        try {
+                            const oldUrl = new URL(trackedUrl);
+                            // If same origin and same pathname, it's not a significant change
+                            if (oldUrl.origin === newUrl.origin && oldUrl.pathname === newUrl.pathname) {
+                                significantChange = false;
+                                break;
+                            }
+                        } catch (e) {
+                            // Invalid URL in tracking
                         }
-                    } catch (e) {
-                        // Invalid URL in tracking, ignore
                     }
-                }
 
-                if (differentOrigin) {
-                    console.log(`Info: Tab ${tabId} navigated to different origin, clearing tracked requests`);
+                    if (significantChange) {
+                        console.log(`Info: Significant SPA navigation detected, clearing tracked requests for tab ${tabId}`);
+                        tabsWithActiveRules.delete(tabId);
+                    }
+                } catch (e) {
+                    // If URL parsing fails, clear to be safe
                     tabsWithActiveRules.delete(tabId);
                 }
-            } catch (e) {
-                // Invalid URL, clear tracking to be safe
-                tabsWithActiveRules.delete(tabId);
+            }
+        }
+
+        // Clear tracking when URL changes (main navigation)
+        if (changeInfo.url && tabsWithActiveRules.has(tabId)) {
+            const trackedUrls = tabsWithActiveRules.get(tabId);
+            if (trackedUrls && trackedUrls.size > 0) {
+                // Check if new URL is different origin than tracked URLs
+                try {
+                    const newOrigin = new URL(changeInfo.url).origin;
+                    let differentOrigin = true;
+
+                    for (const trackedUrl of trackedUrls) {
+                        try {
+                            const trackedOrigin = new URL(trackedUrl).origin;
+                            if (newOrigin === trackedOrigin) {
+                                differentOrigin = false;
+                                break;
+                            }
+                        } catch (e) {
+                            // Invalid URL in tracking, ignore
+                        }
+                    }
+
+                    if (differentOrigin) {
+                        console.log(`Info: Tab ${tabId} navigated to different origin, clearing tracked requests`);
+                        tabsWithActiveRules.delete(tabId);
+                    }
+                } catch (e) {
+                    // Invalid URL, clear tracking to be safe
+                    tabsWithActiveRules.delete(tabId);
+                }
             }
         }
     }
@@ -701,6 +1158,116 @@ tabs.onReplaced?.addListener((addedTabId, removedTabId) => {
         });
     }
 });
+
+// Add handler for when browser starts with existing tabs
+tabs.onCreated?.addListener((tab) => {
+    // When a new tab is created, check if it should be tracked
+    if (tab.url && tab.id && isTrackableUrl(tab.url)) {
+        checkIfUrlMatchesAnyRule(tab.url).then(matches => {
+            if (matches) {
+                if (!tabsWithActiveRules.has(tab.id)) {
+                    tabsWithActiveRules.set(tab.id, new Set());
+                }
+                tabsWithActiveRules.get(tab.id).add(normalizeUrlForTracking(tab.url));
+                console.log(`Info: New tab ${tab.id} created with URL that matches rules`);
+
+                if (tab.active) {
+                    updateBadgeForCurrentTab();
+                }
+            }
+        });
+    }
+});
+
+// Handle window focus changes
+chrome.windows?.onFocusChanged?.addListener((windowId) => {
+    if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+
+    // When window focus changes, update badge for the active tab in that window
+    tabs.query({ active: true, windowId: windowId }, (tabsList) => {
+        if (tabsList[0]) {
+            console.log(`Info: Window focus changed, updating badge for tab ${tabsList[0].id}`);
+            updateBadgeForCurrentTab();
+        }
+    });
+});
+
+// Handle extension suspend/resume
+runtime.onSuspend?.addListener(() => {
+    console.log('Info: Extension suspending, clearing tracked requests');
+    tabsWithActiveRules.clear();
+});
+
+// Add listener for when popup closes to ensure badge is updated
+runtime.onConnect?.addListener((port) => {
+    if (port.name === 'popup') {
+        // Check if this is from an incognito context
+        if (port.sender?.tab?.incognito || port.sender?.incognito) {
+            console.log('Info: Popup opened in incognito mode');
+            // You might want to handle incognito differently
+        }
+
+        port.onDisconnect.addListener(() => {
+            console.log('Info: Popup closed, updating badge');
+            setTimeout(() => {
+                updateBadgeForCurrentTab();
+            }, 100);
+        });
+    }
+});
+
+// Handle back/forward navigation by monitoring webNavigation API if available
+if (chrome.webNavigation) {
+    chrome.webNavigation.onHistoryStateUpdated?.addListener((details) => {
+        if (details.frameId === 0) { // Main frame only
+            console.log(`Info: History state updated in tab ${details.tabId}`);
+
+            // Skip non-trackable URLs
+            if (!isTrackableUrl(details.url)) {
+                return;
+            }
+
+            // Re-evaluate if this URL should be tracked
+            checkIfUrlMatchesAnyRule(normalizeUrlForTracking(details.url)).then(matches => {
+                if (matches) {
+                    // URL matches rules, ensure it's tracked
+                    if (!tabsWithActiveRules.has(details.tabId)) {
+                        tabsWithActiveRules.set(details.tabId, new Set());
+                    }
+                    tabsWithActiveRules.get(details.tabId).add(normalizeUrlForTracking(details.url));
+                }
+
+                // Update badge
+                tabs.query({ active: true, currentWindow: true }, (tabsList) => {
+                    if (tabsList[0] && tabsList[0].id === details.tabId) {
+                        updateBadgeForCurrentTab();
+                    }
+                });
+            });
+        }
+    });
+
+    // Handle pre-rendered pages (Chrome)
+    chrome.webNavigation.onTabReplaced?.addListener((details) => {
+        console.log(`Info: Tab ${details.replacedTabId} replaced with ${details.tabId} (likely pre-render)`);
+
+        // Transfer any tracking from the old tab to the new one
+        if (tabsWithActiveRules.has(details.replacedTabId)) {
+            const trackedUrls = tabsWithActiveRules.get(details.replacedTabId);
+            tabsWithActiveRules.set(details.tabId, trackedUrls);
+            tabsWithActiveRules.delete(details.replacedTabId);
+
+            console.log(`Info: Transferred ${trackedUrls.size} tracked URLs to new tab`);
+
+            // Update badge if needed
+            tabs.query({ active: true, currentWindow: true }, (tabsList) => {
+                if (tabsList[0] && tabsList[0].id === details.tabId) {
+                    updateBadgeForCurrentTab();
+                }
+            });
+        }
+    });
+}
 
 // Periodic cleanup of stale tab tracking (tabs that might have been closed without proper cleanup)
 setInterval(() => {

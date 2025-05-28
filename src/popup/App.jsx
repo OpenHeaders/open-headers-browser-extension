@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Layout } from 'antd';
 import { HeaderProvider } from '../context/HeaderContext';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -14,28 +14,42 @@ const { Content } = Layout;
  * Main App component for the popup
  */
 const App = () => {
+  // Notify background script when popup opens/closes
+  useEffect(() => {
+    console.log('Popup: Establishing connection to background script');
+
+    // Create a connection port to notify background when popup is open
+    const port = chrome.runtime.connect({ name: 'popup' });
+
+    // Cleanup function - this runs when popup closes
+    return () => {
+      console.log('Popup: Closing, disconnecting from background');
+      port.disconnect();
+    };
+  }, []);
+
   return (
-    <ErrorBoundary>
-      <HeaderProvider>
-        <Layout className="app-container">
-          <Header />
-          
-          <Content className="content">
-            <div className="form-container">
-              <HeaderForm />
-            </div>
-            
-            <ConnectionInfo />
-            
-            <div className="entries-list">
-              <HeaderList />
-            </div>
-          </Content>
-          
-          <Footer />
-        </Layout>
-      </HeaderProvider>
-    </ErrorBoundary>
+      <ErrorBoundary>
+        <HeaderProvider>
+          <Layout className="app-container">
+            <Header />
+
+            <Content className="content">
+              <div className="form-container">
+                <HeaderForm />
+              </div>
+
+              <ConnectionInfo />
+
+              <div className="entries-list">
+                <HeaderList />
+              </div>
+            </Content>
+
+            <Footer />
+          </Layout>
+        </HeaderProvider>
+      </ErrorBoundary>
   );
 };
 
