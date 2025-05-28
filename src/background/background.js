@@ -23,6 +23,9 @@ let lastBadgeState = null;
 // Track headers using placeholders
 let headersUsingPlaceholders = [];
 
+// Track which tabs are making requests to domains with rules
+let tabsWithActiveRules = new Map(); // Map of tabId -> Set of matched domains
+
 // Function to generate a simple hash of sources to detect changes
 function generateSourcesHash(sources) {
     if (!sources || !Array.isArray(sources)) return '';
@@ -58,28 +61,146 @@ function generateSavedDataHash(savedData) {
 }
 
 /**
- * Check if any rules apply to the current tab
- * @param {string} tabUrl - The URL of the current tab
- * @returns {Promise<boolean>} - Whether any active rules apply
+ * Re-evaluate tracked requests when rules change
  */
-async function checkRulesForTab(tabUrl) {
-    if (!tabUrl) return false;
+async function revalidateTrackedRequests() {
+    console.log('Info: Revalidating tracked requests after rule change');
 
+    // Get current saved data to check which rules are still enabled
+    return new Promise((resolve) => {
+        storage.sync.get(['savedData'], async (result) => {
+            const savedData = result.savedData || {};
+            const enabledRules = Object.entries(savedData).filter(([_, entry]) => entry.isEnabled !== false);
+
+            // If no enabled rules, clear all tracking
+            if (enabledRules.length === 0) {
+                tabsWithActiveRules.clear();
+                console.log('Info: No enabled rules, cleared all request tracking');
+                resolve();
+                return;
+            }
+
+            // For each tracked tab, re-evaluate if its requests still match any enabled rules
+            for (const [tabId, trackedUrls] of tabsWithActiveRules.entries()) {
+                const validUrls = new Set();
+
+                // Check each tracked URL against current enabled rules
+                for (const url of trackedUrls) {
+                    let stillMatches = false;
+
+                    for (const [id, entry] of enabledRules) {
+                        const domains = entry.domains || [];
+                        for (const domain of domains) {
+                            if (doesUrlMatchPattern(url, domain)) {
+                                stillMatches = true;
+                                break;
+                            }
+                        }
+                        if (stillMatches) break;
+                    }
+
+                    if (stillMatches) {
+                        validUrls.add(url);
+                    }
+                }
+
+                // Update or remove the tab's tracking based on results
+                if (validUrls.size > 0) {
+                    tabsWithActiveRules.set(tabId, validUrls);
+                    console.log(`Info: Tab ${tabId} still has ${validUrls.size} valid tracked requests`);
+                } else {
+                    tabsWithActiveRules.delete(tabId);
+                    console.log(`Info: Tab ${tabId} no longer has valid tracked requests`);
+                }
+            }
+
+            resolve();
+        });
+    });
+}
+
+/**
+ * Set up request monitoring to track which domains tabs are making requests to
+ */
+function setupRequestMonitoring() {
+    // Check if webRequest API is available
+    const webRequestAPI = chrome.webRequest || browser.webRequest;
+
+    if (!webRequestAPI) {
+        console.log('Info: webRequest API not available');
+        return;
+    }
+
+    console.log('Info: Setting up request monitoring for badge updates');
+
+    // Monitor all outgoing requests
+    webRequestAPI.onBeforeRequest.addListener(
+        async (details) => {
+            // Skip non-tab requests
+            if (details.tabId === -1) return;
+
+            // Check if this request URL matches any of our rules
+            const matchesRule = await checkIfUrlMatchesAnyRule(details.url);
+
+            if (matchesRule) {
+                // Track this tab as having active rules
+                if (!tabsWithActiveRules.has(details.tabId)) {
+                    tabsWithActiveRules.set(details.tabId, new Set());
+                }
+                tabsWithActiveRules.get(details.tabId).add(details.url);
+
+                console.log(`Info: Tab ${details.tabId} made request to ${details.url} which has active rules`);
+
+                // Update badge if this is the active tab
+                tabs.query({ active: true, currentWindow: true }, (tabsList) => {
+                    if (tabsList[0] && tabsList[0].id === details.tabId) {
+                        updateBadgeForCurrentTab();
+                    }
+                });
+            }
+        },
+        { urls: ["<all_urls>"] }
+    );
+
+    // Clear tracking when tab navigates (main frame only)
+    if (webRequestAPI.onBeforeNavigate) {
+        webRequestAPI.onBeforeNavigate.addListener((details) => {
+            if (details.frameId === 0) { // Main frame
+                tabsWithActiveRules.delete(details.tabId);
+                console.log(`Info: Cleared tracking for tab ${details.tabId} due to navigation`);
+
+                // Update badge if this is the active tab
+                tabs.query({ active: true, currentWindow: true }, (tabsList) => {
+                    if (tabsList[0] && tabsList[0].id === details.tabId) {
+                        updateBadgeForCurrentTab();
+                    }
+                });
+            }
+        }, { urls: ["<all_urls>"] });
+    }
+}
+
+/**
+ * Check if a URL matches any active rule
+ * @param {string} url - The URL to check
+ * @returns {Promise<boolean>} - Whether the URL matches any active rule
+ */
+async function checkIfUrlMatchesAnyRule(url) {
     return new Promise((resolve) => {
         storage.sync.get(['savedData'], (result) => {
             const savedData = result.savedData || {};
 
-            // Check if any enabled rules match the current tab URL
+            // Check if this URL matches any enabled rule
             for (const id in savedData) {
                 const entry = savedData[id];
 
                 // Skip disabled rules
                 if (entry.isEnabled === false) continue;
 
-                // Check if any domain pattern matches the current tab
+                // Check each domain pattern
                 const domains = entry.domains || [];
                 for (const domain of domains) {
-                    if (doesUrlMatchPattern(tabUrl, domain)) {
+                    if (doesUrlMatchPattern(url, domain)) {
                         resolve(true);
                         return;
                     }
@@ -89,6 +210,68 @@ async function checkRulesForTab(tabUrl) {
             resolve(false);
         });
     });
+}
+
+/**
+ * Check if any rules apply to the current tab
+ * @param {string} tabUrl - The URL of the current tab
+ * @returns {Promise<boolean>} - Whether any active rules apply
+ */
+async function checkRulesForTab(tabUrl) {
+    if (!tabUrl) return false;
+
+    // First check for direct URL match (when you're ON a domain with rules)
+    const directMatch = await new Promise((resolve) => {
+        storage.sync.get(['savedData'], (result) => {
+            const savedData = result.savedData || {};
+
+            // Debug logging
+            const enabledRules = Object.entries(savedData).filter(([_, entry]) => entry.isEnabled !== false);
+            console.log(`Info: Checking ${enabledRules.length} enabled rules for URL: ${tabUrl}`);
+
+            // Check if any enabled rules match the current tab URL
+            for (const id in savedData) {
+                const entry = savedData[id];
+
+                // Skip disabled rules
+                if (entry.isEnabled === false) {
+                    continue;
+                }
+
+                // Check if any domain pattern matches the current tab
+                const domains = entry.domains || [];
+                for (const domain of domains) {
+                    if (doesUrlMatchPattern(tabUrl, domain)) {
+                        console.log(`Info: Direct rule match! Header: ${entry.headerName}, Type: ${entry.isResponse ? 'Response' : 'Request'}, Domain: ${domain}`);
+                        resolve(true);
+                        return;
+                    }
+                }
+            }
+
+            resolve(false);
+        });
+    });
+
+    if (directMatch) return true;
+
+    // Now check if the current tab has made any requests to domains with rules
+    const currentTab = await new Promise((resolve) => {
+        tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            resolve(tabs[0]);
+        });
+    });
+
+    if (currentTab && currentTab.id && tabsWithActiveRules.has(currentTab.id)) {
+        const matchedDomains = tabsWithActiveRules.get(currentTab.id);
+        if (matchedDomains && matchedDomains.size > 0) {
+            console.log(`Info: Current tab has made requests to ${matchedDomains.size} domains with rules`);
+            return true;
+        }
+    }
+
+    console.log('Info: No rules matched for current tab');
+    return false;
 }
 
 /**
@@ -110,7 +293,12 @@ function doesUrlMatchPattern(url, pattern) {
 
         // If pattern doesn't have protocol, add wildcard
         if (!urlFilter.includes('://')) {
-            urlFilter = '*://' + urlFilter;
+            // Handle localhost specially
+            if (urlFilter.startsWith('localhost') || urlFilter.match(/^(\d{1,3}\.){3}\d{1,3}/)) {
+                urlFilter = '*://' + urlFilter;
+            } else {
+                urlFilter = '*://' + urlFilter;
+            }
         }
 
         // Ensure pattern has a path
@@ -124,10 +312,17 @@ function doesUrlMatchPattern(url, pattern) {
             .replace(/\*/g, '.*'); // Replace * with .*
 
         // Create regex
-        const regex = new RegExp('^' + regexPattern + '$');
+        const regex = new RegExp('^' + regexPattern + '$', 'i'); // Case insensitive
 
         // Test the URL
-        return regex.test(url);
+        const matches = regex.test(url);
+
+        // Debug log for troubleshooting
+        if (matches) {
+            console.log(`Info: URL "${url}" matches pattern "${pattern}"`);
+        }
+
+        return matches;
     } catch (e) {
         console.log('Error matching URL pattern:', e);
         return false;
@@ -160,7 +355,7 @@ async function updateExtensionBadge(connected, currentTabUrl, hasPlaceholders) {
     } else if (!connected) {
         badgeState = 'disconnected';
     } else if (currentTabUrl) {
-        // Check if any rules apply to current tab
+        // Check if any rules apply to current tab (including requests it makes)
         const hasActiveRules = await checkRulesForTab(currentTabUrl);
         if (hasActiveRules) {
             badgeState = 'active';
@@ -277,6 +472,9 @@ async function initializeExtension() {
     // Set initial badge state to disconnected
     await updateExtensionBadge(false, null, false);
 
+    // Set up request monitoring
+    setupRequestMonitoring();
+
     // First try to restore any previous dynamic sources
     storage.local.get(['dynamicSources'], (result) => {
         if (result.dynamicSources && Array.isArray(result.dynamicSources) && result.dynamicSources.length > 0) {
@@ -386,7 +584,7 @@ const debouncedUpdateRulesFromSavedData = debounce((savedData) => {
     updateNetworkRules(getCurrentSources());
     lastSavedDataHash = generateSavedDataHash(savedData);
 
-    // Update badge when rules change
+    // Force immediate badge update
     updateBadgeForCurrentTab();
 }, 100);
 
@@ -439,13 +637,91 @@ tabs.onActivated?.addListener((activeInfo) => {
 });
 
 tabs.onUpdated?.addListener((tabId, changeInfo, tab) => {
-    // Update badge when tab URL changes
-    if (changeInfo.url && tab.active) {
+    // Clear tracking when URL changes (main navigation)
+    if (changeInfo.url && tabsWithActiveRules.has(tabId)) {
+        const trackedUrls = tabsWithActiveRules.get(tabId);
+        if (trackedUrls && trackedUrls.size > 0) {
+            // Check if new URL is different origin than tracked URLs
+            try {
+                const newOrigin = new URL(changeInfo.url).origin;
+                let differentOrigin = true;
+
+                for (const trackedUrl of trackedUrls) {
+                    try {
+                        const trackedOrigin = new URL(trackedUrl).origin;
+                        if (newOrigin === trackedOrigin) {
+                            differentOrigin = false;
+                            break;
+                        }
+                    } catch (e) {
+                        // Invalid URL in tracking, ignore
+                    }
+                }
+
+                if (differentOrigin) {
+                    console.log(`Info: Tab ${tabId} navigated to different origin, clearing tracked requests`);
+                    tabsWithActiveRules.delete(tabId);
+                }
+            } catch (e) {
+                // Invalid URL, clear tracking to be safe
+                tabsWithActiveRules.delete(tabId);
+            }
+        }
+    }
+
+    // Update badge when tab URL changes or completes loading
+    if ((changeInfo.url || changeInfo.status === 'complete') && tab.active) {
         setTimeout(() => {
             debouncedUpdateBadge();
         }, 100);
     }
 });
+
+// Clean up tracking when tabs are closed
+tabs.onRemoved?.addListener((tabId) => {
+    tabsWithActiveRules.delete(tabId);
+    console.log(`Info: Cleaned up tracking for closed tab ${tabId}`);
+});
+
+// Clear tracking when tab is replaced (e.g., when navigating to a completely new site)
+tabs.onReplaced?.addListener((addedTabId, removedTabId) => {
+    console.log(`Info: Tab ${removedTabId} replaced by ${addedTabId}, transferring tracking`);
+
+    // Transfer tracking from old tab to new tab if any exists
+    if (tabsWithActiveRules.has(removedTabId)) {
+        const trackedUrls = tabsWithActiveRules.get(removedTabId);
+        tabsWithActiveRules.set(addedTabId, trackedUrls);
+        tabsWithActiveRules.delete(removedTabId);
+
+        // Update badge if this is the active tab
+        tabs.query({ active: true, currentWindow: true }, (tabsList) => {
+            if (tabsList[0] && tabsList[0].id === addedTabId) {
+                updateBadgeForCurrentTab();
+            }
+        });
+    }
+});
+
+// Periodic cleanup of stale tab tracking (tabs that might have been closed without proper cleanup)
+setInterval(() => {
+    if (tabsWithActiveRules.size > 0) {
+        tabs.query({}, (allTabs) => {
+            const activeTabIds = new Set(allTabs.map(tab => tab.id));
+            let cleaned = 0;
+
+            for (const [tabId] of tabsWithActiveRules) {
+                if (!activeTabIds.has(tabId)) {
+                    tabsWithActiveRules.delete(tabId);
+                    cleaned++;
+                }
+            }
+
+            if (cleaned > 0) {
+                console.log(`Info: Cleaned up ${cleaned} stale tab tracking entries`);
+            }
+        });
+    }
+}, 30000); // Every 30 seconds
 
 /**
  * Opens the welcome page ONLY on first install
@@ -611,10 +887,11 @@ storage.onChanged.addListener((changes, area) => {
 
         console.log('Info: Saved header data changed with new content, debouncing update');
 
-        // Use the debounced function to avoid multiple rapid updates
-        debouncedUpdateRulesFromSavedData(newSavedData);
-
-        // Don't update hash immediately - let the debounced function do it
+        // Revalidate tracked requests when rules change
+        revalidateTrackedRequests().then(() => {
+            // Then update rules
+            debouncedUpdateRulesFromSavedData(newSavedData);
+        });
     }
 });
 
@@ -639,20 +916,26 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Handle rule update request (for enable/disable toggle)
         console.log('Info: Rule update requested due to enable/disable toggle');
 
-        // Update network rules with the current sources
-        updateNetworkRules(getCurrentSources());
+        // First revalidate tracked requests
+        revalidateTrackedRequests().then(() => {
+            // Update network rules with the current sources
+            updateNetworkRules(getCurrentSources());
 
-        // Update tracking variables
-        lastSourcesHash = generateSourcesHash(getCurrentSources());
-        lastRulesUpdateTime = Date.now();
+            // Update tracking variables
+            lastSourcesHash = generateSourcesHash(getCurrentSources());
+            lastRulesUpdateTime = Date.now();
 
-        // Update badge for current tab
-        updateBadgeForCurrentTab();
+            // Force immediate badge update
+            updateBadgeForCurrentTab();
 
-        // Send response if callback provided
-        if (sendResponse) {
-            sendResponse({ success: true });
-        }
+            // Send response if callback provided
+            if (sendResponse) {
+                sendResponse({ success: true });
+            }
+        });
+
+        // Return true to indicate async response
+        return true;
     } else if (message.type === 'headersUsingPlaceholders') {
         // Update placeholder tracking from header-manager
         headersUsingPlaceholders = message.headers || [];
@@ -667,6 +950,10 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.type === 'configurationImported') {
         // Handle configuration import
         console.log('Info: Configuration imported, updating rules');
+
+        // Clear all request tracking when importing new config
+        tabsWithActiveRules.clear();
+        console.log('Info: Cleared all request tracking after configuration import');
 
         // If dynamic sources were provided, update them in storage
         if (message.dynamicSources && Array.isArray(message.dynamicSources)) {

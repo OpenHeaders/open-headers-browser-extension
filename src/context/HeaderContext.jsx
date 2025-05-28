@@ -564,7 +564,9 @@ export const HeaderProvider = ({ children }) => {
         });
 
         // Notify the background script to update rules
-        runtime.sendMessage({ type: 'rulesUpdated' });
+        runtime.sendMessage({ type: 'rulesUpdated' }, (response) => {
+          console.log('Background notified of rule save/update', response);
+        });
 
         // Show success message
         onSuccess?.(`Header ${editMode.isEditing ? 'updated' : 'saved'} successfully`);
@@ -659,8 +661,10 @@ export const HeaderProvider = ({ children }) => {
             });
           }
 
-          // Notify the background script to update rules
-          runtime.sendMessage({ type: 'rulesUpdated' });
+          // Notify the background script to update rules AND clear tracking
+          runtime.sendMessage({ type: 'rulesUpdated' }, (response) => {
+            console.log('Background notified of rule deletion', response);
+          });
 
           // Show success message
           onSuccess?.('Header deleted successfully');

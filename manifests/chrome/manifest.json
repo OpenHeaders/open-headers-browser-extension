@@ -16,7 +16,8 @@
     "alarms",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
-    "tabs"
+    "tabs",
+    "webRequest"
   ],
   "host_permissions": [
     "<all_urls>",
