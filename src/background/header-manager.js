@@ -206,8 +206,17 @@ function processEntry(entry, dynamicSources, isConnected) {
         }
     }
 
+    // Handle empty static values that were not replaced during import (edge case)
+    if (!entry.isDynamic && (!headerValue || !headerValue.trim())) {
+        headerValue = '[EMPTY_VALUE]';
+        usingPlaceholder = true;
+        placeholderReason = 'empty_value';
+    }
+
     // Validate the header value (including placeholders)
-    if (!isValidHeaderValue(headerValue, entry.headerName)) {
+    // Skip validation for known placeholders
+    const isPlaceholder = headerValue.startsWith('[') && headerValue.endsWith(']');
+    if (!isPlaceholder && !isValidHeaderValue(headerValue, entry.headerName)) {
         headerValue = sanitizeHeaderValue(headerValue);
         if (!isValidHeaderValue(headerValue, entry.headerName)) {
             console.log(`Info: Skipping invalid header value for ${entry.headerName}`);
@@ -252,7 +261,8 @@ function createRequestHeaderRules(entry, startId) {
         // Format the URL pattern
         const urlFilter = formatUrlPattern(domain);
 
-        console.log(`Info: Creating request header rule for ${entry.headerName} with URL filter: ${urlFilter}`);
+        // Only log rule creation in verbose mode to reduce noise
+        // console.log(`Info: Creating request header rule for ${entry.headerName} with URL filter: ${urlFilter}`);
 
         // Create main frame rule
         rules.push({
@@ -337,7 +347,8 @@ function createResponseHeaderRules(entry, startId) {
         // Format the URL pattern - critical for response headers
         let urlFilter = formatUrlPattern(domain);
 
-        console.log(`Info: Creating response header rule for ${entry.headerName} with URL filter: ${urlFilter}`);
+        // Only log rule creation in verbose mode to reduce noise
+        // console.log(`Info: Creating response header rule for ${entry.headerName} with URL filter: ${urlFilter}`);
 
         // CRITICAL: Try multiple approaches for response headers
 
