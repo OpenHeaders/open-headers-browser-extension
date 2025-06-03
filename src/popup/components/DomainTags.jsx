@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Tag, Input, Tooltip, Space, App } from 'antd';
-import { PlusOutlined, CloseOutlined } from '@ant-design/icons';
+import { Tag, Input, Tooltip, Space, App, Button } from 'antd';
+import { PlusOutlined, CloseOutlined, CopyOutlined } from '@ant-design/icons';
 import { validateDomain } from '../../utils/header-validator';
 
 /**
@@ -34,6 +34,45 @@ const DomainTags = ({ value = [], onChange }) => {
   const handleClose = (removedTag) => {
     const newTags = value.filter(tag => tag !== removedTag);
     onChange?.(newTags);
+  };
+
+  // Handle copying all domains
+  const handleCopyDomains = async () => {
+    if (value.length === 0) {
+      message.warning('No domains to copy');
+      return;
+    }
+    
+    const domainsText = value.join(',');
+    
+    try {
+      // Check if clipboard API is available (requires HTTPS in most browsers)
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(domainsText);
+        message.success(`Copied ${value.length} domain${value.length > 1 ? 's' : ''} to clipboard`);
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = domainsText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          document.execCommand('copy');
+          message.success(`Copied ${value.length} domain${value.length > 1 ? 's' : ''} to clipboard`);
+        } catch (err) {
+          message.error('Failed to copy domains');
+        } finally {
+          textArea.remove();
+        }
+      }
+    } catch (err) {
+      message.error('Failed to copy domains');
+    }
   };
 
   // Show the input for adding a new tag
@@ -175,6 +214,20 @@ const DomainTags = ({ value = [], onChange }) => {
     } else if (e.key === 'Escape') {
       setInputVisible(false);
       setInputValue('');
+    } else if (e.key === 'Backspace' && inputValue === '' && value.length > 0) {
+      // If backspace is pressed and input is empty, remove the last domain
+      e.preventDefault(); // Prevent default backspace behavior
+      const removedDomain = value[value.length - 1];
+      const newTags = value.slice(0, -1);
+      onChange?.(newTags);
+      
+      // Show a subtle message about the deletion
+      message.info(`Removed domain: ${removedDomain}`, 1);
+      
+      // Keep the input focused
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
 
@@ -189,15 +242,38 @@ const DomainTags = ({ value = [], onChange }) => {
 
   return (
       <div className="professional-domain-tags">
-        {/* Always visible help text */}
+        {/* Always visible help text and copy button */}
         <div style={{
-          fontSize: 12,
-          color: 'var(--text-tertiary)',
-          marginBottom: 8,
-          lineHeight: 1.4
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: 8
         }}>
-          Separate multiple domains with Enter or comma. Use * as wildcard.<br/>
-          Examples: localhost:3001 • example.com • *.example.com • *://example.com/* • 192.168.1.1
+          <div style={{
+            fontSize: 12,
+            color: 'var(--text-tertiary)',
+            lineHeight: 1.4,
+            flex: 1
+          }}>
+            Separate multiple domains with Enter or comma. Use * as wildcard. Press Backspace to delete last domain.<br/>
+            Examples: localhost:3001 • example.com • *.example.com • *://example.com/* • 192.168.1.1
+          </div>
+          {value.length > 0 && (
+            <Tooltip title="Copy all domains as comma-separated values">
+              <Button
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={handleCopyDomains}
+                style={{
+                  fontSize: 11,
+                  height: 22,
+                  marginLeft: 8
+                }}
+              >
+                Copy
+              </Button>
+            </Tooltip>
+          )}
         </div>
 
         {/* Domain tags and input */}
@@ -315,12 +391,12 @@ const DomainTags = ({ value = [], onChange }) => {
                       transition: 'all 0.2s ease'
                     }}
                     onMouseEnter={(e) => {
-                      e.target.style.borderColor = '#1890ff';
-                      e.target.style.color = '#1890ff';
+                      e.currentTarget.style.borderColor = '#1890ff';
+                      e.currentTarget.style.color = '#1890ff';
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.borderColor = 'var(--border-color)';
-                      e.target.style.color = 'var(--text-secondary)';
+                      e.currentTarget.style.borderColor = 'var(--border-color)';
+                      e.currentTarget.style.color = 'var(--text-secondary)';
                     }}
                 >
                   <PlusOutlined style={{ fontSize: 10 }} />

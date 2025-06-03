@@ -99,6 +99,19 @@ const HeaderTable = () => {
   // Get dynamic value and source info for an entry
   function getDynamicValueInfo(entry, sources, connected) {
     if (!entry.isDynamic || !entry.sourceId) {
+      // Check if this is an empty static value
+      if (!entry.headerValue || !entry.headerValue.trim()) {
+        return {
+          value: entry.headerValue,
+          sourceInfo: '',
+          sourceTag: '',
+          available: true,
+          connected: true,
+          placeholderType: 'empty_value',
+          actualValue: '[EMPTY_VALUE]' // Display placeholder in UI
+        };
+      }
+      
       return {
         value: entry.headerValue,
         sourceInfo: '',
@@ -296,6 +309,11 @@ const HeaderTable = () => {
               textColor = "secondary";
               icon = <ExclamationCircleOutlined style={{ marginRight: 4 }} />;
               break;
+            case 'empty_value':
+              tooltipMessage = "Sending '[EMPTY_VALUE]' because the header value is empty";
+              textColor = "secondary";
+              icon = <ExclamationCircleOutlined style={{ marginRight: 4 }} />;
+              break;
           }
         }
 
@@ -368,7 +386,9 @@ const HeaderTable = () => {
               case 'source_not_found':
                 return 'Missing';
               case 'empty_source':
-                return 'Empty';
+                return 'Empty Source';
+              case 'empty_value':
+                return 'Empty Value';
               default:
                 return 'Offline';
             }
@@ -396,7 +416,10 @@ const HeaderTable = () => {
               tags.push('Missing');
               break;
             case 'empty_source':
-              tags.push('Empty');
+              tags.push('Empty Source');
+              break;
+            case 'empty_value':
+              tags.push('Empty Value');
               break;
           }
         }
@@ -453,7 +476,21 @@ const HeaderTable = () => {
               break;
             case 'empty_source':
               tags.push(
-                  <Tooltip key="empty" title={`Source #${record.sourceId} exists but has no content`}>
+                  <Tooltip key="empty-source" title={`Source #${record.sourceId} exists but has no content`}>
+                    <Tag
+                        color="warning"
+                        size="small"
+                        icon={<ExclamationCircleOutlined />}
+                        style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}
+                    >
+                      Empty
+                    </Tag>
+                  </Tooltip>
+              );
+              break;
+            case 'empty_value':
+              tags.push(
+                  <Tooltip key="empty-value" title="This header has an empty value">
                     <Tag
                         color="warning"
                         size="small"

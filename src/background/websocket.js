@@ -72,13 +72,22 @@ function broadcastConnectionStatus() {
  * This forces headers to use placeholders immediately
  */
 function clearDynamicSourcesOnDisconnect() {
-    console.log('Info: Connection lost, clearing sources to force placeholder usage');
+    const wasConnected = isConnected;
+    
+    // Update connection state first
+    isConnected = false;
+    
+    // Only update rules if we were previously connected
+    // This avoids repeated updates when already disconnected
+    if (wasConnected) {
+        console.log('Info: Connection lost, clearing sources to force placeholder usage');
+        
+        // Force an immediate rule update with empty sources to trigger placeholders
+        updateNetworkRules([]);
+    }
 
     // Notify the UI that we're disconnected
     broadcastConnectionStatus();
-
-    // Force an immediate rule update with empty sources to trigger placeholders
-    updateNetworkRules([]);
 
     // Don't clear from storage - we want to preserve the configuration
     // The UI will check isConnected to determine if sources are available

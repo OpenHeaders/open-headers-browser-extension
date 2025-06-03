@@ -28,7 +28,8 @@ import {
     FileTextOutlined,
     CodeSandboxOutlined,
     DisconnectOutlined,
-    WarningOutlined
+    WarningOutlined,
+    ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useHeader } from '../../hooks/useHeader';
 import { normalizeHeaderName } from '../../utils/utils';
@@ -99,6 +100,7 @@ const HeaderForm = () => {
     const { message } = App.useApp();
     const isUpdatingRef = useRef(false);
     const prevEditModeRef = useRef(null);
+    const formRef = useRef(null);
     const [dynamicSourceAlertDismissed, setDynamicSourceAlertDismissed] = useState(false);
     const [lastConnectionState, setLastConnectionState] = useState(null);
     const [headerSuggestions, setHeaderSuggestions] = useState([]);
@@ -185,6 +187,20 @@ const HeaderForm = () => {
         // Update the ref for next render
         prevEditModeRef.current = { ...editMode };
     }, [draftValues, form, editMode]);
+
+    // Scroll to form when entering edit mode
+    useEffect(() => {
+        if (editMode.isEditing && editMode.entryId && formRef.current) {
+            // Small delay to ensure the form is expanded first
+            setTimeout(() => {
+                formRef.current.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start',
+                    inline: 'nearest'
+                });
+            }, 100);
+        }
+    }, [editMode.isEditing, editMode.entryId, editMode.timestamp]);
 
     // Load dismissal state from storage
     useEffect(() => {
@@ -318,25 +334,26 @@ const HeaderForm = () => {
     };
 
     return (
-        <Form
-            form={form}
-            layout="vertical"
-            onFinish={handleSubmit}
-            onValuesChange={handleValuesChange}
-            initialValues={{
-                headerName: '',
-                headerValue: '',
-                domains: [],
-                valueType: 'static',
-                sourceId: '',
-                prefix: '',
-                suffix: '',
-                headerType: 'request'
-            }}
-        >
-            <Collapse
+        <div ref={formRef}>
+            <Form
+                form={form}
+                layout="vertical"
+                onFinish={handleSubmit}
+                onValuesChange={handleValuesChange}
+                initialValues={{
+                    headerName: '',
+                    headerValue: '',
+                    domains: [],
+                    valueType: 'static',
+                    sourceId: '',
+                    prefix: '',
+                    suffix: '',
+                    headerType: 'request'
+                }}
+            >
+                <Collapse
                 size="small"
-                activeKey={(editMode.isEditing && editMode.entryId) || uiState?.formCollapsed ? ['add-header'] : []}
+                activeKey={uiState?.formCollapsed ? ['add-header'] : []}
                 onChange={(keys) => updateUiState && updateUiState({ formCollapsed: keys.includes('add-header') })}
                 className="header-form-collapse"
                 style={{ marginBottom: 12 }}
@@ -370,6 +387,20 @@ const HeaderForm = () => {
                                         style={{ marginBottom: 12 }}
                                         closable
                                         onClose={handleDynamicSourceAlertDismiss}
+                                    />
+                                )}
+
+                            {/* Show warning if editing a header with empty value */}
+                            {editMode.isEditing && draftValues.valueType === 'static' &&
+                                (!draftValues.headerValue || !draftValues.headerValue.trim()) && (
+                                    <Alert
+                                        message="Empty Header Value"
+                                        description="This header has an empty value. It will be sent as '[EMPTY_VALUE]' placeholder until you provide a value."
+                                        type="warning"
+                                        icon={<ExclamationCircleOutlined />}
+                                        showIcon
+                                        style={{ marginBottom: 12 }}
+                                        closable={false}
                                     />
                                 )}
 
@@ -819,6 +850,7 @@ const HeaderForm = () => {
                 }]}
             />
         </Form>
+        </div>
     );
 };
 

@@ -1589,7 +1589,7 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
                     return true;
                 }
 
-                // Save data to storage
+                // Save data to storage (preserve empty values as-is)
                 storage.sync.set({ savedData }, () => {
                     const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 

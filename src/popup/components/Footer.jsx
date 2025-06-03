@@ -33,7 +33,7 @@ const Footer = () => {
   const fileInputRef = useRef(null);
 
   // Version information
-  const version = '2.0.0';
+  const version = '2.1.0';
 
   // Handle export configuration
   const handleExport = async () => {

@@ -254,7 +254,8 @@ export const HeaderProvider = ({ children }) => {
   // State for current edit mode
   const [editMode, setEditMode] = useState({
     isEditing: false,
-    entryId: null
+    entryId: null,
+    timestamp: null
   });
 
   // State for form draft
@@ -361,7 +362,8 @@ export const HeaderProvider = ({ children }) => {
         if (savedEditMode && typeof savedEditMode.isEditing === 'boolean') {
           setEditMode({
             isEditing: savedEditMode.isEditing,
-            entryId: savedEditMode.entryId || null
+            entryId: savedEditMode.entryId || null,
+            timestamp: savedEditMode.timestamp || null
           });
         }
 
@@ -527,7 +529,8 @@ export const HeaderProvider = ({ children }) => {
         // Reset edit mode
         setEditMode({
           isEditing: false,
-          entryId: null
+          entryId: null,
+          timestamp: null
         });
 
         // Clear form (include headerType to reset radio buttons)
@@ -629,7 +632,8 @@ export const HeaderProvider = ({ children }) => {
             // Reset edit mode
             setEditMode({
               isEditing: false,
-              entryId: null
+              entryId: null,
+              timestamp: null
             });
 
             // Clear the form
@@ -695,10 +699,11 @@ export const HeaderProvider = ({ children }) => {
     const entry = headerEntries[entryId];
 
     if (entry) {
-      // Set edit mode
+      // Set edit mode with timestamp to trigger scroll even for same entry
       setEditMode({
         isEditing: true,
-        entryId
+        entryId,
+        timestamp: Date.now()
       });
 
       // Populate form with entry data
@@ -725,7 +730,8 @@ export const HeaderProvider = ({ children }) => {
   const cancelEditing = useCallback(() => {
     setEditMode({
       isEditing: false,
-      entryId: null
+      entryId: null,
+      timestamp: null
     });
 
     setDraftValues({
@@ -814,7 +820,8 @@ export const HeaderProvider = ({ children }) => {
         // Clear any edit mode
         setEditMode({
           isEditing: false,
-          entryId: null
+          entryId: null,
+          timestamp: null
         });
 
         // Reset draft values
