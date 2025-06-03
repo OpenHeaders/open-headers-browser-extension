@@ -1,6 +1,6 @@
 {
   "name": "open-headers",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "A browser extension to view and manage HTTP headers",
   "scripts": {
     "build": "npm run build:chrome && npm run build:firefox && npm run build:edge && npm run build:safari",
@@ -15,7 +15,8 @@
     "dev:safari": "webpack --config config/webpack/webpack.safari.js --watch",
     "safari:convert": "mkdir -p manifests/safari/xcode_project && xcrun safari-web-extension-converter ./dist/safari --app-name \"Open Headers\" --bundle-identifier \"com.openheaders.safari\" --copy-resources --project-location .manifests/safari/xcode_project",
     "postbuild": "node config/scripts/build-utils.js",
-    "release": "node config/scripts/release.js"
+    "release": "node config/scripts/release.js",
+    "source-zip": "node config/scripts/source-code-zip.js"
   },
   "dependencies": {
     "react": "^18.2.0",
