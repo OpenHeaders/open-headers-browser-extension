@@ -41,7 +41,7 @@ A modern browser extension for managing HTTP headers with static and dynamic sou
 ### Manual Installation (Developer Mode)
 
 #### Chrome, Edge
-1. Download and unzip the latest release from [GitHub Releases](https://github.com/OpenHeaders/open-headers-browser-extension/releases)
+1. Download and unzip the latest release from [Open Headers website](https://openheaders.io)
 2. Open the browser and navigate to the extensions page
    - Chrome: `chrome://extensions/`
    - Edge: `edge://extensions/`
@@ -86,7 +86,7 @@ The welcome experience adapts to your specific browser, showing only relevant st
 
 For dynamic sources (HTTP requests, files, environment variables), you'll need the Open Headers companion app:
 
-- [Download for macOS, Windows, and Linux](https://github.com/OpenHeaders/open-headers-app/releases)
+- [Download for macOS, Windows, and Linux](https://openheaders.io)
 
 ## 📖 Usage
 
@@ -296,6 +296,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🔗 Links
 
+- [Open Headers Website](https://openheaders.io)
 - [GitHub Repository](https://github.com/OpenHeaders/open-headers-browser-extension)
 - [Companion App](https://github.com/OpenHeaders/open-headers-app)
 - [Report Issues](https://github.com/OpenHeaders/open-headers-browser-extension/issues)

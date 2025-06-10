@@ -4,7 +4,7 @@ import {
   ExportOutlined,
   ImportOutlined,
   QuestionCircleOutlined,
-  GithubOutlined
+  GlobalOutlined
 } from '@ant-design/icons';
 import { storage, runtime, isFirefox } from '../../utils/browser-api';
 
@@ -33,7 +33,7 @@ const Footer = () => {
   const fileInputRef = useRef(null);
 
   // Version information
-  const version = '2.1.0';
+  const version = '2.1.2';
 
   // Handle export configuration
   const handleExport = async () => {
@@ -205,11 +205,11 @@ const Footer = () => {
     }
   };
 
-  // Handle opening GitHub page
-  const handleOpenGitHub = async () => {
+  // Handle opening website
+  const handleOpenWebsite = async () => {
     const response = await sendMessageSafely({
       type: 'openTab',
-      url: 'https://github.com/OpenHeaders/open-headers-browser-extension'
+      url: 'https://openheaders.io'
     });
     if (!response.error) {
       window.close();
@@ -265,8 +265,8 @@ const Footer = () => {
             <Text style={{ fontSize: '11px', color: '#8c8c8c' }}>v{version}</Text>
             <Button
                 type="text"
-                icon={<GithubOutlined />}
-                onClick={handleOpenGitHub}
+                icon={<GlobalOutlined />}
+                onClick={handleOpenWebsite}
                 size="small"
                 style={{ padding: '0 4px', height: '20px', minWidth: 'auto' }}
             />
