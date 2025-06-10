@@ -78,7 +78,7 @@ const ConnectionInfo = () => {
                     type="primary"
                     size="small"
                     icon={<DownloadOutlined />}
-                    onClick={() => window.open('https://github.com/OpenHeaders/open-headers-app/releases', '_blank')}
+                    onClick={() => window.open('https://openheaders.io', '_blank')}
                 >
                   Download
                 </Button>
