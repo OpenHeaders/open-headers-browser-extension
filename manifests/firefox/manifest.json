@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
   "description": "Manage HTTP headers with static and dynamic sources and content auto-refresh. Dynamic sources: requests, env vars, files.",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "manifest_version": 3,
   "browser_specific_settings": {
     "gecko": {
@@ -23,7 +23,11 @@
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
     "tabs",
-    "webRequest"
+    "webRequest",
+    "activeTab",
+    "scripting",
+    "downloads",
+    "cookies"
   ],
   "host_permissions": [
     "<all_urls>",

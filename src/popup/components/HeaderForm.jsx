@@ -823,16 +823,34 @@ const HeaderForm = () => {
                             {/* Row 5 - Action Buttons */}
                             <Form.Item style={{ marginBottom: 0 }}>
                                 <Space style={{ width: '100%', justifyContent: 'center' }}>
-                                    {editMode.isEditing && (
-                                        <Button
-                                            onClick={cancelEditing}
-                                            icon={<CloseOutlined />}
-                                            size="small"
-                                            style={{ minWidth: 100 }}
-                                        >
-                                            Cancel
-                                        </Button>
-                                    )}
+                                    <Button
+                                        onClick={() => {
+                                            if (editMode.isEditing) {
+                                                // In edit mode, use the existing cancelEditing function
+                                                cancelEditing();
+                                            } else {
+                                                // In add mode, reset the form and collapse the panel
+                                                form.resetFields();
+                                                updateDraftValues({
+                                                    headerName: '',
+                                                    headerValue: '',
+                                                    domains: [],
+                                                    valueType: 'static',
+                                                    sourceId: '',
+                                                    prefix: '',
+                                                    suffix: '',
+                                                    isResponse: false
+                                                });
+                                                // Collapse the form panel
+                                                updateUiState({ formCollapsed: false });
+                                            }
+                                        }}
+                                        icon={<CloseOutlined />}
+                                        size="small"
+                                        style={{ minWidth: 100 }}
+                                    >
+                                        Cancel
+                                    </Button>
 
                                     <Button
                                         type="primary"

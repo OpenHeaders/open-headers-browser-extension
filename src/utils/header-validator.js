@@ -164,16 +164,9 @@ export function validateHeaderName(name, isResponse = false) {
 
   // Check for headers that may cause issues
   let warning = null;
-  if (WARNING_HEADERS.has(lowerName)) {
-    warning = `Modifying "${trimmedName}" may affect browser behavior or cause unexpected issues`;
-  }
-
-  // Special warnings for specific headers
-  if (lowerName === 'content-security-policy') {
-    warning = 'Modifying CSP headers may break website functionality';
-  } else if (lowerName.startsWith('x-frame-options')) {
-    warning = 'Modifying X-Frame-Options may affect iframe embedding';
-  } else if (lowerName === 'referer' || lowerName === 'referrer') {
+  
+  // Only show warning for referer spelling
+  if (lowerName === 'referrer') {
     warning = 'Note: The correct spelling is "Referer" (single r)';
   }
 
@@ -258,19 +251,6 @@ export function validateHeaderValue(value, headerName = '') {
   // Validate specific header value formats
   const lowerHeaderName = headerName.toLowerCase();
 
-  // Authorization header validation
-  if (lowerHeaderName === 'authorization') {
-    // Check for common auth schemes
-    const authSchemes = ['bearer', 'basic', 'digest', 'oauth', 'hawk', 'aws4-hmac-sha256'];
-    const firstWord = value.split(' ')[0].toLowerCase();
-    if (!authSchemes.includes(firstWord) && !value.includes(' ')) {
-      return {
-        valid: true,
-        warning: 'Authorization header should typically start with a scheme like "Bearer" or "Basic"',
-        message: ''
-      };
-    }
-  }
 
   // Content-Type validation
   if (lowerHeaderName === 'content-type') {

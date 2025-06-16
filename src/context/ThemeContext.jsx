@@ -5,8 +5,10 @@ import { storage } from '../utils/browser-api';
 const ThemeContext = createContext({
     isDarkMode: false,
     themeMode: 'auto', // 'light', 'dark', 'auto'
+    isCompactMode: false,
     toggleTheme: () => {},
-    setThemeMode: () => {}
+    setThemeMode: () => {},
+    toggleCompactMode: () => {}
 });
 
 export const useTheme = () => useContext(ThemeContext);
@@ -14,15 +16,19 @@ export const useTheme = () => useContext(ThemeContext);
 export const ThemeProvider = ({ children }) => {
     const [themeMode, setThemeMode] = useState('auto');
     const [systemPrefersDark, setSystemPrefersDark] = useState(false);
+    const [isCompactMode, setIsCompactMode] = useState(false);
 
     // Determine if dark mode should be active
     const isDarkMode = themeMode === 'dark' || (themeMode === 'auto' && systemPrefersDark);
 
     // Load theme preference from storage
     useEffect(() => {
-        storage.local.get(['themeMode'], (result) => {
+        storage.local.get(['themeMode', 'compactMode'], (result) => {
             if (result.themeMode) {
                 setThemeMode(result.themeMode);
+            }
+            if (result.compactMode !== undefined) {
+                setIsCompactMode(result.compactMode);
             }
         });
     }, []);
@@ -40,17 +46,6 @@ export const ThemeProvider = ({ children }) => {
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, []);
 
-    // Apply theme class to body
-    useEffect(() => {
-        if (isDarkMode) {
-            document.body.classList.add('dark-theme');
-            document.body.classList.remove('light-theme');
-        } else {
-            document.body.classList.add('light-theme');
-            document.body.classList.remove('dark-theme');
-        }
-    }, [isDarkMode]);
-
     // Toggle between light and dark (manual override)
     const toggleTheme = () => {
         const newMode = isDarkMode ? 'light' : 'dark';
@@ -64,91 +59,48 @@ export const ThemeProvider = ({ children }) => {
         storage.local.set({ themeMode: mode });
     };
 
-    // Ant Design theme configuration - Enhanced for better dark mode
+    // Toggle compact mode
+    const toggleCompactMode = () => {
+        const newCompactMode = !isCompactMode;
+        setIsCompactMode(newCompactMode);
+        storage.local.set({ compactMode: newCompactMode });
+    };
+
+    // Configure Ant Design theme algorithms
+    const getThemeAlgorithms = () => {
+        const algorithms = [];
+        
+        // Add dark/light algorithm
+        algorithms.push(isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm);
+        
+        // Add compact algorithm if enabled
+        if (isCompactMode) {
+            algorithms.push(theme.compactAlgorithm);
+        }
+        
+        return algorithms.length === 1 ? algorithms[0] : algorithms;
+    };
+
+    // Ant Design theme configuration - Using only built-in algorithms
     const antTheme = {
-        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        algorithm: getThemeAlgorithms(),
         token: {
             colorPrimary: '#1677ff',
             borderRadius: 6,
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            ...(isDarkMode ? {
-                colorBgContainer: '#1f1f1f',
-                colorBgElevated: '#262626',
-                colorBgLayout: '#141414',
-                colorBorder: '#303030',
-                colorBorderSecondary: '#303030',
-                colorText: 'rgba(255, 255, 255, 0.85)',
-                colorTextSecondary: 'rgba(255, 255, 255, 0.65)',
-                colorTextTertiary: 'rgba(255, 255, 255, 0.45)',
-                colorTextQuaternary: 'rgba(255, 255, 255, 0.25)',
-                colorBgTextHover: 'rgba(255, 255, 255, 0.08)',
-                colorBgTextActive: 'rgba(255, 255, 255, 0.15)',
-                // Additional tokens for better dark mode support
-                colorBgBase: '#141414',
-                colorFillSecondary: 'rgba(255, 255, 255, 0.06)',
-                colorFillTertiary: 'rgba(255, 255, 255, 0.04)',
-                colorFillQuaternary: 'rgba(255, 255, 255, 0.02)',
-                colorSplit: 'rgba(255, 255, 255, 0.06)',
-            } : {})
-        },
-        components: isDarkMode ? {
-            // Component-specific overrides for dark mode
-            Collapse: {
-                headerBg: '#1f1f1f',
-                contentBg: '#141414',
-                headerPadding: '10px 16px',
-            },
-            Input: {
-                colorBgContainer: '#262626',
-                colorBorder: '#303030',
-                colorText: 'rgba(255, 255, 255, 0.85)',
-                colorTextPlaceholder: 'rgba(255, 255, 255, 0.45)',
-            },
-            Select: {
-                colorBgContainer: '#262626',
-                colorBorder: '#303030',
-                optionSelectedBg: '#303030',
-                colorBgElevated: '#262626',
-            },
-            Table: {
-                colorBgContainer: '#141414',
-                headerBg: '#1f1f1f',
-                rowHoverBg: '#262626',
-                colorBorderSecondary: '#303030',
-            },
-            Tag: {
-                defaultBg: '#262626',
-                defaultColor: 'rgba(255, 255, 255, 0.85)',
-            },
-            Radio: {
-                buttonSolidCheckedBg: '#1677ff',
-                buttonBg: '#262626',
-                buttonColor: 'rgba(255, 255, 255, 0.65)',
-                buttonSolidCheckedColor: '#fff',
-            },
-            Button: {
-                defaultBg: '#262626',
-                defaultBorderColor: '#303030',
-                defaultColor: 'rgba(255, 255, 255, 0.85)',
-            },
-            Alert: {
-                colorInfoBg: 'rgba(22, 119, 255, 0.1)',
-                colorInfoBorder: 'rgba(22, 119, 255, 0.3)',
-                colorWarningBg: 'rgba(250, 173, 20, 0.1)',
-                colorWarningBorder: 'rgba(250, 173, 20, 0.3)',
-            },
-            Typography: {
-                colorText: 'rgba(255, 255, 255, 0.85)',
-                colorTextHeading: 'rgba(255, 255, 255, 0.85)',
-                colorTextSecondary: 'rgba(255, 255, 255, 0.65)',
-                colorTextDescription: 'rgba(255, 255, 255, 0.45)',
-            }
-        } : {},
+        }
     };
 
     return (
-        <ThemeContext.Provider value={{ isDarkMode, themeMode, toggleTheme, setThemeMode: handleSetThemeMode }}>
-            <ConfigProvider theme={antTheme} componentSize="small">
+        <ThemeContext.Provider value={{ 
+            isDarkMode, 
+            themeMode, 
+            isCompactMode,
+            toggleTheme, 
+            setThemeMode: handleSetThemeMode,
+            toggleCompactMode 
+        }}>
+            <ConfigProvider theme={antTheme}>
                 {children}
             </ConfigProvider>
         </ThemeContext.Provider>
