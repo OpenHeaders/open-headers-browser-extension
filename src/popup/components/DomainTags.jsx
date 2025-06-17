@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tag, Input, Tooltip, Space, App, Button } from 'antd';
-import { PlusOutlined, CloseOutlined, CopyOutlined } from '@ant-design/icons';
+import { PlusOutlined, CloseOutlined, CopyOutlined, DeleteOutlined } from '@ant-design/icons';
 import { validateDomain } from '../../utils/header-validator';
 
 /**
@@ -73,6 +73,17 @@ const DomainTags = ({ value = [], onChange }) => {
     } catch (err) {
       message.error('Failed to copy domains');
     }
+  };
+
+  // Handle deleting all domains
+  const handleDeleteAllDomains = () => {
+    if (value.length === 0) {
+      message.warning('No domains to delete');
+      return;
+    }
+    
+    onChange?.([]);
+    message.success(`Deleted ${value.length} domain${value.length > 1 ? 's' : ''}`);
   };
 
   // Show the input for adding a new tag
@@ -259,20 +270,36 @@ const DomainTags = ({ value = [], onChange }) => {
             Examples: localhost:3001 • example.com • *.example.com • *://example.com/* • 192.168.1.1
           </div>
           {value.length > 0 && (
-            <Tooltip title="Copy all domains as comma-separated values">
-              <Button
-                size="small"
-                icon={<CopyOutlined />}
-                onClick={handleCopyDomains}
-                style={{
-                  fontSize: 11,
-                  height: 22,
-                  marginLeft: 8
-                }}
-              >
-                Copy
-              </Button>
-            </Tooltip>
+            <Space size={4}>
+              <Tooltip title="Copy all domains as comma-separated values">
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={handleCopyDomains}
+                  style={{
+                    fontSize: 11,
+                    height: 22,
+                    marginLeft: 8
+                  }}
+                >
+                  Copy all
+                </Button>
+              </Tooltip>
+              <Tooltip title="Delete all domains">
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={handleDeleteAllDomains}
+                  style={{
+                    fontSize: 11,
+                    height: 22
+                  }}
+                >
+                  Delete all
+                </Button>
+              </Tooltip>
+            </Space>
           )}
         </div>
 
@@ -329,12 +356,13 @@ const DomainTags = ({ value = [], onChange }) => {
                       }}
                   >
                 <span
-                    onDoubleClick={(e) => {
+                    onClick={(e) => {
                       setEditInputIndex(index);
                       setEditInputValue(tag);
                       e.preventDefault();
+                      e.stopPropagation();
                     }}
-                    title="Double-click to edit"
+                    title="Click to edit"
                 >
                   {displayTag}
                 </span>
@@ -355,9 +383,9 @@ const DomainTags = ({ value = [], onChange }) => {
                     ref={inputRef}
                     type="text"
                     size="small"
-                    placeholder="Type domain and press Enter or comma"
+                    placeholder="Type domain and press Enter or comma ,"
                     style={{
-                      width: 200,
+                      width: 280,
                       height: 24,
                       borderRadius: 4,
                       border: 'none',

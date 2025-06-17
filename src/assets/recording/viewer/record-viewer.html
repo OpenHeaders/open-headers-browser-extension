@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Viewer - Open Headers</title>
+    <style>
+        :root {
+            --primary-color: #4285F4;
+            --primary-hover: #3b77db;
+            --secondary-color: #34A853;
+            --text-color: #333333;
+            --text-light: #666666;
+            --background-color: #F5F7FA;
+            --panel-background: #FFFFFF;
+            --border-color: #E0E0E0;
+            --success-color: #34A853;
+            --warning-color: #FBBC05;
+            --error-color: #EA4335;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 780px;
+            background-color: var(--panel-background);
+            border-radius: 12px;
+            box-shadow: 0px 2px 12px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+
+        .content {
+            padding: 40px;
+        }
+
+        .steps-container {
+            background-color: #F8F9FA;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 32px;
+        }
+
+        .steps-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .step {
+            display: flex;
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 16px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .step-line {
+            position: absolute;
+            top: 32px;
+            left: 16px;
+            width: 2px;
+            height: calc(100% - 32px);
+            background-color: #E0E0E0;
+            z-index: 1;
+        }
+
+        .step:last-child .step-line {
+            display: none;
+        }
+
+        .step-content {
+            flex: 1;
+            padding-top: 4px;
+        }
+
+        .step-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .step-description {
+            font-size: 14px;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+
+        .highlight {
+            background-color: rgba(66, 133, 244, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .visual-demo {
+            background-color: white;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            padding: 24px;
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .browser-mockup {
+            background-color: #F5F7FA;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .browser-header {
+            background-color: #F5F7FA;
+            height: 36px;
+            border-bottom: 1px solid #E0E0E0;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+        }
+
+        .browser-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .browser-dots span {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #E0E0E0;
+        }
+
+        .browser-dots span:nth-child(1) {
+            background-color: #FBBC05;
+        }
+
+        .browser-dots span:nth-child(2) {
+            background-color: #34A853;
+        }
+
+        .browser-dots span:nth-child(3) {
+            background-color: #EA4335;
+        }
+
+        .app-mockup {
+            background-color: white;
+            padding: 16px;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tabs-container {
+            display: flex;
+            gap: 16px;
+        }
+
+        .tab {
+            padding: 8px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            background-color: #F5F7FA;
+            color: var(--text-light);
+            transition: all 0.2s ease;
+        }
+
+        .tab.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 32px;
+        }
+        
+        @media (max-width: 768px) {
+            .features {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .feature {
+            text-align: center;
+            padding: 20px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+            transition: transform 0.2s ease;
+        }
+
+        .feature:hover {
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background-color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 24px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: var(--text-light);
+        }
+
+
+        .footer {
+            text-align: center;
+            color: var(--text-light);
+            font-size: 12px;
+            padding: 16px 0;
+        }
+
+        .footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+
+            <div class="steps-container">
+                <h2 class="steps-title">How to View Your Records</h2>
+                
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-line"></div>
+                    <div class="step-content">
+                        <h3 class="step-title">Open the Desktop App</h3>
+                        <p class="step-description" style="display: flex; align-items: center; gap: 20px;">
+                            <span>Launch the Open Headers desktop application</span>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;">
+                                <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="#4285F4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <img src="images/icon128.png" alt="Open Headers App" style="width: 48px; height: 48px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0;">
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3 class="step-title">View Your Record</h3>
+                        <p class="step-description">
+                            Click the <span class="highlight">Records</span> tab & load your record: <span class="highlight">Downloads\open-headers_record-*.json</span>
+                        </p>
+                        
+                        <div class="visual-demo">
+                            <div class="browser-mockup">
+                                <div class="browser-header">
+                                    <div class="browser-dots">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                    </div>
+                                </div>
+                                <div class="app-mockup">
+                                    <div class="tabs-container">
+                                        <div class="tab">Sources</div>
+                                        <div class="tab active">Records</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
+                                The Records tab in the Open Headers desktop app
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">🎬</div>
+                    <h3 class="feature-title">Playback</h3>
+                    <p class="feature-desc">Watch your session replay with controls</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🌐</div>
+                    <h3 class="feature-title">Network</h3>
+                    <p class="feature-desc">Inspect all HTTP requests & responses</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">💾</div>
+                    <h3 class="feature-title">Storage</h3>
+                    <p class="feature-desc">View cookies, localStorage & sessionStorage</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📝</div>
+                    <h3 class="feature-title">Console</h3>
+                    <p class="feature-desc">View JavaScript logs & errors</p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <p>Open Headers v2.2.0 • <a href="https://openheaders.io" target="_blank">Website</a></p>
+    </div>
+</body>
+</html>

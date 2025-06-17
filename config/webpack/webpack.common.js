@@ -8,7 +8,9 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 module.exports = {
     entry: {
         background: './src/background/index.js',
-        popup: './src/popup/index.jsx'
+        popup: './src/popup/index.jsx',
+        'content/record-recorder': './src/assets/recording/content/record-recorder.js',
+        'content/test-inject': './src/content/test-inject.js'
     },
     output: {
         path: path.resolve(__dirname, '../../dist'),
@@ -165,6 +167,26 @@ module.exports = {
                 {
                     from: 'src/assets/export/export.js',
                     to: 'js/export.js'
+                },
+                {
+                    from: 'src/assets/recording/inject/recorder.js',
+                    to: 'js/recording/inject/recorder.js'
+                },
+                {
+                    from: 'src/assets/recording/viewer/record-viewer.html',
+                    to: 'record-viewer.html'
+                },
+                {
+                    from: 'node_modules/rrweb/dist/rrweb.umd.cjs',
+                    to: 'js/lib/rrweb.js'
+                },
+                {
+                    from: 'node_modules/rrweb-player/dist/rrweb-player.umd.cjs',
+                    to: 'js/lib/rrweb-player.js'
+                },
+                {
+                    from: 'node_modules/rrweb-player/dist/style.css',
+                    to: 'css/rrweb-player.css'
                 }
             ]
         })

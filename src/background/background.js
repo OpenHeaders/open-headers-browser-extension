@@ -2,9 +2,13 @@
  * Main background service worker with placeholder header tracking
  */
 
+console.log('[Open Headers] Background script loading...');
+
 import { connectWebSocket, getCurrentSources, isWebSocketConnected } from './websocket.js';
 import { updateNetworkRules } from './header-manager.js';
 import { alarms, runtime, storage, tabs, isFirefox, isChrome, isEdge, isSafari } from '../utils/browser-api.js';
+import recordManager from '../assets/recording/background/record-manager.js';
+
 
 // Constants
 const MAX_TRACKED_URLS_PER_TAB = 50; // Limit tracked URLs to prevent memory leaks
@@ -879,6 +883,8 @@ async function updateBadgeForCurrentTab() {
  * Initialize the extension.
  */
 async function initializeExtension() {
+    // Initialize record manager (force it to set up its listeners)
+    
     // Set initial badge state to disconnected
     await updateExtensionBadge(false, null, false);
 
@@ -1470,7 +1476,61 @@ storage.onChanged.addListener((changes, area) => {
 });
 
 // Listen for messages from popup and header-manager
+console.log('[Open Headers] Setting up message listener...');
 runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[Open Headers] Received message:', message.type, message);
+    // Handle record recording messages directly here
+    if (message.type && [
+        'START_RECORDING', 
+        'STOP_RECORDING', 
+        'CANCEL_RECORDING',
+        'GET_RECORDING_STATE',
+        'DOWNLOAD_RECORD'
+    ].includes(message.type)) {
+        
+        // Forward to record manager
+        if (recordManager) {
+            switch (message.type) {
+                case 'START_RECORDING':
+                    recordManager.startRecording(message.tabId)
+                        .then(response => sendResponse(response))
+                        .catch(error => sendResponse({ success: false, error: error.message }));
+                    return true;
+                    
+                case 'STOP_RECORDING':
+                    recordManager.stopRecording(message.tabId)
+                        .then(response => sendResponse(response))
+                        .catch(error => sendResponse({ success: false, error: error.message }));
+                    return true;
+                    
+                case 'CANCEL_RECORDING':
+                    const cancelTabId = message.tabId || sender.tab?.id;
+                    if (!cancelTabId) {
+                        sendResponse({ success: false, error: 'No tab ID available' });
+                        return true;
+                    }
+                    recordManager.cancelRecording(cancelTabId)
+                        .then(response => sendResponse(response))
+                        .catch(error => sendResponse({ success: false, error: error.message }));
+                    return true;
+                    
+                case 'GET_RECORDING_STATE':
+                    const tabId = message.tabId || sender.tab?.id;
+                    const state = recordManager.getRecordingState(tabId);
+                    sendResponse(state);
+                    return true;
+                    
+                case 'DOWNLOAD_RECORD':
+                    recordManager.downloadRecord(message.url, message.filename);
+                    sendResponse({ success: true });
+                    return true;
+            }
+        } else {
+            sendResponse({ success: false, error: 'Record manager not initialized' });
+            return true;
+        }
+    }
+    
     // Create a safe response function that checks if the channel is still open
     const safeResponse = (data) => {
         try {
@@ -1599,8 +1659,9 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
                         return;
                     }
 
-                    // Save dynamic sources if present
-                    if (dynamicSources && Array.isArray(dynamicSources)) {
+                    // Handle dynamic sources - preserve existing ones if import doesn't include any
+                    if (dynamicSources && Array.isArray(dynamicSources) && dynamicSources.length > 0) {
+                        // Import has dynamic sources, use them
                         storage.local.set({ dynamicSources }, () => {
                             if (browserAPI.runtime.lastError) {
                                 console.log('Info: Error saving dynamicSources:', browserAPI.runtime.lastError.message);
@@ -1608,17 +1669,17 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
                                 return;
                             }
 
-                            console.log('Info: Configuration imported successfully');
+                            console.log('Info: Configuration imported successfully with dynamic sources');
 
                             // Clear all request tracking when importing new config
                             tabsWithActiveRules.clear();
                             console.log('Info: Cleared all request tracking after configuration import');
 
                             // Update network rules with the imported sources
-                            updateNetworkRules(dynamicSources || getCurrentSources());
+                            updateNetworkRules(dynamicSources);
 
                             // Update tracking variables
-                            lastSourcesHash = generateSourcesHash(dynamicSources || []);
+                            lastSourcesHash = generateSourcesHash(dynamicSources);
                             lastRulesUpdateTime = Date.now();
                             lastSavedDataHash = generateSavedDataHash(savedData);
 
@@ -1629,14 +1690,17 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
                             safeResponse({ success: true });
                         });
                     } else {
-                        // No dynamic sources, just update rules
-                        console.log('Info: Configuration imported successfully (no dynamic sources)');
+                        // No dynamic sources in import, preserve existing ones
+                        console.log('Info: Configuration imported successfully (preserving existing dynamic sources)');
 
                         // Clear all request tracking
                         tabsWithActiveRules.clear();
 
-                        // Update network rules
-                        updateNetworkRules(getCurrentSources());
+                        // Get current sources (existing ones will be preserved)
+                        const currentSources = getCurrentSources();
+
+                        // Update network rules with existing sources
+                        updateNetworkRules(currentSources);
 
                         // Update tracking variables
                         lastRulesUpdateTime = Date.now();
@@ -1686,15 +1750,13 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return true; // Keep channel open for async response
         } else {
-            // Unknown message type
+            // Unknown message type - don't handle it, let other listeners try
             console.log('Info: Unknown message type:', message.type);
-            safeResponse({ error: 'Unknown message type' });
+            return false;
         }
     } catch (error) {
         console.log('Info: Error handling message:', error.message);
         safeResponse({ error: error.message });
+        return true;
     }
-
-    // Return true for any async operations
-    return true;
 });
