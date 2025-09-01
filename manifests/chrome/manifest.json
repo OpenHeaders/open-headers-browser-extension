@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
-  "description": "Manage HTTP headers with static and dynamic sources and content auto-refresh. Dynamic sources: requests, env vars, files.",
-  "version": "2.2.0",
+  "description": "Record your browser tab. Modify HTTP Traffic. Team Workspaces. Everything local.",
+  "version": "3.0.0",
   "manifest_version": 3,
   "action": {
     "default_popup": "popup.html",
@@ -18,10 +18,13 @@
     "declarativeNetRequestWithHostAccess",
     "tabs",
     "webRequest",
+    "webNavigation",
     "activeTab",
     "scripting",
     "downloads",
-    "cookies"
+    "cookies",
+    "system.display",
+    "windows"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -43,6 +46,6 @@
     "128": "images/icon128.png"
   },
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; connect-src 'self' ws://127.0.0.1:59210 http://127.0.0.1:59210 wss://127.0.0.1:59211 https://127.0.0.1:59211; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob:"
+    "extension_pages": "default-src 'self'; connect-src 'self' * ws://127.0.0.1:59210 http://127.0.0.1:59210 wss://127.0.0.1:59211 https://127.0.0.1:59211; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob:"
   }
 }

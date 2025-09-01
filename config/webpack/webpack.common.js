@@ -1,21 +1,22 @@
 const path = require('path');
-const TerserPlugin = require('terser-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const ChromeSafePlugin = require('./chrome-safe-plugin');
 
 module.exports = {
     entry: {
         background: './src/background/index.js',
         popup: './src/popup/index.jsx',
-        'content/record-recorder': './src/assets/recording/content/record-recorder.js',
-        'content/test-inject': './src/content/test-inject.js'
+        'content/record-recorder': './src/assets/recording/content/record-recorder.js'
     },
     output: {
         path: path.resolve(__dirname, '../../dist'),
         filename: 'js/[name]/index.js',
-        clean: true
+        clean: true,
+        // Prevent webpack from using Function constructor for global object detection
+        globalObject: 'this'
     },
     // Use a safer devtool option that doesn't rely on eval for development
     // This ensures compatibility with strict CSP policies in browsers like Edge
@@ -89,29 +90,9 @@ module.exports = {
         ]
     },
     optimization: {
-        minimize: process.env.NODE_ENV === 'production', // Only minimize in production
-        minimizer: [
-            new TerserPlugin({
-                terserOptions: {
-                    // Chrome Web Store compliant settings - no obfuscation
-                    compress: {
-                        drop_console: false,
-                        passes: 2
-                    },
-                    mangle: {
-                        // Only basic variable name minification, not obfuscation
-                        reserved: ['chrome', 'browser'] // Prevent mangling of browser API names
-                    },
-                    format: {
-                        comments: false
-                    },
-                    // Make sure the code is readable and not obfuscated
-                    keep_classnames: true,
-                    keep_fnames: true
-                },
-                extractComments: false
-            })
-        ]
+        minimize: false, // Disable minification to comply with Chrome Web Store
+        // Chrome Web Store requires all code to be human-readable
+        // and considers minified code as obfuscated
     },
     resolve: {
         extensions: ['.js', '.jsx', '.json'],
@@ -153,42 +134,35 @@ module.exports = {
                     to: 'js/welcome.js'
                 },
                 {
-                    from: 'src/assets/import/import.html',
-                    to: 'import.html'
-                },
-                {
-                    from: 'src/assets/import/import.js',
-                    to: 'js/import.js'
-                },
-                {
-                    from: 'src/assets/export/export.html',
-                    to: 'export.html'
-                },
-                {
-                    from: 'src/assets/export/export.js',
-                    to: 'js/export.js'
-                },
-                {
-                    from: 'src/assets/recording/inject/recorder.js',
+                    from: 'src/assets/recording/inject/recorder-rrweb.js',
                     to: 'js/recording/inject/recorder.js'
+                },
+                {
+                    from: 'src/assets/recording/inject/recording-widget.js',
+                    to: 'js/recording/inject/recording-widget.js'
                 },
                 {
                     from: 'src/assets/recording/viewer/record-viewer.html',
                     to: 'record-viewer.html'
                 },
                 {
-                    from: 'node_modules/rrweb/dist/rrweb.umd.cjs',
+                    from: 'src/assets/lib/rrweb.js',
                     to: 'js/lib/rrweb.js'
                 },
                 {
-                    from: 'node_modules/rrweb-player/dist/rrweb-player.umd.cjs',
+                    from: 'src/assets/lib/rrweb-player.js',
                     to: 'js/lib/rrweb-player.js'
                 },
                 {
-                    from: 'node_modules/rrweb-player/dist/style.css',
+                    from: 'src/assets/lib/rrweb-player.css',
                     to: 'css/rrweb-player.css'
+                },
+                {
+                    from: 'src/assets/lib/assets/*.js',
+                    to: 'js/lib/assets/[name][ext]'
                 }
             ]
-        })
+        }),
+        new ChromeSafePlugin()
     ]
 };

@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import { ConfigProvider, theme } from 'antd';
 import { storage } from '../utils/browser-api';
 
-const ThemeContext = createContext({
+export const ThemeContext = createContext({
     isDarkMode: false,
     themeMode: 'auto', // 'light', 'dark', 'auto'
     isCompactMode: false,

@@ -45,8 +45,8 @@ export const generateSourcesHash = (sources) => {
   // Create a simplified representation of the sources to compare
   const simplifiedSources = sources.map(source => {
     return {
-      id: source.sourceId || source.locationId,
-      content: source.sourceContent || source.locationContent
+      id: source.sourceId,
+      content: source.sourceContent
     };
   });
 
