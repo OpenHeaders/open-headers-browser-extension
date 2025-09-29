@@ -6,6 +6,7 @@ import { normalizeHeaderName } from '../utils/utils.js';
 import { storage, declarativeNetRequest, runtime } from '../utils/browser-api.js';
 import { isWebSocketConnected } from './websocket.js';
 import { validateHeaderName } from '../utils/header-validator.js';
+import { getChunkedData } from '../utils/storage-chunking.js';
 
 // Track headers using placeholders for badge notification
 let headersWithPlaceholders = [];
@@ -33,105 +34,124 @@ export function updateNetworkRules(dynamicSources) {
     // Reset placeholder tracking
     headersWithPlaceholders = [];
 
-    // Check if we're connected
-    const isConnected = isWebSocketConnected();
+    // Check if rules execution is paused
+    const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+    browserAPI.storage.sync.get(['isRulesExecutionPaused'], (result) => {
+        const isPaused = result.isRulesExecutionPaused || false;
+        
+        if (isPaused) {
+            console.log('Info: Rules execution is paused, clearing all active rules');
+            // Clear all rules when paused
+            declarativeNetRequest.updateDynamicRules({
+                removeRuleIds: Array.from({length: 1000}, (_, i) => i + 1),
+                addRules: []
+            }).then(() => {
+                console.log('Info: All rules cleared while paused');
+            });
+            return;
+        }
 
-    // If not connected, we should not use any dynamic sources
-    const effectiveSources = isConnected ? dynamicSources : [];
+        // Continue with normal rule processing if not paused
+        // Check if we're connected
+        const isConnected = isWebSocketConnected();
 
-    // Get all saved headers
-    storage.sync.get(['savedData'], (result) => {
-        const savedData = result.savedData || {};
+        // If not connected, we should not use any dynamic sources
+        const effectiveSources = isConnected ? dynamicSources : [];
 
-        // Create rules array for declarativeNetRequest
-        const rules = [];
-        let ruleId = 1;
+        // Get all saved headers using chunked data retrieval
+        getChunkedData('savedData', (savedData) => {
+            savedData = savedData || {};
 
-        // Separate request and response headers for specialized handling
-        const requestEntries = [];
-        const responseEntries = [];
+            // Create rules array for declarativeNetRequest
+            const rules = [];
+            let ruleId = 1;
 
-        // First pass - categorize and validate all entries
-        for (const id in savedData) {
-            const entry = savedData[id];
+            // Separate request and response headers for specialized handling
+            const requestEntries = [];
+            const responseEntries = [];
 
-            // Skip disabled rules
-            if (entry.isEnabled === false) {
-                console.log(`Info: Skipping disabled rule for ${entry.headerName}`);
-                continue;
-            }
+            // First pass - categorize and validate all entries
+            for (const id in savedData) {
+                const entry = savedData[id];
 
-            // Process entry (now returns entry with placeholder if needed)
-            const processedEntry = processEntry(entry, effectiveSources, isConnected);
-            if (processedEntry) {
-                if (processedEntry.isResponse) {
-                    responseEntries.push(processedEntry);
-                } else {
-                    requestEntries.push(processedEntry);
+                // Skip disabled rules
+                if (entry.isEnabled === false) {
+                    console.log(`Info: Skipping disabled rule for ${entry.headerName}`);
+                    continue;
+                }
+
+                // Process entry (now returns entry with placeholder if needed)
+                const processedEntry = processEntry(entry, effectiveSources, isConnected);
+                if (processedEntry) {
+                    if (processedEntry.isResponse) {
+                        responseEntries.push(processedEntry);
+                    } else {
+                        requestEntries.push(processedEntry);
+                    }
                 }
             }
-        }
 
-        // Process request headers (these work reliably)
-        requestEntries.forEach(entry => {
-            const requestRules = createRequestHeaderRules(entry, ruleId);
-            rules.push(...requestRules);
-            ruleId += requestRules.length;
-        });
-
-        // Process response headers with specialized approach
-        responseEntries.forEach(entry => {
-            const responseRules = createResponseHeaderRules(entry, ruleId);
-            rules.push(...responseRules);
-            ruleId += responseRules.length;
-        });
-
-        // Log diagnostic placeholder usage
-        if (headersWithPlaceholders.length > 0) {
-            console.warn(`Info: ${headersWithPlaceholders.length} headers using diagnostic placeholders:`, headersWithPlaceholders);
-
-            // Notify background script to update badge
-            sendMessageSafely({
-                type: 'headersUsingPlaceholders',
-                headers: headersWithPlaceholders
-            }, (response, error) => {
-                // Ignore errors when no listeners
+            // Process request headers (these work reliably)
+            requestEntries.forEach(entry => {
+                const requestRules = createRequestHeaderRules(entry, ruleId);
+                rules.push(...requestRules);
+                ruleId += requestRules.length;
             });
-        } else {
-            // Clear badge if no placeholders
-            sendMessageSafely({
-                type: 'headersUsingPlaceholders',
-                headers: []
-            }, (response, error) => {
-                // Ignore errors when no listeners
-            });
-        }
 
-        // Log response header details for debugging
-        if (responseEntries.length > 0) {
-            console.log(`Info: Creating ${rules.length} total rules (${responseEntries.length} response headers)`);
-            console.log(`Info: Response headers being set:`);
+            // Process response headers with specialized approach
             responseEntries.forEach(entry => {
-                console.log(`- ${entry.headerName}: "${entry.headerValue}" for domains: ${entry.domains.join(', ')}`);
+                const responseRules = createResponseHeaderRules(entry, ruleId);
+                rules.push(...responseRules);
+                ruleId += responseRules.length;
             });
-        }
 
-        // Update the dynamic rules
-        declarativeNetRequest.updateDynamicRules({
-            removeRuleIds: Array.from({ length: 2000 }, (_, i) => i + 1), // Remove all existing rules
-            addRules: rules
-        }).then(() => {
-            console.log(`Info: Successfully updated ${rules.length} network rules`);
-            if (rules.length > 0) {
-                console.log('Info: Example rule:', JSON.stringify(rules[0].condition));
+            // Log diagnostic placeholder usage
+            if (headersWithPlaceholders.length > 0) {
+                console.warn(`Info: ${headersWithPlaceholders.length} headers using diagnostic placeholders:`, headersWithPlaceholders);
+
+                // Notify background script to update badge
+                sendMessageSafely({
+                    type: 'headersUsingPlaceholders',
+                    headers: headersWithPlaceholders
+                }, (response, error) => {
+                    // Ignore errors when no listeners
+                });
+            } else {
+                // Clear badge if no placeholders
+                sendMessageSafely({
+                    type: 'headersUsingPlaceholders',
+                    headers: []
+                }, (response, error) => {
+                    // Ignore errors when no listeners
+                });
             }
-        }).catch(e => {
-            console.error('Error updating rules:', e.message || 'Unknown error');
-            sendMessageSafely({
-                type: 'ruleUpdateError',
-                error: e.message || 'Unknown error'
-            }, (response, error) => {
-                // Ignore errors when no popup is listening
+
+            // Log response header details for debugging
+            if (responseEntries.length > 0) {
+                console.log(`Info: Creating ${rules.length} total rules (${responseEntries.length} response headers)`);
+                console.log(`Info: Response headers being set:`);
+                responseEntries.forEach(entry => {
+                    console.log(`- ${entry.headerName}: "${entry.headerValue}" for domains: ${entry.domains.join(', ')}`);
+                });
+            }
+
+            // Update the dynamic rules
+            declarativeNetRequest.updateDynamicRules({
+                removeRuleIds: Array.from({ length: 2000 }, (_, i) => i + 1), // Remove all existing rules
+                addRules: rules
+            }).then(() => {
+                console.log(`Info: Successfully updated ${rules.length} network rules`);
+                if (rules.length > 0) {
+                    console.log('Info: Example rule:', JSON.stringify(rules[0].condition));
+                }
+            }).catch(e => {
+                console.error('Error updating rules:', e.message || 'Unknown error');
+                sendMessageSafely({
+                    type: 'ruleUpdateError',
+                    error: e.message || 'Unknown error'
+                }, (response, error) => {
+                    // Ignore errors when no popup is listening
+                });
             });
         });
     });
@@ -169,8 +189,7 @@ function processEntry(entry, dynamicSources, isConnected) {
         } else {
             // Only look for sources when connected
             const source = dynamicSources.find(s =>
-                s.sourceId?.toString() === entry.sourceId?.toString() ||
-                s.locationId?.toString() === entry.sourceId?.toString()
+                s.sourceId?.toString() === entry.sourceId?.toString()
             );
 
             if (!source) {
@@ -180,7 +199,7 @@ function processEntry(entry, dynamicSources, isConnected) {
                 placeholderReason = 'source_not_found';
                 console.warn(`Header "${entry.headerName}" using placeholder - source #${entry.sourceId} not found`);
             } else {
-                const dynamicContent = source.sourceContent || source.locationContent || '';
+                const dynamicContent = source.sourceContent || '';
 
                 if (!dynamicContent) {
                     // EMPTY_SOURCE state
@@ -295,7 +314,7 @@ function createRequestHeaderRules(entry, startId) {
             }
         });
 
-        // Create sub-resources rule
+        // Create sub-resources rule (including websocket)
         rules.push({
             id: ruleId++,
             priority: 90,
@@ -322,7 +341,28 @@ function createRequestHeaderRules(entry, startId) {
             },
             condition: {
                 urlFilter: urlFilter,
-                resourceTypes: ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'other']
+                resourceTypes: ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'websocket', 'other']
+            }
+        });
+
+        // Create dedicated WebSocket rule with higher priority
+        // This ensures WebSocket upgrade requests get the headers
+        rules.push({
+            id: ruleId++,
+            priority: 95, // Higher priority for WebSocket
+            action: {
+                type: 'modifyHeaders',
+                requestHeaders: [
+                    {
+                        header: entry.headerName,
+                        operation: 'set',
+                        value: entry.headerValue
+                    }
+                ]
+            },
+            condition: {
+                urlFilter: urlFilter,
+                resourceTypes: ['websocket']
             }
         });
     });

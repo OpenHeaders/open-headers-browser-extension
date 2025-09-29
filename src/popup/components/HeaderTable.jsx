@@ -6,13 +6,11 @@ import {
   Button,
   Switch,
   Tooltip,
-  Popconfirm,
   Input,
   Typography,
-  Skeleton,
   Empty,
   App,
-  Badge
+  Dropdown
 } from 'antd';
 import {
   EditOutlined,
@@ -21,9 +19,20 @@ import {
   FileTextOutlined,
   DisconnectOutlined,
   WarningOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  PlusOutlined,
+  DownOutlined,
+  SwapOutlined,
+  ApiOutlined,
+  LinkOutlined,
+  StopOutlined,
+  MoreOutlined,
+  FileProtectOutlined,
+  SendOutlined,
+  CodeOutlined
 } from '@ant-design/icons';
 import { useHeader } from '../../hooks/useHeader';
+import { getAppLauncher } from '../../utils/app-launcher';
 
 const { Search } = Input;
 const { Text, Paragraph } = Typography;
@@ -33,17 +42,15 @@ const { Text, Paragraph } = Typography;
  */
 const HeaderTable = () => {
   const { message } = App.useApp();
+  const appLauncher = getAppLauncher();
 
   const {
     headerEntries,
-    editMode,
     dynamicSources,
     isConnected,
+    rulesFromApp,
     uiState,
-    updateUiState,
-    startEditingEntry,
-    deleteHeaderEntry,
-    toggleEntryEnabled
+    updateUiState
   } = useHeader();
 
   // Initialize local state from context
@@ -81,7 +88,8 @@ const HeaderTable = () => {
       sourceAvailable: dynamicInfo.available,
       sourceConnected: dynamicInfo.connected,
       placeholderType: dynamicInfo.placeholderType,
-      actualValue: dynamicInfo.actualValue
+      actualValue: dynamicInfo.actualValue,
+      tag: entry.tag || '' // Add the actual tag from the header rule
     };
   });
 
@@ -89,7 +97,8 @@ const HeaderTable = () => {
   const filteredData = dataSource.filter(item =>
       item.headerName.toLowerCase().includes(searchText.toLowerCase()) ||
       item.domains.some(domain => domain.toLowerCase().includes(searchText.toLowerCase())) ||
-      item.headerValue.toLowerCase().includes(searchText.toLowerCase())
+      item.actualValue.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.tag.toLowerCase().includes(searchText.toLowerCase())
   );
 
   // Count enabled rules
@@ -317,23 +326,37 @@ const HeaderTable = () => {
           }
         }
 
-        return (
-            <Tooltip title={tooltipMessage}>
-              <Text
-                  ellipsis
-                  type={textColor}
-                  style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontFamily: hasPlaceholder ? 'monospace' : 'inherit',
-                    opacity: record.isEnabled ? 1 : 0.5
-                  }}
-              >
-                {icon}
-                {text}
-              </Text>
-            </Tooltip>
+        // Trim long values: show first 10 chars ... last 5 chars
+        let displayValue = text || '';
+        const shouldTrim = !hasPlaceholder && displayValue.length > 20;
+        if (shouldTrim) {
+          displayValue = `${displayValue.substring(0, 10)}...${displayValue.substring(displayValue.length - 5)}`;
+        }
+
+        // Only show tooltip for placeholder messages
+        const tooltipContent = hasPlaceholder ? tooltipMessage : null;
+
+        const content = (
+          <Text
+              type={textColor}
+              style={{
+                display: 'block',
+                fontSize: '13px',
+                fontFamily: hasPlaceholder ? 'monospace' : 'inherit',
+                opacity: record.isEnabled ? 1 : 0.5,
+                cursor: hasPlaceholder ? 'help' : 'default'
+              }}
+          >
+            {icon}
+            {displayValue}
+          </Text>
         );
+
+        return tooltipContent ? (
+            <Tooltip title={tooltipContent}>
+              {content}
+            </Tooltip>
+        ) : content;
       },
     },
     {
@@ -371,14 +394,14 @@ const HeaderTable = () => {
       width: 100,
       align: 'center',
       sorter: (a, b) => {
-        const tagA = `${a.isResponse ? 'Response' : 'Request'}${a.isDynamic ? '-D' : ''}${a.sourceTag ? `-${a.sourceTag}` : ''}`;
-        const tagB = `${b.isResponse ? 'Response' : 'Request'}${b.isDynamic ? '-D' : ''}${b.sourceTag ? `-${b.sourceTag}` : ''}`;
+        const tagA = `${a.isResponse ? 'Response' : 'Request'}${a.tag ? `-${a.tag}` : ''}`;
+        const tagB = `${b.isResponse ? 'Response' : 'Request'}${b.tag ? `-${b.tag}` : ''}`;
         return tagA.localeCompare(tagB);
       },
       filters: [
         ...new Set([
           ...dataSource.map(item => item.isResponse ? 'Response' : 'Request'),
-          ...dataSource.filter(item => item.sourceTag).map(item => item.sourceTag),
+          ...dataSource.filter(item => item.tag).map(item => item.tag),
           ...dataSource.filter(item => item.placeholderType).map(item => {
             switch (item.placeholderType) {
               case 'app_disconnected':
@@ -403,7 +426,7 @@ const HeaderTable = () => {
       onFilter: (value, record) => {
         const tags = [
           record.isResponse ? 'Response' : 'Request',
-          ...(record.sourceTag ? [record.sourceTag] : [])
+          ...(record.tag ? [record.tag] : [])
         ];
 
         // Add the appropriate placeholder tag based on type
@@ -442,6 +465,15 @@ const HeaderTable = () => {
               {record.isResponse ? 'Response' : 'Request'}
             </Tag>
         );
+
+        // Show custom tag if present
+        if (record.tag) {
+          tags.push(
+              <Tag key="custom-tag" color="purple" size="small" style={{ margin: '0 0 2px 0', fontSize: '11px' }}>
+                {record.tag}
+              </Tag>
+          );
+        }
 
         // Show appropriate tag based on placeholder type or source tag
         if (record.placeholderType) {
@@ -503,12 +535,6 @@ const HeaderTable = () => {
               );
               break;
           }
-        } else if (record.sourceTag) {
-          tags.push(
-              <Tag key="source" color="orange" size="small" style={{ margin: '0 0 2px 0', fontSize: '11px' }}>
-                {record.sourceTag}
-              </Tag>
-          );
         }
 
         return (
@@ -592,12 +618,30 @@ const HeaderTable = () => {
       sortOrder: sortedInfo.columnKey === 'isEnabled' ? sortedInfo.order : null,
       render: (enabled, record) => {
         return (
-            <Switch
-                checked={enabled}
-                onChange={(checked) => toggleEntryEnabled(record.id, checked)}
-                disabled={editMode.entryId === record.id}
-                size="small"
-            />
+            <Tooltip title="Enable/disable rule">
+              <Switch
+                  checked={enabled}
+                  onChange={async () => {
+                    // Send toggle request directly via WebSocket without redirecting
+                    const { runtime } = await import('../../utils/browser-api');
+                    
+                    // Send toggle request to background script
+                    runtime.sendMessage({
+                      type: 'toggleRule',
+                      ruleId: record.id,
+                      enabled: !enabled  // Send the new state we want
+                    }, (response) => {
+                      if (response && response.success) {
+                        // Success - the app will send back updated rules via rules-update
+                        message.success('Rule toggled');
+                      } else {
+                        message.error('Failed to toggle rule - app not connected');
+                      }
+                    });
+                  }}
+                  size="small"
+              />
+            </Tooltip>
         );
       },
     },
@@ -609,32 +653,196 @@ const HeaderTable = () => {
       fixed: 'right',
       render: (_, record) => (
           <Space size={2}>
-            <Tooltip title="Edit">
+            <Tooltip title={!isConnected ? "App not connected" : "Edit in desktop app"}>
               <Button
                   type="text"
                   icon={<EditOutlined />}
                   size="small"
-                  onClick={() => startEditingEntry(record.id)}
+                  disabled={!isConnected}
+                  onClick={async () => {
+                    if (!isConnected) {
+                      message.warning('Please connect to the desktop app to edit rules');
+                      return;
+                    }
+                    await appLauncher.launchOrFocus({ 
+                      tab: 'rules', 
+                      subTab: 'headers',
+                      action: 'edit',
+                      itemId: record.id 
+                    });
+                    message.info('Opening edit dialog in OpenHeaders app');
+                  }}
               />
             </Tooltip>
 
-            <Popconfirm
-                title="Delete this header?"
-                description="This action cannot be undone."
-                onConfirm={() => deleteHeaderEntry(record.id, (successMsg) => message.success(successMsg))}
-                okText="Yes"
-                cancelText="No"
-            >
+            <Tooltip title={!isConnected ? "App not connected" : "Delete in desktop app"}>
               <Button
                   type="text"
                   danger
                   icon={<DeleteOutlined />}
                   size="small"
+                  disabled={!isConnected}
+                  onClick={async () => {
+                    if (!isConnected) {
+                      message.warning('Please connect to the desktop app to delete rules');
+                      return;
+                    }
+                    await appLauncher.launchOrFocus({ 
+                      tab: 'rules', 
+                      subTab: 'headers',
+                      action: 'delete',
+                      itemId: record.id 
+                    });
+                    message.info('Opening delete confirmation in OpenHeaders app');
+                  }}
               />
-            </Popconfirm>
+            </Tooltip>
           </Space>
       ),
     },
+  ];
+
+  // Dropdown menu items for Add Rule button
+  const addRuleMenuItems = [
+    {
+      key: 'modify-headers',
+      icon: <SwapOutlined />,
+      label: !isConnected ? (
+        <Tooltip title="App not connected" placement="right">
+          <span>Modify Headers (Request/Response)</span>
+        </Tooltip>
+      ) : 'Modify Headers (Request/Response)',
+      disabled: !isConnected,
+      onClick: async () => {
+        await appLauncher.launchOrFocus({ 
+          tab: 'rules', 
+          subTab: 'headers',
+          action: 'create'
+        });
+        message.info('Opening new rule dialog in OpenHeaders app');
+      }
+    },
+    // TODO: Add when cookies support is implemented in the app
+    // {
+    //   key: 'modify-cookies',
+    //   icon: <FileProtectOutlined />,
+    //   label: 'Modify Cookies',
+    //   onClick: async () => {
+    //     await appLauncher.launchOrFocus({ 
+    //       tab: 'rules', 
+    //       subTab: 'cookies',
+    //       action: 'create'
+    //     });
+    //     message.info('Opening new rule dialog in OpenHeaders app');
+    //   }
+    // },
+    {
+      key: 'modify-payload',
+      icon: <ApiOutlined />,
+      label: !isConnected ? (
+        <Tooltip title="App not connected" placement="right">
+          <span>Modify Payload (Request/Response)</span>
+        </Tooltip>
+      ) : 'Modify Payload (Request/Response)',
+      disabled: !isConnected,
+      onClick: async () => {
+        await appLauncher.launchOrFocus({ 
+          tab: 'rules', 
+          subTab: 'payload',
+          action: 'create'
+        });
+        message.info('Opening payload rules in OpenHeaders app');
+      }
+    },
+    {
+      key: 'modify-params',
+      icon: <LinkOutlined />,
+      label: !isConnected ? (
+        <Tooltip title="App not connected" placement="right">
+          <span>Modify URL Query Params</span>
+        </Tooltip>
+      ) : 'Modify URL Query Params',
+      disabled: !isConnected,
+      onClick: async () => {
+        await appLauncher.launchOrFocus({ 
+          tab: 'rules', 
+          subTab: 'query-params',
+          action: 'create'
+        });
+        message.info('Opening query params rules in OpenHeaders app');
+      }
+    },
+    {
+      key: 'block-requests',
+      icon: <StopOutlined />,
+      label: !isConnected ? (
+        <Tooltip title="App not connected" placement="right">
+          <span>Block Requests</span>
+        </Tooltip>
+      ) : 'Block Requests',
+      disabled: !isConnected,
+      onClick: async () => {
+        await appLauncher.launchOrFocus({ 
+          tab: 'rules', 
+          subTab: 'block',
+          action: 'create'
+        });
+        message.info('Opening block rules in OpenHeaders app');
+      }
+    },
+    {
+      key: 'redirect-requests',
+      icon: <SendOutlined />,
+      label: !isConnected ? (
+        <Tooltip title="App not connected" placement="right">
+          <span>Redirect Requests</span>
+        </Tooltip>
+      ) : 'Redirect Requests',
+      disabled: !isConnected,
+      onClick: async () => {
+        await appLauncher.launchOrFocus({ 
+          tab: 'rules', 
+          subTab: 'redirect',
+          action: 'create'
+        });
+        message.info('Opening redirect rules in OpenHeaders app');
+      }
+    },
+    {
+      key: 'inject-scripts',
+      icon: <CodeOutlined />,
+      label: !isConnected ? (
+        <Tooltip title="App not connected" placement="right">
+          <span>Inject Scripts/CSS</span>
+        </Tooltip>
+      ) : 'Inject Scripts/CSS',
+      disabled: !isConnected,
+      onClick: async () => {
+        await appLauncher.launchOrFocus({ 
+          tab: 'rules', 
+          subTab: 'inject',
+          action: 'create'
+        });
+        message.info('Opening inject rules in OpenHeaders app');
+      }
+    },
+    {
+      type: 'divider'
+    },
+    {
+      key: 'more-options',
+      icon: <MoreOutlined />,
+      label: !isConnected ? (
+        <Tooltip title="App not connected" placement="right">
+          <span>And more inside the app...</span>
+        </Tooltip>
+      ) : 'And more inside the app...',
+      disabled: !isConnected,
+      onClick: async () => {
+        await appLauncher.launchOrFocus({ tab: 'rules', subTab: 'headers' });
+        message.info('Switch to OpenHeaders app to add rule');
+      }
+    }
   ];
 
   return (
@@ -651,13 +859,30 @@ const HeaderTable = () => {
             )}
           </Space>
           <Space>
+            <Dropdown
+              menu={{ items: addRuleMenuItems }}
+              placement="bottomRight"
+              trigger={['click']}
+            >
+              <Button 
+                type="primary" 
+                size="middle"
+                className="add-rule-button"
+              >
+                <Space>
+                  <PlusOutlined />
+                  Add Rule
+                  <DownOutlined style={{ fontSize: '10px' }} />
+                </Space>
+              </Button>
+            </Dropdown>
             {(searchText || Object.keys(filteredInfo).length > 0 || sortedInfo.columnKey) && (
                 <Button onClick={clearAll} size="small">
                   Clear filters and sorting
                 </Button>
             )}
             <Search
-                placeholder="Search headers, values, or domains..."
+                placeholder="Search headers, values, domains, or tags..."
                 allowClear
                 size="small"
                 style={{ width: 300 }}
@@ -667,11 +892,17 @@ const HeaderTable = () => {
           </Space>
         </div>
 
-        <div style={{ flex: 1, minHeight: 200, maxHeight: 350, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, paddingBottom: '8px' }}>
           <Table
               dataSource={filteredData}
               columns={columns}
-              pagination={false}
+              pagination={{
+                pageSize: 10,
+                size: 'small',
+                showSizeChanger: false,
+                showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
+                style: { marginBottom: 0 }
+              }}
               size="small"
               scroll={{ x: 1000, y: 270 }}
               onChange={handleChange}
@@ -680,19 +911,23 @@ const HeaderTable = () => {
                     <Empty
                         image={<FileTextOutlined style={{ fontSize: 28, color: 'var(--text-tertiary)' }} />}
                         description={
-                          <Text type="secondary">
-                            {searchText ? 'No matching headers found' : 'No header rules yet'}
-                          </Text>
+                          searchText ? (
+                            <Text type="secondary">No matching headers found</Text>
+                          ) : (
+                            <Space direction="vertical" size={4}>
+                              <Text type="secondary">No header rules yet</Text>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                Click "Add Rule" above to create rules in the desktop app
+                              </Text>
+                            </Space>
+                          )
                         }
                         style={{ padding: '32px 0' }}
                     />
                 )
               }}
-              rowClassName={(record) =>
-                  editMode.entryId === record.id ? 'ant-table-row-selected' : ''
-              }
               className="header-rules-table"
-              style={{ width: '100%', height: '100%' }}
+              style={{ width: '100%', flex: 1 }}
           />
         </div>
       </div>

@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
-  "description": "Manage HTTP headers with static and dynamic sources and content auto-refresh. Dynamic sources: requests, env vars, files.",
-  "version": "2.2.0",
+  "description": "Record your browser tab. Modify HTTP Traffic. Team Workspaces. Everything local.",
+  "version": "3.0.0",
   "manifest_version": 3,
   "browser_specific_settings": {
     "gecko": {
@@ -24,6 +24,8 @@
     "declarativeNetRequestWithHostAccess",
     "tabs",
     "webRequest",
+    "webRequestBlocking",
+    "webNavigation",
     "activeTab",
     "scripting",
     "downloads",

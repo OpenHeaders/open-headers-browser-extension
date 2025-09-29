@@ -1,324 +1,398 @@
-import { MESSAGE_TYPES } from '../shared/constants.js';
+/**
+ * Enhanced content script that bridges the existing widget with new recording logic
+ */
 
-// Use the browser API wrapper to ensure cross-browser compatibility
+import { MESSAGE_TYPES } from '../shared/constants.js';
+import { adaptInjectedEvent, NewMessageTypes } from '../shared/message-adapter.js';
+
+// Browser API reference
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 class RecordRecorder {
   constructor() {
     this.isRecording = false;
     this.recordId = null;
-    this.recordingStartTime = null;
-    this.scriptsInjected = false;
-    this.pendingRecording = null;
+    this.widgetInjected = false;
+    this.recorderReady = false;
+    this.useWidget = false;
+    this.isPreNav = false;
+    this.startTime = null;
+    this.recorderStarted = false;
     
-    // Inject scripts early if page is ready
-    this.injectScriptsIfReady();
-    this.setupMessageHandlers();
+    // Initialize
+    this.setupMessageListeners();
+    this.notifyBackgroundReady();
   }
   
-  setupMessageHandlers() {
-    // Listen for messages from background script or popup
-    browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  setupMessageListeners() {
+    // Listen for messages from background
+    browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('[RecordRecorder] Received message:', message.type || message.action);
       
-      switch (request.type) {
+      // Handle both old and new message formats
+      const messageType = message.type || message.action;
+      
+      switch (messageType) {
+        case 'startRecording':
         case MESSAGE_TYPES.START_RECORDING:
-          this.startRecording(request.recordId || `record-${Date.now()}`);
+          this.handleStartRecording(message.data || message);
           sendResponse({ success: true });
           break;
           
+        case 'stopRecording':
         case MESSAGE_TYPES.STOP_RECORDING:
-          this.stopRecording();
+          this.handleStopRecording();
           sendResponse({ success: true });
           break;
           
-        case MESSAGE_TYPES.CANCEL_RECORDING:
-          this.cancelRecording();
+        case 'updateWidget':
+        case MESSAGE_TYPES.UPDATE_RECORDING_WIDGET:
+          this.handleUpdateWidget(message.data || message);
           sendResponse({ success: true });
           break;
           
-        case MESSAGE_TYPES.GET_RECORDING_STATE:
-          sendResponse({
-            isRecording: this.isRecording,
-            recordId: this.recordId
-          });
+        case 'RECORDING_STATE_CHANGED':
+        case 'recordingStateChanged':
+          this.handleStateChange(message.data || message.payload);
+          sendResponse({ success: true });
           break;
+          
+        default:
+          sendResponse({ success: false });
       }
+      
       return true;
     });
     
-    // Listen for messages from page script
+    // Listen for messages from injected recorder
     window.addEventListener('message', (event) => {
       if (event.source !== window) return;
       
-      switch (event.data.type) {
-        case 'RECORDER_READY':
-          this.scriptsInjected = true;
-          
-          // If we have a pending recording, start it
-          if (this.pendingRecording) {
-            window.postMessage({
-              type: 'START_RECORDING',
-              recordId: this.pendingRecording
-            }, '*');
-            this.pendingRecording = null;
+      // Handle widget stop button click
+      if (event.data?.type === 'OPEN_HEADERS_RECORDING_WIDGET_STOP') {
+        console.log('[RecordRecorder] Widget stop button clicked');
+        // Send stop recording message to background
+        browserAPI.runtime.sendMessage({
+          type: 'STOP_RECORDING_FROM_WIDGET'
+        }).catch(error => {
+          // Only log if it's not a context error
+          if (!error.message?.includes('context invalidated') && 
+              !error.message?.includes('message port closed')) {
+            console.error('[RecordRecorder] Failed to send stop message:', error);
           }
-          break;
-          
-        case 'RECORDING_STATS':
-          // Could send stats to popup if needed
-          break;
-          
-        case 'RECORDING_COMPLETE':
-          this.handleRecordingComplete(event.data.record);
-          break;
+        });
+        return;
       }
+      
+      // Handle recorder messages
+      if (event.data?.source !== 'open-headers-recorder') return;
+      
+      const { type, data, timestamp } = event.data;
+      
+      if (type === 'ready') {
+        this.recorderReady = true;
+        console.log('[RecordRecorder] Recorder ready');
+        
+        // If we're already recording, start the recorder
+        if (this.isRecording) {
+          this.startRecorder();
+        }
+      } else if (type === 'pong') {
+        // Recorder is responsive
+        this.recorderReady = true;
+      } else if (this.isRecording && browserAPI.runtime?.id) {
+        // Forward recording data to background
+        const adaptedMessage = adaptInjectedEvent({
+          type,
+          data,
+          timestamp
+        });
+        
+        browserAPI.runtime.sendMessage(adaptedMessage).catch(error => {
+          // Silently ignore context invalidated errors (tab closed, navigation, etc)
+          if (!error.message?.includes('context invalidated') && 
+              !error.message?.includes('message port closed') &&
+              !error.message?.includes('extension context invalidated')) {
+            console.error('[RecordRecorder] Failed to forward event:', error);
+          }
+        });
+      }
+    });
+    
+    // Clean up on page unload
+    window.addEventListener('pagehide', () => {
+      this.cleanup();
     });
   }
   
-  async startRecording(recordId) {
-    this.recordId = recordId;
-    this.isRecording = true;
-    this.recordingStartTime = Date.now();
-    
-    // Store pending recording if scripts aren't ready
-    this.pendingRecording = recordId;
-    
-    // Inject recording scripts if not already injected
-    if (!this.scriptsInjected) {
-      try {
-        await this.injectScripts();
-      } catch (error) {
+  async notifyBackgroundReady() {
+    try {
+      // Check if we're already recording
+      const response = await browserAPI.runtime.sendMessage({
+        type: NewMessageTypes.CONTENT_SCRIPT_READY,
+        action: 'contentScriptReady',
+        payload: {
+          url: window.location.href
+        }
+      });
+      
+      if (response?.shouldStartRecording) {
+        this.handleStartRecording({
+          recordId: response.state?.metadata?.recordingId,
+          useWidget: true,
+          isPreNav: response.state?.metadata?.isPreNavigation,
+          startTime: response.state?.metadata?.startTime
+        });
       }
-    } else {
-      // Scripts already injected, start recording immediately
-      window.postMessage({
-        type: 'START_RECORDING',
-        recordId: recordId
-      }, '*');
-      this.pendingRecording = null;
+    } catch (error) {
+      console.log('[RecordRecorder] Could not notify background:', error);
     }
   }
   
-  stopRecording() {
-    this.isRecording = false;
+  async handleStartRecording(data) {
+    console.log('[RecordRecorder] Starting recording:', data);
     
-    // Send stop message to page script
-    window.postMessage({
-      type: 'STOP_RECORDING'
-    }, '*');
+    this.isRecording = true;
+    this.recordId = data.recordId;
+    this.useWidget = data.useWidget !== false;
+    this.isPreNav = data.isPreNav || false;
+    this.startTime = data.startTime || Date.now();
+    
+    // Inject scripts if not already done
+    await this.injectScripts();
+    
+    // Inject widget if requested
+    if (this.useWidget) {
+      await this.injectWidget();
+    }
+    
+    // Start recording
+    this.startRecorder();
   }
   
-  cancelRecording() {
+  handleStopRecording() {
+    console.log('[RecordRecorder] Stopping recording');
+    
     this.isRecording = false;
     this.recordId = null;
-    this.recordingStartTime = null;
-    this.pendingRecording = null;
     
-    // Send cancel message to page script to clean up without saving
+    // Stop recorder
+    this.stopRecorder();
+    
+    // Remove widget
+    if (this.widgetInjected) {
+      this.removeWidget();
+    }
+  }
+  
+  handleUpdateWidget(data) {
+    // Update widget through existing mechanism
     window.postMessage({
-      type: 'CANCEL_RECORDING'
+      source: 'open-headers-content',
+      action: 'updateWidget',
+      data: data
     }, '*');
-    
   }
   
-  async injectScriptsIfReady() {
-    // Only inject if DOM is ready and scripts haven't been injected yet
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => this.injectScriptsIfReady());
-      return;
+  handleStateChange(data) {
+    console.log('[RecordRecorder] State changed:', data);
+    
+    // Update recording state
+    this.isRecording = data.isRecording || false;
+    this.isPreNav = data.isPreNav || false;
+    
+    // Update startTime if provided
+    if (data.startTime) {
+      this.startTime = data.startTime;
+      // If widget exists, update it with the new start time
+      if (this.widgetInjected) {
+        this.handleUpdateWidget({
+          startTime: data.startTime
+        });
+      }
     }
     
-    if (!this.scriptsInjected && !await this.areScriptsInjected()) {
-      await this.injectScripts();
+    if (data.state === 'recording' && this.isPreNav) {
+      // Transitioned from pre-nav to recording
+      this.isPreNav = false;
+      this.handleUpdateWidget({
+        status: 'recording',
+        startTime: data.startTime || this.startTime || Date.now()
+      });
+    } else if (data.state === 'idle' || data.state === 'stopping') {
+      this.handleStopRecording();
     }
-  }
-  
-  async areScriptsInjected() {
-    // Check if recorder is already injected by looking for a marker element
-    const marker = document.querySelector('meta[name="oh-recorder-injected"]');
-    return !!marker;
   }
   
   async injectScripts() {
-    try {
-      // Add marker to indicate scripts are injected
-      const marker = document.createElement('meta');
-      marker.name = 'oh-recorder-injected';
-      marker.content = 'true';
-      document.head.appendChild(marker);
+    // Check if scripts already injected
+    const existingRrweb = document.querySelector('script[data-recorder="rrweb"]');
+    const existingRecorder = document.querySelector('script[data-recorder="main"]');
+    
+    if (existingRrweb && existingRecorder) {
+      console.log('[RecordRecorder] Scripts already injected, triggering re-initialization');
+      // Scripts exist, but we need to re-initialize the recorder
+      // Send a re-init message to the existing recorder
+      window.postMessage({
+        source: 'open-headers-content',
+        action: 'reinitRecorder'
+      }, '*');
       
+      // Wait for re-initialization
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Reset the ready flag so we wait for the new ready signal
+      this.recorderReady = false;
+      return;
+    }
+    
+    const target = document.head || document.documentElement;
+    if (!target) {
+      console.error('[RecordRecorder] Cannot inject scripts - no injection target');
+      return;
+    }
+    
+    try {
       // Inject rrweb first
       const rrwebScript = document.createElement('script');
       rrwebScript.src = browserAPI.runtime.getURL('js/lib/rrweb.js');
+      rrwebScript.dataset.recorder = 'rrweb';
+      target.appendChild(rrwebScript);
       
-      await new Promise((resolve, reject) => {
-        rrwebScript.onload = () => {
-          this.scriptsInjected = true;
+      // Wait for rrweb to load
+      await new Promise((resolve) => {
+        rrwebScript.onload = resolve;
+        rrwebScript.onerror = () => {
+          console.error('[RecordRecorder] Failed to load rrweb');
           resolve();
         };
-        rrwebScript.onerror = (error) => {
-          reject(error);
-        };
-        document.documentElement.appendChild(rrwebScript);
       });
       
-      // Then inject our simple recorder
+      // Inject recorder
       const recorderScript = document.createElement('script');
       recorderScript.src = browserAPI.runtime.getURL('js/recording/inject/recorder.js');
+      recorderScript.dataset.recorder = 'main';
+      target.appendChild(recorderScript);
       
-      await new Promise((resolve, reject) => {
-        recorderScript.onload = () => {
-          // Send message to window that recorder is ready
-          window.postMessage({ type: 'RECORDER_READY' }, '*');
-          resolve();
-        };
-        recorderScript.onerror = (error) => {
-          reject(error);
-        };
-        document.documentElement.appendChild(recorderScript);
-      });
+      console.log('[RecordRecorder] Scripts injected successfully');
+      
+      // Give scripts time to initialize
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
-      throw error;
+      console.error('[RecordRecorder] Failed to inject scripts:', error);
     }
   }
   
-  async handleRecordingComplete(record) {
+  async injectWidget() {
+    if (this.widgetInjected) return;
     
-    // Get network data captured by the extension
-    try {
-      const response = await browserAPI.runtime.sendMessage({
-        type: 'GET_EXTENSION_NETWORK_DATA'
-      });
-      
-      if (response && response.networkData) {
-        // Merge the network data
-        record.network = this.mergeNetworkData(record.network || [], response.networkData);
-      }
-    } catch (error) {
+    // Inject the existing widget
+    const widgetScript = document.createElement('script');
+    widgetScript.src = browserAPI.runtime.getURL('js/recording/inject/recording-widget.js');
+    widgetScript.dataset.recorder = 'widget';
+    
+    if (document.head) {
+      document.head.appendChild(widgetScript);
+    } else if (document.documentElement) {
+      document.documentElement.appendChild(widgetScript);
     }
     
-    // Get all cookies using extension permissions
-    try {
-      const cookieResponse = await browserAPI.runtime.sendMessage({
-        type: 'GET_ALL_COOKIES'
-      });
-      
-      if (cookieResponse && cookieResponse.cookies) {
-        
-        // Merge with page-captured cookies
-        const pageCookieNames = new Set(record.storage.cookies.map(c => c.name));
-        const allCookies = [...record.storage.cookies];
-        
-        // Add cookies from extension that weren't captured by page
-        cookieResponse.cookies.forEach(cookie => {
-          if (!pageCookieNames.has(cookie.name)) {
-            allCookies.push({
-              name: cookie.name,
-              value: cookie.value,
-              domain: cookie.domain,
-              path: cookie.path,
-              httpOnly: cookie.httpOnly,
-              secure: cookie.secure,
-              sameSite: cookie.sameSite,
-              expirationDate: cookie.expirationDate,
-              accessible: !cookie.httpOnly
-            });
-          }
-        });
-        
-        record.storage.cookies = allCookies;
-      }
-    } catch (error) {
-    }
+    this.widgetInjected = true;
     
-    // Create the complete export
-    const exportData = {
-      version: '1.0',
-      exportDate: new Date().toISOString(),
-      extension: 'Open Headers',
-      record: record
-    };
-    
-    // Convert to JSON
-    const json = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
-    // Generate filename
-    const date = new Date();
-    const dateStr = date.toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const filename = `open-headers_record_${dateStr}.json`;
-    
-    // Download directly from content script
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    
-    // Clean up
+    // Initialize widget with current state
     setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      window.postMessage({
+        source: 'open-headers-content',
+        action: 'initWidget',
+        data: {
+          recordId: this.recordId,
+          isPreNav: this.isPreNav,
+          startTime: this.startTime
+        }
+      }, '*');
     }, 100);
-    
-    // Clean up
-    this.recordId = null;
-    
-    // Notification is now shown in the popup instead of in-page widget
   }
   
-  mergeNetworkData(pageNetwork, extensionNetwork) {
-    // Create a map of page network requests by URL and timestamp for matching
-    const pageNetworkMap = new Map();
-    pageNetwork.forEach(req => {
-      const key = `${req.url}-${Math.floor(req.timestamp / 100)}`; // Group by 100ms windows
-      pageNetworkMap.set(key, req);
-    });
+  removeWidget() {
+    window.postMessage({
+      source: 'open-headers-content',
+      action: 'removeWidget'
+    }, '*');
+    this.widgetInjected = false;
+  }
+  
+  startRecorder() {
+    // Avoid double-starting
+    if (this.recorderStarted) {
+      console.log('[RecordRecorder] Recorder already started');
+      return;
+    }
     
-    // Merge extension network data
-    const merged = [];
-    const processedKeys = new Set();
+    // Check if recorder is ready
+    if (!this.recorderReady) {
+      console.log('[RecordRecorder] Recorder not ready yet, will retry...');
+      setTimeout(() => {
+        if (this.isRecording && !this.recorderStarted) {
+          this.startRecorder();
+        }
+      }, 100);
+      return;
+    }
     
-    extensionNetwork.forEach(extReq => {
-      const key = `${extReq.url}-${Math.floor(extReq.timestamp / 100)}`;
-      const pageReq = pageNetworkMap.get(key);
+    // Mark as started
+    this.recorderStarted = true;
+    
+    // Send start command to recorder
+    window.postMessage({
+      source: 'open-headers-content',
+      action: 'startRecording',
+      data: {
+        recordId: this.recordId
+      }
+    }, '*');
+  }
+  
+  stopRecorder() {
+    // Reset started flag
+    this.recorderStarted = false;
+    
+    // Send stop command to recorder
+    window.postMessage({
+      source: 'open-headers-content',
+      action: 'stopRecording'
+    }, '*');
+  }
+  
+  cleanup() {
+    console.log('[RecordRecorder] Cleaning up...');
+    
+    try {
+      if (this.isRecording) {
+        this.stopRecorder();
+      }
       
-      if (pageReq) {
-        // Merge the data - extension data has all headers, page data might have response body
-        merged.push({
-          ...pageReq,
-          ...extReq,
-          // Preserve these from page data
-          timestamp: pageReq.timestamp,
-          responseBody: pageReq.responseBody,
-          requestBody: pageReq.requestBody,
-          initiator: pageReq.initiator,
-          // Use headers from extension (more complete)
-          requestHeaders: extReq.requestHeaders,
-          responseHeaders: extReq.responseHeaders
-        });
-        processedKeys.add(key);
-      } else {
-        // Extension-only request
-        merged.push(extReq);
+      if (this.widgetInjected) {
+        this.removeWidget();
       }
-    });
+    } catch (error) {
+      // Silently ignore cleanup errors (page might be unloading)
+    }
     
-    // Add any page-only requests that weren't matched
-    pageNetwork.forEach(req => {
-      const key = `${req.url}-${Math.floor(req.timestamp / 100)}`;
-      if (!processedKeys.has(key)) {
-        merged.push(req);
-      }
-    });
-    
-    // Sort by timestamp
-    return merged.sort((a, b) => a.timestamp - b.timestamp);
+    this.isRecording = false;
+    this.recordId = null;
+    this.recorderStarted = false;
   }
 }
 
-// Initialize recorder
-const recorder = new RecordRecorder();
+// Initialize and handle re-injection properly
+if (!window.__recordRecorderInitialized) {
+  window.__recordRecorderInitialized = true;
+  window.__recordRecorderInstance = new RecordRecorder();
+} else {
+  // Re-injection detected - cleanup old instance and create new one
+  console.log('[RecordRecorder] Re-injection detected, resetting instance');
+  if (window.__recordRecorderInstance) {
+    window.__recordRecorderInstance.cleanup();
+  }
+  window.__recordRecorderInstance = new RecordRecorder();
+}

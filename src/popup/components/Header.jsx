@@ -1,8 +1,8 @@
 import React from 'react';
 import { Typography, Space, Badge, Button, Dropdown, Tooltip, Switch } from 'antd';
-import { ApiOutlined, DisconnectOutlined, BulbOutlined, BulbFilled, CompressOutlined, MenuOutlined, ExportOutlined, ImportOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { ApiOutlined, CheckCircleOutlined, BulbOutlined, BulbFilled, CompressOutlined, MenuOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useHeader } from '../../hooks/useHeader';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../context';
 import { runtime } from '../../utils/browser-api';
 
 const { Title, Text } = Typography;
@@ -10,7 +10,7 @@ const { Title, Text } = Typography;
 /**
  * Professional header component with connection status indicator and theme toggle
  */
-const Header = ({ onExport, onImport, onOpenSetupGuide }) => {
+const Header = ({ onOpenSetupGuide }) => {
     const { isConnected } = useHeader();
     const { isDarkMode, themeMode, setThemeMode, isCompactMode, toggleCompactMode } = useTheme();
 
@@ -105,18 +105,6 @@ const Header = ({ onExport, onImport, onOpenSetupGuide }) => {
     // Menu items for the burger menu
     const menuItems = [
         {
-            key: 'export',
-            icon: <ExportOutlined />,
-            label: 'Export Rules',
-            onClick: onExport
-        },
-        {
-            key: 'import',
-            icon: <ImportOutlined />,
-            label: 'Import Rules',
-            onClick: onImport
-        },
-        {
             key: 'setup',
             icon: <QuestionCircleOutlined />,
             label: 'Setup Guide',
@@ -137,7 +125,6 @@ const Header = ({ onExport, onImport, onOpenSetupGuide }) => {
                             status={isConnected ? 'success' : 'error'}
                             text={
                                 <Space size={4}>
-                                    {isConnected ? <ApiOutlined /> : <DisconnectOutlined />}
                                     <Text style={{ fontSize: '12px' }}>
                                         {isConnected ? 'Connected' : 'Disconnected'}
                                     </Text>

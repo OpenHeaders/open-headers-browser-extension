@@ -69,10 +69,10 @@ const ConnectionInfo = () => {
 
   return (
       <Alert
-          message="Local App Not Connected"
+          message="Desktop App Not Connected"
           description={
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <span style={{ fontSize: '12px' }}>Install the local app to use dynamic sources.</span>
+              <span style={{ fontSize: '12px' }}>Install the Open Headers desktop app to manage rules and view recordings.</span>
               <Space size={8}>
                 <Button
                     type="primary"
@@ -80,7 +80,7 @@ const ConnectionInfo = () => {
                     icon={<DownloadOutlined />}
                     onClick={() => window.open('https://openheaders.io', '_blank')}
                 >
-                  Download
+                  Download App
                 </Button>
 
                 <Button

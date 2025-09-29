@@ -162,11 +162,25 @@ export const tabs = {
       return browserAPI.tabs.query(options, callback);
     }
   },
+  get: (tabId, callback) => {
+    if (isFirefox) {
+      return browserAPI.tabs.get(tabId).then(callback || (() => {}));
+    } else {
+      return browserAPI.tabs.get(tabId, callback);
+    }
+  },
   update: (tabId, options, callback) => {
     if (isFirefox) {
       return browserAPI.tabs.update(tabId, options).then(callback || (() => {}));
     } else {
       return browserAPI.tabs.update(tabId, options, callback);
+    }
+  },
+  sendMessage: (tabId, message, callback) => {
+    if (isFirefox) {
+      return browserAPI.tabs.sendMessage(tabId, message).then(callback || (() => {}));
+    } else {
+      return browserAPI.tabs.sendMessage(tabId, message, callback);
     }
   },
   onActivated: browserAPI.tabs.onActivated,
@@ -206,4 +220,51 @@ export const declarativeNetRequest = browserAPI.declarativeNetRequest ? {
       });
     }
   }
+} : null;
+
+// Cross-browser downloads API
+export const downloads = browserAPI.downloads ? {
+  download: (options, callback) => {
+    if (isFirefox) {
+      return browserAPI.downloads.download(options).then(callback || (() => {}));
+    } else {
+      return browserAPI.downloads.download(options, callback);
+    }
+  }
+} : null;
+
+// Cross-browser cookies API
+export const cookies = browserAPI.cookies ? {
+  getAll: (details, callback) => {
+    if (isFirefox) {
+      return browserAPI.cookies.getAll(details).then(callback || (() => {}));
+    } else {
+      return browserAPI.cookies.getAll(details, callback);
+    }
+  }
+} : null;
+
+// Cross-browser windows API
+export const windows = browserAPI.windows ? {
+  WINDOW_ID_NONE: browserAPI.windows.WINDOW_ID_NONE,
+  onFocusChanged: browserAPI.windows.onFocusChanged ? {
+    addListener: (listener) => browserAPI.windows.onFocusChanged.addListener(listener),
+    removeListener: (listener) => browserAPI.windows.onFocusChanged.removeListener(listener)
+  } : null
+} : null;
+
+// Cross-browser webNavigation API
+export const webNavigation = browserAPI.webNavigation ? {
+  onCommitted: browserAPI.webNavigation.onCommitted ? {
+    addListener: (listener) => browserAPI.webNavigation.onCommitted.addListener(listener),
+    removeListener: (listener) => browserAPI.webNavigation.onCommitted.removeListener(listener)
+  } : null,
+  onHistoryStateUpdated: browserAPI.webNavigation.onHistoryStateUpdated ? {
+    addListener: (listener) => browserAPI.webNavigation.onHistoryStateUpdated.addListener(listener),
+    removeListener: (listener) => browserAPI.webNavigation.onHistoryStateUpdated.removeListener(listener)
+  } : null,
+  onTabReplaced: browserAPI.webNavigation.onTabReplaced ? {
+    addListener: (listener) => browserAPI.webNavigation.onTabReplaced.addListener(listener),
+    removeListener: (listener) => browserAPI.webNavigation.onTabReplaced.removeListener(listener)
+  } : null
 } : null;
