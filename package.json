@@ -1,6 +1,6 @@
 {
   "name": "open-headers",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Record your browser tab. Modify HTTP Traffic. Team Workspaces. Everything local.",
   "scripts": {
     "build": "npm run build:chrome && npm run build:firefox && npm run build:edge && npm run build:safari",

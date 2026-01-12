@@ -2,7 +2,7 @@
   "name": "Open Headers",
   "description": "Record your browser tab. Modify HTTP Traffic. Team Workspaces. Everything local.",
   "author": "Open Headers",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "manifest_version": 3,
   "action": {
     "default_popup": "popup.html",

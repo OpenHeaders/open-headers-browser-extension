@@ -4,6 +4,10 @@
 
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
+// Number of reconnect attempts before showing disconnected badge
+// With exponential backoff (1s, 2s, 4s), 3 attempts = ~7 seconds grace period
+const DISCONNECTED_BADGE_THRESHOLD = 3;
+
 let lastBadgeState = null;
 
 /**
@@ -13,8 +17,9 @@ let lastBadgeState = null;
  * @param {boolean} hasPlaceholders - Whether any headers are using placeholders
  * @param {boolean} isPaused - Whether rules execution is paused
  * @param {Object} recordingService - The recording service to check if recording is active
+ * @param {number} reconnectAttempts - Number of reconnect attempts since last successful connection
  */
-export async function updateExtensionBadge(connected, activeRules, hasPlaceholders, isPaused, recordingService) {
+export async function updateExtensionBadge(connected, activeRules, hasPlaceholders, isPaused, recordingService, reconnectAttempts = 0) {
     // Get the appropriate API (chrome.action for MV3, chrome.browserAction for MV2/Firefox)
     const actionAPI = browserAPI.action || browserAPI.browserAction;
 
@@ -45,9 +50,11 @@ export async function updateExtensionBadge(connected, activeRules, hasPlaceholde
     const activeRulesCount = activeRules ? activeRules.length : 0;
 
     // Priority: placeholders > disconnected > paused > active > none
+    // Only show disconnected badge after multiple failed reconnect attempts
+    // to avoid flashing yellow during brief disconnections
     if (hasPlaceholders) {
         badgeState = 'placeholders';
-    } else if (!connected) {
+    } else if (!connected && reconnectAttempts >= DISCONNECTED_BADGE_THRESHOLD) {
         badgeState = 'disconnected';
     } else if (isPaused) {
         badgeState = 'paused';

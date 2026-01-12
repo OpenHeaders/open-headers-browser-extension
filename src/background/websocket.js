@@ -9,7 +9,7 @@ import { getChunkedData, setChunkedData } from '../utils/storage-chunking.js';
 // Configuration
 const WS_SERVER_URL = 'ws://127.0.0.1:59210';
 const WSS_SERVER_URL = 'wss://127.0.0.1:59211'; // Secure endpoint for Firefox
-const RECONNECT_DELAY_MS = 5000;
+const RECONNECT_DELAY_MS = 1000;
 
 // Certificate fingerprint that matches the hardcoded certificate
 const EXPECTED_CERT_FINGERPRINT = "53:64:0A:FA:73:44:F3:14:DA:9D:C9:5E:F1:93:1F:82:45:62:B5:5E";
@@ -22,6 +22,8 @@ let isConnected = false;
 let allSources = [];
 let rules = {};
 let welcomePageOpenedBySocket = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY = 6000;
 
 
 // Debug socket state - exposed on globalThis for service workers
@@ -141,30 +143,49 @@ function broadcastConnectionStatus() {
  * @param {Function} onSourcesReceived - Callback when sources are received
  */
 export function connectWebSocket(onSourcesReceived) {
-    if (isConnecting || (socket && socket.readyState === WebSocket.OPEN)) {
-        console.log('Info: Connection already active or in progress');
-        return;
+    // Check if already connected
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        console.log('Info: WebSocket already connected');
+        return Promise.resolve(true);
+    }
+
+    // Check if connection is already in progress
+    if (isConnecting) {
+        console.log('Info: Connection already in progress, skipping duplicate attempt');
+        return Promise.resolve(false);
     }
 
     isConnecting = true;
 
-    // Handle browser-specific connection logic
-    if (isFirefox) {
-        connectWebSocketFirefox(onSourcesReceived);
-    } else if (isSafari) {
-        // Safari needs pre-check
-        safariPreCheck(WS_SERVER_URL).then(canConnect => {
-            if (canConnect) {
-                connectStandardWebSocket(adaptWebSocketUrl(WS_SERVER_URL), onSourcesReceived);
-            } else {
-                console.log('Info: Safari pre-check failed, will retry');
-                handleConnectionFailure();
+    // Return a Promise for async/await compatibility
+    return new Promise((resolve, reject) => {
+        // Store original callback and wrap it
+        const wrappedCallback = (sources) => {
+            if (onSourcesReceived && typeof onSourcesReceived === 'function') {
+                onSourcesReceived(sources);
             }
-        });
-    } else {
-        // Chrome/Edge - standard connection
-        connectStandardWebSocket(WS_SERVER_URL, onSourcesReceived);
-    }
+            resolve(true);
+        };
+
+        // Handle browser-specific connection logic
+        if (isFirefox) {
+            connectWebSocketFirefox(wrappedCallback);
+        } else if (isSafari) {
+            // Safari needs pre-check
+            safariPreCheck(WS_SERVER_URL).then(canConnect => {
+                if (canConnect) {
+                    connectStandardWebSocket(adaptWebSocketUrl(WS_SERVER_URL), wrappedCallback);
+                } else {
+                    console.log('Info: Safari pre-check failed, will retry');
+                    handleConnectionFailure();
+                    resolve(false);
+                }
+            });
+        } else {
+            // Chrome/Edge - standard connection
+            connectStandardWebSocket(WS_SERVER_URL, wrappedCallback);
+        }
+    });
 }
 
 /**
@@ -181,11 +202,15 @@ function handleConnectionFailure() {
         clearTimeout(reconnectTimer);
     }
 
-    console.log(`Info: Scheduling reconnection in ${RECONNECT_DELAY_MS}ms`);
+    // Implement exponential backoff with max delay
+    reconnectAttempts++;
+    const delay = Math.min(RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+
+    console.log(`Info: Scheduling reconnection attempt ${reconnectAttempts} in ${delay}ms`);
     reconnectTimer = setTimeout(() => {
         console.log('Info: Attempting WebSocket reconnection');
         connectWebSocket();
-    }, RECONNECT_DELAY_MS);
+    }, delay);
 }
 
 /**
@@ -254,6 +279,7 @@ function connectStandardWebSocket(url, onSourcesReceived) {
                     console.log('Info: WebSocket connection opened successfully!');
                     isConnecting = false;
                     isConnected = true;
+                    reconnectAttempts = 0; // Reset reconnect attempts on successful connection
                     broadcastConnectionStatus();
 
                     // Send browser information
@@ -619,6 +645,7 @@ function connectFirefoxWss(onSourcesReceived) {
                 console.log('Info: Firefox secure WebSocket connection opened successfully!');
                 isConnecting = false;
                 isConnected = true;
+                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
                 broadcastConnectionStatus();
 
                 // Send browser information
@@ -931,6 +958,7 @@ function connectFirefoxWs(onSourcesReceived) {
             console.log('Info: Firefox WebSocket connection opened (WS fallback)!');
             isConnecting = false;
             isConnected = true;
+            reconnectAttempts = 0; // Reset reconnect attempts on successful connection
             broadcastConnectionStatus();
 
             // Send browser information
@@ -1172,6 +1200,14 @@ function connectFirefoxWs(onSourcesReceived) {
  */
 export function isWebSocketConnected() {
     return isConnected && socket && socket.readyState === WebSocket.OPEN;
+}
+
+/**
+ * Get current reconnect attempts count
+ * @returns {number} Number of reconnect attempts since last successful connection
+ */
+export function getReconnectAttempts() {
+    return reconnectAttempts;
 }
 
 /**
