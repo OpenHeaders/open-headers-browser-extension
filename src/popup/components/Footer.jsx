@@ -39,7 +39,7 @@ const sendMessageSafely = (message) => {
  */
 const Footer = () => {
   // Version information
-  const version = '3.0.0';
+  const version = '3.1.0';
   const { token } = theme.useToken();
   const [useWidget, setUseWidget] = useState(true);
   const [enableVideoRecording, setEnableVideoRecording] = useState(false);

@@ -2,7 +2,7 @@
  * Main background service worker - Minimal orchestrator
  */
 
-import { connectWebSocket, getCurrentSources, isWebSocketConnected, sendViaWebSocket, sendRecordingViaWebSocket } from './websocket.js';
+import { connectWebSocket, getCurrentSources, isWebSocketConnected, getReconnectAttempts, sendViaWebSocket, sendRecordingViaWebSocket } from './websocket.js';
 import { updateNetworkRules } from './header-manager.js';
 import { getChunkedData } from '../utils/storage-chunking.js';
 import { alarms, runtime, storage, tabs, isFirefox } from '../utils/browser-api.js';
@@ -32,6 +32,7 @@ let headersUsingPlaceholders = [];
  */
 async function updateBadgeForCurrentTab() {
     const isConnected = isWebSocketConnected();
+    const reconnectAttempts = getReconnectAttempts();
     const hasPlaceholders = headersUsingPlaceholders.length > 0;
 
     // Check if rules execution is paused
@@ -43,7 +44,7 @@ async function updateBadgeForCurrentTab() {
         tabs.query({ active: true, currentWindow: true }, async (tabList) => {
             const currentTab = tabList[0];
             const currentUrl = currentTab?.url || '';
-            
+
             // Check if this tab is recording - recording badge takes priority
             if (currentTab && currentTab.id) {
                 if (recordingService.isRecording(currentTab.id)) {
@@ -55,7 +56,7 @@ async function updateBadgeForCurrentTab() {
             // Get active rules for current tab (using centralized function)
             const { getActiveRulesForTab } = await import('./modules/request-tracker.js');
             const activeRules = await getActiveRulesForTab(currentTab?.id, currentUrl);
-            await updateExtensionBadge(isConnected, activeRules, hasPlaceholders, isPaused, recordingService);
+            await updateExtensionBadge(isConnected, activeRules, hasPlaceholders, isPaused, recordingService, reconnectAttempts);
         });
     });
 }
@@ -83,8 +84,8 @@ const debouncedUpdateBadge = debounce(() => {
  * Initialize the extension
  */
 async function initializeExtension() {
-    // Set initial badge state to disconnected
-    await updateExtensionBadge(false, [], false, false, recordingService);
+    // Set initial badge state to disconnected (0 reconnect attempts initially)
+    await updateExtensionBadge(false, [], false, false, recordingService, 0);
 
     // Set up request monitoring
     setupRequestMonitoring(debouncedUpdateBadge);
@@ -142,9 +143,24 @@ alarms.create('updateBadge', {
     periodInMinutes: 0.033 // Repeat every ~2 seconds
 });
 
-alarms.onAlarm.addListener((alarm) => {
+alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'keepAlive') {
         console.log('Info: Keep alive ping');
+        if (!isWebSocketConnected()) {
+            console.log('Info: WebSocket disconnected, reconnecting immediately...');
+            try {
+                await connectWebSocket((sources) => {
+                    console.log('Info: WebSocket reconnected via keepAlive, updating rules');
+                    updateNetworkRules(sources);
+                    lastSourcesHash = generateSourcesHash(sources);
+                    lastRulesUpdateTime = Date.now();
+                });
+            } catch (error) {
+                console.log('Info: Failed to reconnect WebSocket:', error.message);
+            }
+        }
+
+        // Check for source changes
         const currentSources = getCurrentSources();
         const currentHash = generateSourcesHash(currentSources);
 
