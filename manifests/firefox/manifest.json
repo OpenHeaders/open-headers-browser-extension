@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
   "description": "Record your browser tab. Modify HTTP Traffic. Team Workspaces. Everything local.",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "manifest_version": 3,
   "browser_specific_settings": {
     "gecko": {

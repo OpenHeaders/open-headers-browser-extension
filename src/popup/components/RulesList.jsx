@@ -14,7 +14,7 @@ import { useHeader } from '../../hooks/useHeader';
  * Component that renders tabs for different rule views
  */
 const RulesList = () => {
-  const [activeTab, setActiveTab] = useState('all-rules');
+  const [activeTab, setActiveTab] = useState(null);
   const [currentTabDomain, setCurrentTabDomain] = useState(null);
   const { headerEntries } = useHeader();
   
@@ -66,15 +66,11 @@ const RulesList = () => {
       try {
         const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
         const result = await browserAPI.storage.local.get('activeRulesTab');
-        if (result.activeRulesTab) {
-          setActiveTab(result.activeRulesTab);
-        }
+        setActiveTab(result.activeRulesTab || 'all-rules');
       } catch (error) {
         // Fallback to localStorage
         const saved = localStorage.getItem('activeRulesTab');
-        if (saved) {
-          setActiveTab(saved);
-        }
+        setActiveTab(saved || 'all-rules');
       }
     };
     loadSavedTab();
@@ -154,6 +150,11 @@ const RulesList = () => {
     },
   ];
 
+  // Don't render until tab preference is loaded to prevent flash
+  if (activeTab === null) {
+    return null;
+  }
+
   return (
     <Tabs
       activeKey={activeTab}
@@ -163,7 +164,7 @@ const RulesList = () => {
       size="medium"
       animated
       className="header-rules-tabs"
-      style={{ 
+      style={{
         height: '100%'
       }}
       tabBarStyle={{
