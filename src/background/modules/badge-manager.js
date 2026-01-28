@@ -137,7 +137,7 @@ export async function updateExtensionBadge(connected, activeRules, hasPlaceholde
                 console.log('Badge text error:', browserAPI.runtime.lastError);
             }
         });
-        actionAPI.setBadgeBackgroundColor({ color: '#52c41a' }, () => {
+        actionAPI.setBadgeBackgroundColor({ color: '#E8E8E8' }, () => {
             if (browserAPI.runtime.lastError) {
                 console.log('Badge color error:', browserAPI.runtime.lastError);
             }
