@@ -8,8 +8,8 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Browser detection flags
 export const isFirefox = typeof browser !== 'undefined';
-export const isChrome = !isFirefox && navigator.userAgent.indexOf('Chrome') !== -1;
 export const isEdge = !isFirefox && navigator.userAgent.indexOf('Edg') !== -1;
+export const isChrome = !isFirefox && !isEdge && navigator.userAgent.indexOf('Chrome') !== -1;
 export const isSafari = !isFirefox && navigator.userAgent.indexOf('Safari') !== -1 && navigator.userAgent.indexOf('Chrome') === -1;
 
 // Use proper storage APIs
