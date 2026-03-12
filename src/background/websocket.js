@@ -11,9 +11,6 @@ const WS_SERVER_URL = 'ws://127.0.0.1:59210';
 const WSS_SERVER_URL = 'wss://127.0.0.1:59211'; // Secure endpoint for Firefox
 const RECONNECT_DELAY_MS = 1000;
 
-// Certificate fingerprint that matches the hardcoded certificate
-const EXPECTED_CERT_FINGERPRINT = "53:64:0A:FA:73:44:F3:14:DA:9D:C9:5E:F1:93:1F:82:45:62:B5:5E";
-
 // State variables
 let socket = null;
 let reconnectTimer = null;
@@ -1165,15 +1162,29 @@ function connectFirefoxWs(onSourcesReceived) {
                 } else if (parsed.type === 'recordingHotkeyPressed') {
                     // Handle recording hotkey press from desktop app
                     console.log('Info: Firefox WS received recording hotkey press');
-                    
+
                     // Broadcast to background script via storage event
-                    storage.local.set({ 
+                    storage.local.set({
                         hotkeyCommand: {
                             type: 'TOGGLE_RECORDING',
                             timestamp: Date.now()
                         }
                     }, () => {
                         console.log('Info: Firefox WS triggered recording toggle from hotkey');
+                    });
+                } else if (parsed.type === 'certificateTrustChanged' && parsed.trusted) {
+                    // Certificate was trusted in the desktop app — check if WSS is
+                    // actually reachable in this browser before disrupting the connection
+                    // (Firefox uses its own cert store, not the OS keychain)
+                    checkServerReachable(WSS_SERVER_URL).then(reachable => {
+                        if (reachable) {
+                            console.log('Info: Certificate trusted and WSS reachable, upgrading to WSS');
+                            storage.local.remove(['lastSuccessfulConnection'], () => {
+                                if (socket) { socket.close(); }
+                            });
+                        } else {
+                            console.log('Info: Certificate trusted in OS but WSS not reachable in Firefox, staying on WS');
+                        }
                     });
                 }
             } catch (err) {
