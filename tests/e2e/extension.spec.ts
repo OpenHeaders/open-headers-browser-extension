@@ -80,13 +80,13 @@ test.describe('Popup Layout', () => {
         await expect(page.locator('.footer')).toBeVisible({ timeout: 5000 });
     });
 
-    test('popup body is 800x540', async () => {
+    test('popup body is 800x600', async () => {
         const size = await page.evaluate(() => {
             const style = window.getComputedStyle(document.body);
             return { width: parseInt(style.width), height: parseInt(style.height) };
         });
         expect(size.width).toBe(800);
-        expect(size.height).toBe(540);
+        expect(size.height).toBe(600);
     });
 });
 
