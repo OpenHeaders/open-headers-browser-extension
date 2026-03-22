@@ -87,9 +87,21 @@ const debouncedUpdateBadge = debounce(() => {
 }, 100);
 
 /**
- * Initialize the extension
+ * Initialize the extension — guarded to prevent duplicate listener registration
  */
+let extensionInitialized = false;
 async function initializeExtension(): Promise<void> {
+    if (extensionInitialized) {
+        // Already initialized — only reconnect WebSocket
+        await connectWebSocket((sources: Source[]) => {
+            updateNetworkRules(sources);
+            lastSourcesHash = generateSourcesHash(sources);
+            lastRulesUpdateTime = Date.now();
+        });
+        return;
+    }
+    extensionInitialized = true;
+
     // Set initial badge state to disconnected (0 reconnect attempts initially)
     await updateExtensionBadge(false, [], false, false, recordingService, 0);
 
