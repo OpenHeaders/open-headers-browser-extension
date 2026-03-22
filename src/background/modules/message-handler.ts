@@ -4,7 +4,7 @@
 
 import { storage, tabs, runtime as browserRuntime } from '../../utils/browser-api.js';
 import { openWelcomePageDirectly } from './welcome-page';
-import { clearAllTracking } from './request-tracker';
+import { clearAllTracking, getActiveRulesForTab } from './request-tracker';
 import { generateSourcesHash, generateSavedDataHash } from './utils';
 import { getChunkedData, setChunkedData } from '../../utils/storage-chunking.js';
 
@@ -318,11 +318,10 @@ export function handleGeneralMessage(
             return true;
         } else if (message.type === 'getActiveRulesForTab') {
             // Get all active rules for a specific tab using centralized logic
-            import('./request-tracker').then(async ({ getActiveRulesForTab }) => {
-                const tabId = message.tabId as number;
-                const tabUrl = message.tabUrl as string;
+            const tabId = message.tabId as number;
+            const tabUrl = message.tabUrl as string;
 
-                const activeRules = await getActiveRulesForTab(tabId, tabUrl);
+            getActiveRulesForTab(tabId, tabUrl).then(activeRules => {
                 safeResponse({ activeRules });
             }).catch((error: Error) => {
                 console.error('Error getting active rules:', error);

@@ -13,7 +13,7 @@ import { RecordingService } from '../assets/recording/background/recording-servi
 // Import modules
 import { updateExtensionBadge } from './modules/badge-manager';
 import { setupRequestMonitoring } from './modules/request-monitor';
-import { checkRulesForTab, revalidateTrackedRequests, restoreTrackingState, refreshSavedDataCache } from './modules/request-tracker';
+import { checkRulesForTab, revalidateTrackedRequests, restoreTrackingState, refreshSavedDataCache, getActiveRulesForTab } from './modules/request-tracker';
 import { setupTabListeners, setupPeriodicCleanup } from './modules/tab-listeners';
 import { openWelcomePageOnInstall, checkFirefoxFirstRun } from './modules/welcome-page';
 import { debounce, generateSourcesHash, generateSavedDataHash } from './modules/utils';
@@ -60,8 +60,7 @@ async function updateBadgeForCurrentTab(): Promise<void> {
                 }
             }
 
-            // Get active rules for current tab (using centralized function)
-            const { getActiveRulesForTab } = await import('./modules/request-tracker');
+            // Get active rules for current tab
             const activeRules: ActiveRule[] = await getActiveRulesForTab(currentTab?.id, currentUrl);
             await updateExtensionBadge(isConnected, activeRules, hasPlaceholders, isPaused, recordingService, reconnectAttempts);
         });

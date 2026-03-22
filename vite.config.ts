@@ -101,6 +101,9 @@ export default defineConfig({
         // Chrome Web Store requires human-readable code
         minify: false,
         sourcemap: browser === 'firefox' ? 'inline' : false,
+        // Disable module preload polyfill — it references `document` which
+        // crashes the background service worker.
+        modulePreload: false,
         rollupOptions: {
             input: {
                 popup: path.resolve(__dirname, 'popup.html'),
@@ -115,6 +118,17 @@ export default defineConfig({
                         return 'css/[name][extname]';
                     }
                     return 'assets/[name][extname]';
+                },
+                // Keep background service worker code separate from popup/UI chunks.
+                // Shared modules used by both are duplicated into each context to
+                // prevent the service worker from pulling in DOM-dependent code.
+                manualChunks(id) {
+                    // Popup-only: React, Ant Design, UI components
+                    if (id.includes('node_modules')) {
+                        return 'vendor';
+                    }
+                    // Let background and content script code stay in their own entries
+                    return undefined;
                 },
             },
         },
