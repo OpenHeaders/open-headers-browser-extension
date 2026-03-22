@@ -406,8 +406,8 @@ const HeaderTable: React.FC = () => {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, paddingBottom: '8px' }}>
           <Table
               dataSource={filteredData} columns={columns}
-              pagination={{ pageSize: 10, size: 'small', showSizeChanger: false, showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`, style: { marginBottom: 0 } }}
-              size="small" scroll={{ x: 1000, y: 270 }} onChange={handleChange}
+              pagination={{ pageSize: 10, size: 'small', showSizeChanger: false, showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`, style: { marginBottom: 0, marginTop: 4 } }}
+              size="small" scroll={{ x: 1000, y: 290 }} onChange={handleChange}
               locale={{ emptyText: (
                 <Empty image={<FileTextOutlined style={{ fontSize: 28, color: 'var(--text-tertiary)' }} />}
                   description={searchText ? <Text type="secondary">No matching headers found</Text> : (

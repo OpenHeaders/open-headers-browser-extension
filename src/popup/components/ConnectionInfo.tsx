@@ -44,12 +44,17 @@ const ConnectionInfo: React.FC = () => {
   }
 
   return (
-      <Alert
-          message="Desktop App Not Connected"
-          description={
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <span style={{ fontSize: '12px' }}>Install the Open Headers desktop app to manage rules and view recordings.</span>
-              <Space size={8}>
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 470,
+        right: 16,
+        zIndex: 100,
+      }}>
+        <Alert
+            message={<span style={{ fontSize: '12px', fontWeight: 600 }}>Desktop App Not Connected</span>}
+            description={
+              <Space size={6} style={{ marginTop: 2 }}>
                 <Button
                     type="primary"
                     size="small"
@@ -58,7 +63,6 @@ const ConnectionInfo: React.FC = () => {
                 >
                   Download App
                 </Button>
-
                 <Button
                     size="small"
                     onClick={handleOpenWelcomePage}
@@ -66,18 +70,19 @@ const ConnectionInfo: React.FC = () => {
                   Setup Guide
                 </Button>
               </Space>
-            </Space>
-          }
-          type="info"
-          showIcon
-          closable
-          onClose={handleDismiss}
-          style={{
-            marginBottom: 8,
-            fontSize: '12px',
-            padding: '8px 12px'
-          }}
-      />
+            }
+            type="warning"
+            showIcon
+            closable
+            onClose={handleDismiss}
+            style={{
+              fontSize: '12px',
+              padding: '6px 12px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+              borderRadius: '8px',
+            }}
+        />
+      </div>
   );
 };
 

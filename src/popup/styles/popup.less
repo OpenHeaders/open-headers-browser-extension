@@ -10,7 +10,7 @@ body {
   margin: 0;
   padding: 0;
   width: 800px;
-  height: 540px;
+  height: 600px;
   overflow: hidden !important;
   box-sizing: border-box;
   background-color: transparent;
@@ -71,11 +71,9 @@ body {
 
 .content {
   flex: 1 1 auto;
-  padding: 16px 16px 30px 16px; /* Bottom padding for footer (48px) + minimal spacing */
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 16px 16px 30px 16px;
+  overflow: hidden;
   min-height: 0;
-  max-height: calc(100vh - 74px);
   position: relative;
 }
 
@@ -211,37 +209,7 @@ body {
 }
 
 
-/* Webkit scrollbar for better visibility */
-.content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.content::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
-}
-
-.content::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-}
-
-.content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-/* Dark mode scrollbar */
-.app-container[data-theme="dark"] .content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.app-container[data-theme="dark"] .content::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.3);
-}
-
-.app-container[data-theme="dark"] .content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.5);
-}
+/* No outer scrollbar — only the table scrolls internally */
 
 /* Form item spacing adjustments */
 .ant-form-item {

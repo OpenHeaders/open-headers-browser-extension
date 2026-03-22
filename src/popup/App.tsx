@@ -71,7 +71,6 @@ const AppContent: React.FC = () => {
 
             <Content className="content">
               <ConnectionInfo />
-
               <div className="entries-list">
                 <RulesList />
               </div>
