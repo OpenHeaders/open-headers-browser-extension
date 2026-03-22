@@ -1,27 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { normalizeHeaderName, generateUniqueId, generateSourcesHash, formatUrlPattern, debounce } from '../../src/utils/utils';
-import { generateSavedDataHash } from '../../src/background/modules/utils';
+import { normalizeHeaderName, generateUniqueId } from '../../src/utils/utils';
+import { generateSourcesHash, generateSavedDataHash, debounce } from '../../src/background/modules/utils';
+import { formatUrlPattern } from '../../src/background/header-manager';
 import type { SavedDataMap } from '../../src/types/header';
-
-// The Source type from websocket.ts has sourceContent: string | null | undefined,
-// but generateSourcesHash in utils/utils.ts accepts SourceObject with sourceContent?: string.
-// We define a compatible factory type for use in these tests.
-interface SourceLike {
-    sourceId: string;
-    sourceType?: string;
-    sourcePath?: string;
-    sourceMethod?: string;
-    sourceName?: string;
-    sourceTag?: string;
-    sourceContent?: string;
-    [key: string]: unknown;
-}
+import type { Source } from '../../src/types/websocket';
 
 // ---------------------------------------------------------------------------
 //  Factory functions
 // ---------------------------------------------------------------------------
 
-function makeSource(overrides: Partial<SourceLike> = {}): SourceLike {
+function makeSource(overrides: Partial<Source> = {}): Source {
     return {
         sourceId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         sourceType: 'http',
@@ -312,8 +300,8 @@ describe('debounce', () => {
 // ---------------------------------------------------------------------------
 
 describe('formatUrlPattern', () => {
-    it('adds protocol to bare domains', () => {
-        expect(formatUrlPattern('example.com')).toBe('*://example.com');
+    it('adds protocol and path to bare domains', () => {
+        expect(formatUrlPattern('example.com')).toBe('*://example.com/*');
     });
 
     it('preserves full URL patterns', () => {
@@ -335,15 +323,22 @@ describe('formatUrlPattern', () => {
     });
 
     it('handles wildcard subdomains', () => {
-        expect(formatUrlPattern('*.example.com')).toBe('*://*.example.com');
+        expect(formatUrlPattern('*.example.com')).toBe('*://*.example.com/*');
     });
 
     it('trims whitespace', () => {
-        expect(formatUrlPattern('  example.com  ')).toBe('*://example.com');
+        expect(formatUrlPattern('  example.com  ')).toBe('*://example.com/*');
     });
 
     it('handles enterprise domain patterns', () => {
-        expect(formatUrlPattern('api.openheaders.io')).toBe('*://api.openheaders.io');
-        expect(formatUrlPattern('*.partner-service.io')).toBe('*://*.partner-service.io');
+        expect(formatUrlPattern('api.openheaders.io')).toBe('*://api.openheaders.io/*');
+        expect(formatUrlPattern('*.partner-service.io')).toBe('*://*.partner-service.io/*');
+    });
+
+    it('handles bare single-label domains from env vars', () => {
+        // Real-world: MC2_DOMAIN_LIST includes "medicenter" and "ifap.vos"
+        expect(formatUrlPattern('medicenter')).toBe('*://medicenter/*');
+        expect(formatUrlPattern('ifap.vos')).toBe('*://ifap.vos/*');
+        expect(formatUrlPattern('development.medicenter.cgm.ag')).toBe('*://development.medicenter.cgm.ag/*');
     });
 });

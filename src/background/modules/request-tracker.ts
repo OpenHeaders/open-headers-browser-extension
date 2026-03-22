@@ -3,7 +3,7 @@
  */
 
 import { storage, tabs } from '../../utils/browser-api.js';
-import { doesUrlMatchPattern, normalizeUrlForTracking, isTrackableUrl } from './url-utils';
+import { doesUrlMatchPattern, normalizeUrlForTracking, isTrackableUrl, precompileAllPatterns, clearPatternCache } from './url-utils';
 import { getChunkedData } from '../../utils/storage-chunking.js';
 
 import type { SavedDataMap, HeaderEntry } from '../../types/header';
@@ -17,6 +17,62 @@ let isRevalidating = false; // Prevent concurrent revalidations
 // Track which tabs are making requests to domains with rules
 export const tabsWithActiveRules: Map<number, Set<string>> = new Map();
 
+// ── In-memory savedData cache ──────────────────────────────────────
+let cachedSavedData: SavedDataMap | null = null;
+let cacheInitialized = false;
+
+/** Warm the cache from storage (called once at startup) */
+function ensureCache(callback: (data: SavedDataMap) => void): void {
+    if (cacheInitialized && cachedSavedData !== null) {
+        callback(cachedSavedData);
+        return;
+    }
+    refreshSavedDataCache(() => {
+        callback(cachedSavedData!);
+    });
+}
+
+/** Invalidate the cache — next access will re-read from storage */
+export function invalidateSavedDataCache(): void {
+    cacheInitialized = false;
+    cachedSavedData = null;
+}
+
+/** Force-refresh the cache from storage right now and pre-compile URL patterns */
+export function refreshSavedDataCache(callback?: () => void): void {
+    getChunkedData('savedData', (data: SavedDataMap | null) => {
+        cachedSavedData = data || {};
+        cacheInitialized = true;
+
+        // Pre-compile all domain patterns for fast matching
+        clearPatternCache();
+        const allDomains: string[] = [];
+        for (const id in cachedSavedData) {
+            const entry = cachedSavedData[id];
+            if (entry.isEnabled !== false && entry.domains) {
+                allDomains.push(...entry.domains);
+            }
+        }
+        if (allDomains.length > 0) {
+            precompileAllPatterns(allDomains);
+        }
+
+        if (callback) callback();
+    });
+}
+
+// Listen for storage changes that affect savedData and auto-refresh cache
+storage.onChanged.addListener((changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+    if (area === 'sync') {
+        const hasDataChange = changes.savedData ||
+            changes.savedData_chunked ||
+            Object.keys(changes).some(key => key.startsWith('savedData_chunk_'));
+        if (hasDataChange) {
+            refreshSavedDataCache();
+        }
+    }
+});
+
 /**
  * Check if a URL matches any active rule
  */
@@ -24,9 +80,7 @@ export async function checkIfUrlMatchesAnyRule(url: string): Promise<boolean> {
     const normalizedUrl = normalizeUrlForTracking(url);
 
     return new Promise<boolean>((resolve) => {
-        getChunkedData('savedData', (savedData: SavedDataMap | null) => {
-            savedData = savedData || {};
-
+        ensureCache((savedData: SavedDataMap) => {
             // Check if this URL matches any enabled rule
             for (const id in savedData) {
                 const entry: HeaderEntry = savedData[id];
@@ -75,8 +129,7 @@ export async function getActiveRulesForTab(tabId: number | undefined, tabUrl: st
     }
 
     return new Promise<ActiveRule[]>((resolve) => {
-        getChunkedData('savedData', (savedData: SavedDataMap | null) => {
-            savedData = savedData || {};
+        ensureCache((savedData: SavedDataMap) => {
             const activeRules: ActiveRule[] = [];
 
             for (const id in savedData) {
@@ -156,17 +209,14 @@ export async function revalidateTrackedRequests(): Promise<void> {
     // Add to queue if already revalidating
     if (isRevalidating) {
         REVALIDATION_QUEUE.add(Date.now());
-        console.log('Info: Revalidation already in progress, queued for later');
         return;
     }
 
     isRevalidating = true;
-    console.log('Info: Starting revalidation of tracked requests');
 
     try {
         await new Promise<void>((resolve) => {
-            getChunkedData('savedData', async (savedData: SavedDataMap | null) => {
-                savedData = savedData || {};
+            ensureCache(async (savedData: SavedDataMap) => {
                 const enabledRules: [string, HeaderEntry][] = Object.entries(savedData).filter(
                     ([_, entry]) => entry.isEnabled !== false
                 );
@@ -174,7 +224,6 @@ export async function revalidateTrackedRequests(): Promise<void> {
                 // If no enabled rules, clear all tracking
                 if (enabledRules.length === 0) {
                     tabsWithActiveRules.clear();
-                    console.log('Info: No enabled rules, cleared all request tracking');
                     resolve();
                     return;
                 }
@@ -209,10 +258,8 @@ export async function revalidateTrackedRequests(): Promise<void> {
                     // Update or remove the tab's tracking based on results
                     if (validUrls.size > 0) {
                         tabsWithActiveRules.set(tabId, validUrls);
-                        console.log(`Info: Tab ${tabId} still has ${validUrls.size} valid tracked requests`);
                     } else {
                         tabsWithActiveRules.delete(tabId);
-                        console.log(`Info: Tab ${tabId} no longer has valid tracked requests`);
                     }
                 }
 
@@ -225,7 +272,6 @@ export async function revalidateTrackedRequests(): Promise<void> {
         // Process any queued revalidations
         if (REVALIDATION_QUEUE.size > 0) {
             REVALIDATION_QUEUE.clear();
-            console.log('Info: Processing queued revalidation');
             setTimeout(() => revalidateTrackedRequests(), 100);
         }
     }
@@ -235,21 +281,16 @@ export async function revalidateTrackedRequests(): Promise<void> {
  * Restore tracking state after service worker restart
  */
 export async function restoreTrackingState(updateBadgeCallback: () => void): Promise<void> {
-    console.log('Info: Attempting to restore tracking state after restart');
-
     // Get all tabs
     tabs.query({}, async (allTabs: chrome.tabs.Tab[]) => {
         for (const tab of allTabs) {
             if (tab.url && tab.id && isTrackableUrl(tab.url)) {
-                // Check if this tab's URL matches any rules
                 const matchesRule = await checkIfUrlMatchesAnyRule(tab.url);
                 if (matchesRule) {
-                    // Add to tracking
                     if (!tabsWithActiveRules.has(tab.id)) {
                         tabsWithActiveRules.set(tab.id, new Set());
                     }
                     tabsWithActiveRules.get(tab.id)!.add(normalizeUrlForTracking(tab.url));
-                    console.log(`Info: Restored tracking for tab ${tab.id} - ${tab.url}`);
                 }
             }
         }

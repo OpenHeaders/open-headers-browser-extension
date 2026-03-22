@@ -8,6 +8,7 @@ import { adaptWebSocketUrl, safariPreCheck } from './safari-websocket-adapter';
 import { updateNetworkRules } from './header-manager';
 import { getChunkedData, setChunkedData } from '../utils/storage-chunking.js';
 import { sendMessageWithCallback } from '../utils/messaging';
+import { generateSourcesHash } from './modules/utils';
 
 import type { Source, OnSourcesReceivedCallback, RulesData, HeaderRuleFromApp, LastSuccessfulConnection } from '../types/websocket';
 import type { SavedDataMap } from '../types/header';
@@ -36,23 +37,6 @@ const MAX_RECONNECT_DELAY = 6000;
     console.log('Is connected:', isConnected);
     console.log('WebSocket.OPEN:', WebSocket.OPEN);
 };
-
-/**
- * Function to generate a simple hash of sources to detect changes
- */
-function generateSourcesHash(sources: Source[]): string {
-    if (!sources || !Array.isArray(sources)) return '';
-
-    // Create a simplified representation of the sources to compare
-    const simplifiedSources = sources.map(source => {
-        return {
-            id: source.sourceId,
-            content: source.sourceContent
-        };
-    });
-
-    return JSON.stringify(simplifiedSources);
-}
 
 // Track last sources hash to avoid redundant updates
 let lastSourcesHash = '';

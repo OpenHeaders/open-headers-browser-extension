@@ -16,6 +16,9 @@ import { getBrowserAPI } from '../types/browser';
 // Track headers using placeholders for badge notification
 let headersWithPlaceholders: PlaceholderInfo[] = [];
 
+// Track the highest rule ID from the last update for efficient removal
+let lastMaxRuleId = 0;
+
 /**
  * Updates the network request rules based on saved data and dynamic sources.
  * Implements specialized handling for response headers to maximize compatibility.
@@ -32,11 +35,14 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
 
         if (isPaused) {
             console.log('Info: Rules execution is paused, clearing all active rules');
-            // Clear all rules when paused
+            const removeIds = lastMaxRuleId > 0
+                ? Array.from({ length: lastMaxRuleId }, (_, i) => i + 1)
+                : [];
             declarativeNetRequest!.updateDynamicRules({
-                removeRuleIds: Array.from({ length: 1000 }, (_, i) => i + 1),
+                removeRuleIds: removeIds,
                 addRules: []
             }).then(() => {
+                lastMaxRuleId = 0;
                 console.log('Info: All rules cleared while paused');
             });
             return;
@@ -117,24 +123,19 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
                 });
             }
 
-            // Log response header details for debugging
-            if (responseEntries.length > 0) {
-                console.log(`Info: Creating ${rules.length} total rules (${responseEntries.length} response headers)`);
-                console.log(`Info: Response headers being set:`);
-                responseEntries.forEach(entry => {
-                    console.log(`- ${entry.headerName}: "${entry.headerValue}" for domains: ${entry.domains.join(', ')}`);
-                });
-            }
+            // Build removal list from previous max ID (avoid allocating a huge array)
+            const removeCount = Math.max(lastMaxRuleId, ruleId - 1);
+            const removeRuleIds = removeCount > 0
+                ? Array.from({ length: removeCount }, (_, i) => i + 1)
+                : [];
 
             // Update the dynamic rules
             declarativeNetRequest!.updateDynamicRules({
-                removeRuleIds: Array.from({ length: 2000 }, (_, i) => i + 1), // Remove all existing rules
+                removeRuleIds,
                 addRules: rules
             }).then(() => {
+                lastMaxRuleId = ruleId - 1;
                 console.log(`Info: Successfully updated ${rules.length} network rules`);
-                if (rules.length > 0) {
-                    console.log('Info: Example rule:', JSON.stringify(rules[0].condition));
-                }
             }).catch((e: Error) => {
                 console.error('Error updating rules:', e.message || 'Unknown error');
                 sendMessageWithCallback({
@@ -251,20 +252,22 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
 }
 
 /**
- * Create rules for request headers
+ * Create rules for request headers — single rule per domain covering all resource types
  */
 function createRequestHeaderRules(entry: ProcessedEntry, startId: number): HeaderRule[] {
     const rules: HeaderRule[] = [];
     let ruleId = startId;
 
-    // Process each domain
+    const ALL_RESOURCE_TYPES: chrome.declarativeNetRequest.ResourceType[] = [
+        'main_frame', 'sub_frame', 'stylesheet', 'script', 'image',
+        'font', 'object', 'xmlhttprequest', 'websocket', 'other'
+    ] as chrome.declarativeNetRequest.ResourceType[];
+
     entry.domains.forEach(domain => {
         if (!domain || domain.trim() === '') return;
 
-        // Format the URL pattern
         const urlFilter = formatUrlPattern(domain);
 
-        // Create main frame rule
         rules.push({
             id: ruleId++,
             priority: 100,
@@ -276,7 +279,6 @@ function createRequestHeaderRules(entry: ProcessedEntry, startId: number): Heade
                         operation: 'set',
                         value: entry.headerValue
                     },
-                    // Add cache prevention headers
                     {
                         header: 'Cache-Control',
                         operation: 'set',
@@ -291,57 +293,7 @@ function createRequestHeaderRules(entry: ProcessedEntry, startId: number): Heade
             },
             condition: {
                 urlFilter: urlFilter,
-                resourceTypes: ['main_frame' as chrome.declarativeNetRequest.ResourceType]
-            }
-        });
-
-        // Create sub-resources rule (including websocket)
-        rules.push({
-            id: ruleId++,
-            priority: 90,
-            action: {
-                type: 'modifyHeaders',
-                requestHeaders: [
-                    {
-                        header: entry.headerName,
-                        operation: 'set',
-                        value: entry.headerValue
-                    },
-                    {
-                        header: 'Cache-Control',
-                        operation: 'set',
-                        value: 'no-cache, no-store, must-revalidate'
-                    },
-                    {
-                        header: 'Pragma',
-                        operation: 'set',
-                        value: 'no-cache'
-                    }
-                ]
-            },
-            condition: {
-                urlFilter: urlFilter,
-                resourceTypes: ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'websocket', 'other'] as chrome.declarativeNetRequest.ResourceType[]
-            }
-        });
-
-        // Create dedicated WebSocket rule with higher priority
-        rules.push({
-            id: ruleId++,
-            priority: 95,
-            action: {
-                type: 'modifyHeaders',
-                requestHeaders: [
-                    {
-                        header: entry.headerName,
-                        operation: 'set',
-                        value: entry.headerValue
-                    }
-                ]
-            },
-            condition: {
-                urlFilter: urlFilter,
-                resourceTypes: ['websocket' as chrome.declarativeNetRequest.ResourceType]
+                resourceTypes: ALL_RESOURCE_TYPES
             }
         });
     });
@@ -350,20 +302,23 @@ function createRequestHeaderRules(entry: ProcessedEntry, startId: number): Heade
 }
 
 /**
- * Create rules for response headers with maximum compatibility
+ * Create rules for response headers — 2 rules per domain (main_frame + sub-resources)
  */
 function createResponseHeaderRules(entry: ProcessedEntry, startId: number): HeaderRule[] {
     const rules: HeaderRule[] = [];
     let ruleId = startId;
 
-    // Process each domain
+    const SUB_RESOURCE_TYPES: chrome.declarativeNetRequest.ResourceType[] = [
+        'sub_frame', 'stylesheet', 'script', 'image', 'font',
+        'xmlhttprequest', 'websocket', 'other'
+    ] as chrome.declarativeNetRequest.ResourceType[];
+
     entry.domains.forEach(domain => {
         if (!domain || domain.trim() === '') return;
 
-        // Format the URL pattern - critical for response headers
         const urlFilter = formatUrlPattern(domain);
 
-        // Approach 1: Ultra-high priority for main document
+        // Main document — higher priority
         rules.push({
             id: ruleId++,
             priority: 1000,
@@ -381,67 +336,23 @@ function createResponseHeaderRules(entry: ProcessedEntry, startId: number): Head
             }
         });
 
-        // Approach 2: Add rules for each individual resource type
-        (['sub_frame', 'stylesheet', 'script', 'image', 'font', 'xmlhttprequest'] as chrome.declarativeNetRequest.ResourceType[]).forEach(resourceType => {
-            rules.push({
-                id: ruleId++,
-                priority: 950,
-                action: {
-                    type: 'modifyHeaders',
-                    responseHeaders: [{
-                        header: entry.headerName,
-                        operation: 'set',
-                        value: entry.headerValue
-                    }]
-                },
-                condition: {
-                    urlFilter: urlFilter,
-                    resourceTypes: [resourceType]
-                }
-            });
+        // All sub-resources in one rule
+        rules.push({
+            id: ruleId++,
+            priority: 950,
+            action: {
+                type: 'modifyHeaders',
+                responseHeaders: [{
+                    header: entry.headerName,
+                    operation: 'set',
+                    value: entry.headerValue
+                }]
+            },
+            condition: {
+                urlFilter: urlFilter,
+                resourceTypes: SUB_RESOURCE_TYPES
+            }
         });
-
-        // Approach 3: Try with and without exact scheme matching for maximum compatibility
-        if (!urlFilter.startsWith('http')) {
-            const httpUrlFilter = 'http://' + domain.trim().replace(/^\*:\/\//, '');
-            const httpsUrlFilter = 'https://' + domain.trim().replace(/^\*:\/\//, '');
-
-            // HTTP explicit rule
-            rules.push({
-                id: ruleId++,
-                priority: 900,
-                action: {
-                    type: 'modifyHeaders',
-                    responseHeaders: [{
-                        header: entry.headerName,
-                        operation: 'set',
-                        value: entry.headerValue
-                    }]
-                },
-                condition: {
-                    urlFilter: httpUrlFilter + '/*',
-                    resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest'] as chrome.declarativeNetRequest.ResourceType[]
-                }
-            });
-
-            // HTTPS explicit rule
-            rules.push({
-                id: ruleId++,
-                priority: 900,
-                action: {
-                    type: 'modifyHeaders',
-                    responseHeaders: [{
-                        header: entry.headerName,
-                        operation: 'set',
-                        value: entry.headerValue
-                    }]
-                },
-                condition: {
-                    urlFilter: httpsUrlFilter + '/*',
-                    resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest'] as chrome.declarativeNetRequest.ResourceType[]
-                }
-            });
-        }
     });
 
     return rules;
@@ -450,7 +361,7 @@ function createResponseHeaderRules(entry: ProcessedEntry, startId: number): Head
 /**
  * Format a domain string into a proper URL pattern for rule matching
  */
-function formatUrlPattern(domain: string): string {
+export function formatUrlPattern(domain: string): string {
     let urlFilter = domain.trim();
 
     // If it's already a full URL pattern, validate and return
@@ -496,18 +407,11 @@ function formatUrlPattern(domain: string): string {
         urlFilter = '*://' + urlFilter;
     }
 
-    // Ensure path component
-    if (!urlFilter.includes('/') || urlFilter.endsWith('://')) {
+    // Ensure path component — check if there's a slash AFTER the protocol's "://"
+    const protocolEnd = urlFilter.indexOf('://');
+    const afterProtocol = protocolEnd >= 0 ? urlFilter.substring(protocolEnd + 3) : urlFilter;
+    if (!afterProtocol.includes('/')) {
         urlFilter = urlFilter + '/*';
-    } else {
-        // Check if it ends with a domain without path
-        const lastSlash = urlFilter.lastIndexOf('/');
-        const protocolSlashes = urlFilter.indexOf('://');
-
-        // If the only slashes are from the protocol, add /*
-        if (lastSlash <= protocolSlashes + 1) {
-            urlFilter = urlFilter + '/*';
-        }
     }
 
     return urlFilter;

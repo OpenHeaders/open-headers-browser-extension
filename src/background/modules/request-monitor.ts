@@ -66,8 +66,6 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
                     // Track this tab as having active rules
                     addTrackedUrl(details.tabId, normalizedUrl);
 
-                    console.log(`Info: Tab ${details.tabId} made ${details.method} ${details.type} request to ${normalizedUrl} which has active rules`);
-
                     // Update badge if this is the active tab
                     tabs.query({ active: true, currentWindow: true }, (tabsList: chrome.tabs.Tab[]) => {
                         if (tabsList[0] && tabsList[0].id === details.tabId) {
@@ -131,54 +129,7 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
                     'net::ERR_SSL_OBSOLETE_VERSION'
                 ];
 
-                // CORS errors and similar happen AFTER the request is sent
-                const clientSideErrors: string[] = [
-                    'net::ERR_FAILED',
-                    'net::ERR_ABORTED',
-                    'net::ERR_BLOCKED_BY_CLIENT',
-                    'net::ERR_BLOCKED_BY_RESPONSE',
-                    'net::ERR_EMPTY_RESPONSE',
-                    'net::ERR_INSECURE_RESPONSE',
-                    'net::ERR_BLOCKED_BY_ADMINISTRATOR',
-                    'net::ERR_BLOCKED_BY_XSS_AUDITOR',
-                    'net::ERR_CONTENT_DECODING_FAILED',
-                    'net::ERR_CONTENT_LENGTH_MISMATCH',
-                    'net::ERR_INCOMPLETE_CHUNKED_ENCODING',
-                    'net::ERR_INVALID_RESPONSE',
-                    'net::ERR_RESPONSE_HEADERS_TOO_BIG',
-                    'net::ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_LENGTH',
-                    'net::ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_DISPOSITION',
-                    'net::ERR_HTTP2_PROTOCOL_ERROR',
-                    'net::ERR_HTTP2_SERVER_REFUSED_STREAM',
-                    'net::ERR_QUIC_PROTOCOL_ERROR',
-                    'net::ERR_INVALID_CHUNKED_ENCODING',
-                    'net::ERR_REQUEST_RANGE_NOT_SATISFIABLE',
-                    'net::ERR_ENCODING_CONVERSION_FAILED',
-                    'net::ERR_UNRECOGNIZED_FTP_DIRECTORY_LISTING_FORMAT',
-                    'net::ERR_NO_SUPPORTED_PROXIES',
-                    'net::ERR_HTTP2_INADEQUATE_TRANSPORT_SECURITY',
-                    'net::ERR_HTTP2_FLOW_CONTROL_ERROR',
-                    'net::ERR_HTTP2_FRAME_SIZE_ERROR',
-                    'net::ERR_HTTP2_COMPRESSION_ERROR',
-                    'net::ERR_HTTP2_CONNECT_ERROR',
-                    'net::ERR_HTTP2_GOAWAY_FRAME',
-                    'net::ERR_HTTP2_RST_STREAM_NO_ERROR_RECEIVED',
-                    'net::ERR_HTTP2_PUSHED_STREAM_NOT_AVAILABLE',
-                    'net::ERR_HTTP2_CLAIMED_PUSHED_STREAM_RESET_BY_SERVER',
-                    'net::ERR_HTTP2_PUSHED_RESPONSE_DOES_NOT_MATCH',
-                    'net::ERR_HTTP2_FALLBACK_BEYOND_PROTOCOL_ERROR',
-                    'net::ERR_QUIC_GOAWAY_REQUEST_CAN_BE_RETRIED',
-                    'net::ERR_TOO_MANY_REDIRECTS',
-                    'net::ERR_UNSAFE_REDIRECT',
-                    'net::ERR_UNSAFE_PORT',
-                    'net::ERR_INVALID_HTTP_RESPONSE',
-                    'net::ERR_METHOD_NOT_SUPPORTED',
-                    'net::ERR_PAC_STATUS_NOT_OK',
-                    'net::ERR_PAC_SCRIPT_FAILED'
-                ];
-
                 if (pending.headersApplied && networkFailureErrors.includes(error)) {
-                    console.log(`Info: Removing tracking for failed request (${error}): ${pending.url}`);
 
                     if (tabsWithActiveRules.has(pending.tabId)) {
                         const trackedUrls = tabsWithActiveRules.get(pending.tabId)!;
@@ -198,10 +149,6 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
                             });
                         }
                     }
-                } else if (pending.headersApplied && clientSideErrors.includes(error)) {
-                    console.log(`Info: Keeping tracking for request with client-side error (${error}): ${pending.url} - headers were successfully applied`);
-                } else if (pending.headersApplied && error && !networkFailureErrors.includes(error) && !clientSideErrors.includes(error)) {
-                    console.log(`Info: Unknown error type (${error}) for request: ${pending.url} - keeping tracking since headers may have been applied`);
                 }
             }
 
@@ -222,7 +169,6 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
                 const trackedUrls = tabsWithActiveRules.get(details.tabId)!;
                 if (!trackedUrls.has(pending.url)) {
                     trackedUrls.add(pending.url);
-                    console.log(`Info: Ensuring tracking for request that received response: ${pending.url}`);
                 }
             }
         }, { urls: ["<all_urls>"] });
@@ -245,7 +191,6 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
                 checkIfUrlMatchesAnyRule(normalizedRedirectUrl).then(matchesRule => {
                     if (matchesRule) {
                         addTrackedUrl(details.tabId, normalizedRedirectUrl);
-                        console.log(`Info: Tab ${details.tabId} redirected to ${normalizedRedirectUrl} which has active rules`);
 
                         // Update badge if active tab
                         tabs.query({ active: true, currentWindow: true }, (tabsList: chrome.tabs.Tab[]) => {
@@ -280,8 +225,6 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
                         pendingRequests.delete(requestId);
                     }
                 }
-
-                console.log(`Info: Cleared tracking for tab ${details.tabId} due to navigation`);
 
                 // Update badge if this is the active tab
                 tabs.query({ active: true, currentWindow: true }, (tabsList: chrome.tabs.Tab[]) => {

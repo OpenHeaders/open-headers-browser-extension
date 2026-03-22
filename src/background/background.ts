@@ -13,7 +13,7 @@ import { RecordingService } from '../assets/recording/background/recording-servi
 // Import modules
 import { updateExtensionBadge } from './modules/badge-manager';
 import { setupRequestMonitoring } from './modules/request-monitor';
-import { checkRulesForTab, revalidateTrackedRequests, restoreTrackingState } from './modules/request-tracker';
+import { checkRulesForTab, revalidateTrackedRequests, restoreTrackingState, refreshSavedDataCache } from './modules/request-tracker';
 import { setupTabListeners, setupPeriodicCleanup } from './modules/tab-listeners';
 import { openWelcomePageOnInstall, checkFirefoxFirstRun } from './modules/welcome-page';
 import { debounce, generateSourcesHash, generateSavedDataHash } from './modules/utils';
@@ -290,19 +290,22 @@ storage.onChanged.addListener((changes: { [key: string]: chrome.storage.StorageC
             Object.keys(changes).some(key => key.startsWith('savedData_chunk_'));
 
         if (hasDataChange) {
-            // Use getChunkedData to properly retrieve the potentially chunked data
-            getChunkedData('savedData', (newSavedData: SavedDataMap | null) => {
-                const effectiveSavedData: SavedDataMap = newSavedData || {};
-                const newSavedDataHash = generateSavedDataHash(effectiveSavedData);
+            // Refresh the in-memory cache first, then revalidate tracked requests.
+            // This avoids a race where revalidation reads stale cached data.
+            refreshSavedDataCache(() => {
+                getChunkedData('savedData', (newSavedData: SavedDataMap | null) => {
+                    const effectiveSavedData: SavedDataMap = newSavedData || {};
+                    const newSavedDataHash = generateSavedDataHash(effectiveSavedData);
 
-                if (newSavedDataHash === lastSavedDataHash) {
-                    console.log('Info: Saved data changed but content is identical, skipping update');
-                    return;
-                }
+                    if (newSavedDataHash === lastSavedDataHash) {
+                        console.log('Info: Saved data changed but content is identical, skipping update');
+                        return;
+                    }
 
-                console.log('Info: Saved header data changed with new content, debouncing update');
-                revalidateTrackedRequests().then(() => {
-                    debouncedUpdateRulesFromSavedData(effectiveSavedData);
+                    console.log('Info: Saved header data changed with new content, debouncing update');
+                    revalidateTrackedRequests().then(() => {
+                        debouncedUpdateRulesFromSavedData(effectiveSavedData);
+                    });
                 });
             });
         }

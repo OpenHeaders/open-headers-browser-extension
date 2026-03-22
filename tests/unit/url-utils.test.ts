@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { normalizeUrlForTracking, isTrackableUrl, doesUrlMatchPattern } from '../../src/background/modules/url-utils';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { normalizeUrlForTracking, isTrackableUrl, doesUrlMatchPattern, clearPatternCache, precompilePattern, precompileAllPatterns } from '../../src/background/modules/url-utils';
 
 // ---------------------------------------------------------------------------
 //  normalizeUrlForTracking
 // ---------------------------------------------------------------------------
+
+// Clear pattern cache between test suites to avoid cross-test leakage
+beforeEach(() => {
+    clearPatternCache();
+});
 
 describe('normalizeUrlForTracking', () => {
     it('removes fragment from enterprise URL', () => {
@@ -180,6 +185,21 @@ describe('doesUrlMatchPattern', () => {
         expect(doesUrlMatchPattern('http://localhost:3000/api/test', 'localhost:4000')).toBe(false);
     });
 
+    it('bare localhost pattern does not match localhost with port', () => {
+        // "localhost" compiles to *://localhost/* which should NOT match localhost:3000
+        // because :3000 sits between the hostname and the / path separator
+        expect(doesUrlMatchPattern('http://localhost:3000/api/test', 'localhost')).toBe(false);
+    });
+
+    it('bare localhost pattern matches localhost without port', () => {
+        expect(doesUrlMatchPattern('http://localhost/api/test', 'localhost')).toBe(true);
+    });
+
+    it('bare domain does not match same domain on non-default port', () => {
+        // "medicenter" should NOT match "http://medicenter:8080/api"
+        expect(doesUrlMatchPattern('http://medicenter:8080/api', 'medicenter')).toBe(false);
+    });
+
     it('matches IPv4 address pattern', () => {
         expect(doesUrlMatchPattern('http://192.168.1.100:8080/api', '192.168.1.100:8080')).toBe(true);
     });
@@ -233,5 +253,47 @@ describe('doesUrlMatchPattern', () => {
 
     it('returns false for completely invalid input without crashing', () => {
         expect(doesUrlMatchPattern('', 'api.openheaders.io')).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+//  Pattern cache
+// ---------------------------------------------------------------------------
+
+describe('pattern cache', () => {
+    it('precompilePattern makes subsequent matches work', () => {
+        precompilePattern('api.openheaders.io');
+        expect(
+            doesUrlMatchPattern('https://api.openheaders.io/v2/config', 'api.openheaders.io')
+        ).toBe(true);
+    });
+
+    it('precompileAllPatterns compiles multiple patterns', () => {
+        precompileAllPatterns(['api.openheaders.io', '*.partner-service.io', 'localhost:3000']);
+        expect(
+            doesUrlMatchPattern('https://api.openheaders.io/v2/config', 'api.openheaders.io')
+        ).toBe(true);
+        expect(
+            doesUrlMatchPattern('https://staging.partner-service.io/health', '*.partner-service.io')
+        ).toBe(true);
+        expect(
+            doesUrlMatchPattern('http://localhost:3000/api', 'localhost:3000')
+        ).toBe(true);
+    });
+
+    it('clearPatternCache forces recompilation', () => {
+        precompilePattern('api.openheaders.io');
+        clearPatternCache();
+        // Should still work — doesUrlMatchPattern lazily recompiles
+        expect(
+            doesUrlMatchPattern('https://api.openheaders.io/v2/config', 'api.openheaders.io')
+        ).toBe(true);
+    });
+
+    it('doesUrlMatchPattern works without pre-compilation (lazy compile)', () => {
+        // No precompilePattern call — pattern should be compiled on first use
+        expect(
+            doesUrlMatchPattern('https://example.com/page', 'example.com')
+        ).toBe(true);
     });
 });

@@ -1,6 +1,6 @@
 {
   "name": "open-headers",
-  "version": "3.2.0",
+  "version": "3.5.0",
   "description": "Record your browser tab. Modify HTTP Traffic. Team Workspaces. Everything local.",
   "scripts": {
     "// Build //": "",
