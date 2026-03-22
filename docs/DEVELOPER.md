@@ -1,500 +1,382 @@
 # Open Headers - Developer Documentation
 
-This document contains technical information for developers who want to understand, build, or contribute to the Open Headers browser extension.
+Technical documentation for developers who want to understand, build, test, or contribute to the Open Headers browser extension.
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
-Open Headers is a modern browser extension built with **React 18** and **Ant Design 5**, featuring a professional, Apple-inspired design. The extension uses a hybrid architecture combining React for the frontend UI with vanilla JavaScript for the background service worker to ensure maximum browser compatibility.
+Open Headers is a browser extension built with **TypeScript**, **React 18**, and **Ant Design 5**. It uses a background service worker to manage HTTP header rules via the browser's `declarativeNetRequest` API and communicates with the [OpenHeaders desktop app](https://github.com/OpenHeaders/open-headers-app) over WebSocket.
 
 ### Technology Stack
 
-- **Frontend Framework**: React 18 with functional components and hooks
-- **UI Library**: Ant Design 5 with custom theming
-- **Build System**: Webpack 5 with Babel for ES6+ and JSX compilation
-- **State Management**: React Context API for global application state
-- **Styling**: LESS with CSS custom properties for theming
-- **Background Service**: Vanilla JavaScript for cross-browser compatibility
-- **Module Bundling**: Browser-specific webpack configurations
-- **Package Management**: npm
-- **Version Control**: Git
+| Layer | Technology |
+|-------|-----------|
+| Language | TypeScript (strict mode) |
+| Frontend | React 18, Ant Design 5, styled-components |
+| Build | Vite 8 |
+| Unit Tests | Vitest 4, @testing-library/react |
+| E2E Tests | Playwright |
+| Styling | LESS with CSS custom properties |
+| State Management | React Context API |
+| Package Manager | npm |
 
-### Core Components
+### Core Architecture
 
-1. **React Popup UI** (`src/popup/`)
-   - Modern React-based interface with Ant Design components
-   - Component-based architecture with reusable UI elements
-   - Real-time state updates and validation
+1. **Popup UI** (`src/popup/`) — React-based interface for managing header rules, recording sessions, and viewing connection state.
 
-2. **Background Service Worker** (`src/background/`)
-   - Manages header rules using browser's declarativeNetRequest API
-   - WebSocket client for companion app communication
-   - Request tracking and badge updates
+2. **Background Service Worker** (`src/background/`) — Manages `declarativeNetRequest` rules, WebSocket connection to the desktop app, request monitoring, and badge state.
 
-3. **React Context System** (`src/context/`)
-   - `HeaderContext`: Global state for header entries and dynamic sources
-   - `ThemeContext`: Dark/light mode management
+3. **Context System** (`src/context/`) — `HeaderContext` for global header/source state, `ThemeContext` for dark/light mode.
 
-4. **Welcome Experience** (`src/assets/welcome/`)
-   - Interactive multi-step onboarding
-   - Browser-specific setup instructions
-   - Connection verification flow
+4. **Shared Types** (`src/types/`) — Canonical type definitions shared across the extension, aligned with the desktop app's types.
 
-5. **Import/Export System** (`src/assets/import/`, `src/assets/export/`)
-   - Dedicated pages for configuration management
-   - Browser-specific implementations (Firefox uses separate pages)
+5. **Recording System** (`src/assets/recording/`) — State machine, event accumulation, and content script injection for browser tab recording.
 
-## 📁 Project Structure
+6. **Shared Utilities** (`src/utils/`) — Cross-browser API wrapper, storage chunking, header validation, messaging.
+
+## Project Structure
 
 ```
 open-headers-browser-extension/
-├── src/                          # Source code
-│   ├── popup/                    # React popup application
-│   │   ├── App.jsx              # Main app component with providers
-│   │   ├── index.jsx            # React entry point
-│   │   ├── popup.html           # HTML template
-│   │   ├── components/          # React components
-│   │   │   ├── Header.jsx       # App header with theme toggle
-│   │   │   ├── HeaderForm.jsx   # Form for adding/editing headers
-│   │   │   ├── HeaderTable.jsx  # Professional table view
-│   │   │   ├── HeaderList.jsx   # Wrapper for table
-│   │   │   ├── DomainTags.jsx   # Multi-domain input component
-│   │   │   ├── ConnectionInfo.jsx # Connection status alerts
-│   │   │   └── Footer.jsx       # Import/export and links
+├── src/
+│   ├── popup/                     # React popup application
+│   │   ├── App.tsx                # Main app with providers
+│   │   ├── index.tsx              # React entry point
+│   │   ├── components/            # UI components
+│   │   │   ├── Header.tsx         # App header with theme toggle
+│   │   │   ├── HeaderTable.tsx    # Rules table with sort/filter/search
+│   │   │   ├── HeaderEntry.tsx    # Single rule card
+│   │   │   ├── DomainTags.tsx     # Multi-domain tag input
+│   │   │   ├── TagManager.tsx     # Tag grouping and management
+│   │   │   ├── ActiveRules.tsx    # Active rules for current tab
+│   │   │   ├── RulesList.tsx      # Rules list wrapper
+│   │   │   ├── ConnectionInfo.tsx # Connection status alerts
+│   │   │   ├── Footer.tsx         # Recording controls, options, version
+│   │   │   ├── RecordingButton.tsx
+│   │   │   └── RecordingPreNav.tsx
+│   │   ├── utils/
+│   │   │   ├── recording.ts       # Recording utilities
+│   │   │   └── recording-pre-nav.ts
 │   │   └── styles/
-│   │       └── popup.less       # Main stylesheet with Ant Design theming
+│   │       └── popup.less         # Main stylesheet
 │   │
-│   ├── background/              # Background service worker
-│   │   ├── index.js            # Entry point
-│   │   ├── background.js       # Main background logic
-│   │   ├── header-manager.js   # DeclarativeNetRequest rule management
-│   │   ├── websocket.js        # WebSocket client
-│   │   ├── rule-validator.js   # Header validation
-│   │   └── safari-websocket-adapter.js # Safari-specific handling
+│   ├── background/                # Background service worker
+│   │   ├── index.ts               # Entry point
+│   │   ├── background.ts          # Main orchestrator
+│   │   ├── header-manager.ts      # declarativeNetRequest rule management
+│   │   ├── websocket.ts           # WebSocket client (ws://127.0.0.1:59210)
+│   │   ├── rule-validator.ts      # Header validation
+│   │   ├── safari-websocket-adapter.ts
+│   │   └── modules/
+│   │       ├── badge-manager.ts   # Extension badge state
+│   │       ├── message-handler.ts # Popup/content script messages
+│   │       ├── recording-handler.ts
+│   │       ├── request-monitor.ts # webRequest event tracking
+│   │       ├── request-tracker.ts # Active rule tracking per tab
+│   │       ├── tab-listeners.ts   # Tab lifecycle events
+│   │       ├── url-utils.ts       # URL normalization and matching
+│   │       ├── utils.ts           # Debounce, hash generation
+│   │       └── welcome-page.ts
 │   │
-│   ├── context/                 # React Context providers
-│   │   ├── HeaderContext.jsx    # Global header state management
-│   │   ├── ThemeContext.jsx     # Theme management
-│   │   └── index.js            # Context exports
+│   ├── types/                     # Shared TypeScript types
+│   │   ├── header.ts              # HeaderEntry, ProcessedEntry, HeaderRule, SavedDataMap
+│   │   ├── websocket.ts           # Source, RulesData, HeaderRuleFromApp, WS messages
+│   │   ├── recording.ts           # Recording, RecordingEvent, IRecordingService
+│   │   ├── browser.ts             # getBrowserAPI(), ExtensionMessage, BadgeState
+│   │   └── index.ts               # Re-exports
 │   │
-│   ├── hooks/                   # Custom React hooks
-│   │   └── useHeader.js        # Header context hook
+│   ├── context/                   # React Context providers
+│   │   ├── HeaderContext.tsx       # Header entries, sources, connection state
+│   │   ├── ThemeContext.tsx        # Theme mode (light/dark/auto)
+│   │   └── index.ts
 │   │
-│   ├── components/              # Shared components
-│   │   └── ErrorBoundary.jsx   # Error handling wrapper
+│   ├── hooks/
+│   │   ├── useHeader.ts           # HeaderContext consumer hook
+│   │   └── useEnvironmentService.ts # Environment variable resolution
 │   │
-│   ├── utils/                   # Shared utilities
-│   │   ├── browser-api.js      # Cross-browser API wrapper
-│   │   ├── header-validator.js  # Validation functions
-│   │   └── utils.js            # Common utilities
+│   ├── services/
+│   │   └── EnvironmentService.ts  # Workspace/environment management
 │   │
-│   └── assets/                  # Static assets
-│       ├── images/             # Extension icons
-│       ├── welcome/            # Welcome page
-│       ├── import/             # Import page
-│       └── export/             # Export success page
+│   ├── utils/
+│   │   ├── browser-api.ts         # Cross-browser API wrapper (Chrome/Firefox/Safari)
+│   │   ├── messaging.ts           # sendMessage/sendMessageWithCallback (shared)
+│   │   ├── header-validator.ts    # Header name/value/domain validation
+│   │   ├── storage-chunking.ts    # chrome.storage.sync chunking (8KB limit)
+│   │   ├── utils.ts               # normalizeHeaderName, debounce, formatUrlPattern
+│   │   ├── display-detector.ts    # Multi-monitor display detection
+│   │   └── app-launcher.ts        # Desktop app launch/focus
+│   │
+│   ├── components/
+│   │   └── ErrorBoundary.tsx
+│   │
+│   └── assets/
+│       ├── images/                # Extension icons
+│       ├── welcome/               # Welcome page (raw HTML/JS, not bundled)
+│       ├── recording/
+│       │   ├── background/recording-service.ts  # Recording service
+│       │   ├── shared/            # State machine, constants, message adapter
+│       │   ├── content/           # Content script (raw JS, injected into pages)
+│       │   ├── inject/            # Recording widget (raw JS)
+│       │   └── viewer/            # Record viewer page
+│       └── lib/                   # Vendored rrweb libraries
 │
-├── config/                      # Build configuration
-│   ├── webpack/                # Webpack configs
-│   │   ├── webpack.common.js   # Shared config
-│   │   ├── webpack.chrome.js   # Chrome-specific
-│   │   ├── webpack.firefox.js  # Firefox-specific
-│   │   ├── webpack.edge.js     # Edge-specific
-│   │   └── webpack.safari.js   # Safari-specific
-│   └── scripts/                # Build scripts
-│       ├── build-utils.js      # Build helpers
-│       └── release.js          # Release packaging
+├── tests/
+│   ├── setup.ts                   # Vitest setup (chrome mock)
+│   ├── __mocks__/chrome.ts        # Chrome API mock
+│   ├── unit/                      # 28 test files, 795+ tests
+│   └── e2e/
+│       └── extension.spec.ts      # Playwright e2e (23 tests)
 │
-├── manifests/                   # Browser manifests
+├── config/scripts/                # Release and build utility scripts
+│   ├── release.js                 # Release packaging
+│   ├── build-utils.js             # Post-build reporting
+│   └── source-code-zip.js         # Firefox source zip
+│
+├── manifests/                     # Browser-specific manifests (MV3)
 │   ├── chrome/manifest.json
 │   ├── firefox/manifest.json
 │   ├── edge/manifest.json
 │   └── safari/
 │       ├── manifest.json
-│       └── SafariAPIs.js       # Safari compatibility layer
+│       └── SafariAPIs.js          # Safari compatibility layer
 │
-├── docs/                        # Documentation
-├── package.json                 # Dependencies and scripts
-└── .babelrc                     # Babel configuration
+├── vite.config.ts                 # Vite build config (multi-browser)
+├── tsconfig.json                  # TypeScript config (strict)
+├── tsconfig.test.json             # TypeScript config for tests
+├── vitest.config.ts               # Vitest config
+├── playwright.config.ts           # Playwright config
+├── popup.html                     # Vite HTML entry point
+└── package.json
 ```
 
-## 🔄 Data Flow Architecture
-
-### State Management Flow
-
-1. **User Interaction** → React Components
-2. **State Updates** → React Context (HeaderContext)
-3. **Persistence** → Browser Storage API
-4. **Background Sync** → Service Worker
-5. **Rule Application** → DeclarativeNetRequest API
-6. **Dynamic Updates** → WebSocket → Companion App
-
-### Component Communication
+## Data Flow
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   React Popup   │────▶│  Header Context │────▶│ Browser Storage │
+│   React Popup   │────>│  HeaderContext   │────>│ Browser Storage  │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
          │                       │                         │
-         │                       ▼                         ▼
+         │                       v                         v
          │              ┌─────────────────┐     ┌─────────────────┐
-         └─────────────▶│ Background SW   │────▶│ Network Rules   │
-                        └─────────────────┘     └─────────────────┘
-                                 │
-                                 ▼
+         └─────────────>│ Background SW   │────>│ Network Rules    │
+                        └─────────────────┘     │ (declarativeNet  │
+                                 │              │  Request)        │
+                                 v              └─────────────────┘
                         ┌─────────────────┐
                         │ WebSocket Client│
+                        │ ws://127.0.0.1  │
+                        │    :59210       │
                         └─────────────────┘
                                  │
-                                 ▼
+                                 v
                         ┌─────────────────┐
-                        │ Companion App   │
+                        │ Desktop App     │
+                        │ (open-headers-  │
+                        │  app)           │
                         └─────────────────┘
 ```
 
-## 🛠️ Development Setup
+## Development Setup
 
 ### Prerequisites
 
-- Node.js 16.0 or higher
-- npm 8.0 or higher
+- Node.js 22+
+- npm 10+
 - Git
-- A code editor (VS Code recommended)
-- Browser(s) for testing
 
-### Initial Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/OpenHeaders/open-headers-browser-extension.git
-   cd open-headers-browser-extension
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start development build**
-   ```bash
-   # Watch mode for all browsers
-   npm run dev
-
-   # Or for specific browser
-   npm run dev:chrome    # Chrome development
-   npm run dev:firefox   # Firefox development
-   npm run dev:edge      # Edge development
-   npm run dev:safari    # Safari development
-   ```
-
-4. **Load the extension**
-   - Chrome/Edge: Navigate to extensions page, enable Developer Mode, click "Load unpacked", select `dist/chrome` or `dist/edge`
-   - Firefox: Navigate to `about:debugging`, click "Load Temporary Add-on", select `manifest.json` in `dist/firefox`
-   - Safari: Run `npm run safari:convert` after building, then open in Xcode
-
-### Build Commands
+### Getting Started
 
 ```bash
-# Production builds
-npm run build          # Build all browsers
-npm run build:chrome   # Chrome only
-npm run build:firefox  # Firefox only
-npm run build:edge     # Edge only
-npm run build:safari   # Safari only
-
-# Create release packages
-npm run release        # Creates .zip files in releases/
+git clone https://github.com/OpenHeaders/open-headers-browser-extension.git
+cd open-headers-browser-extension
+npm install
 ```
 
-## 🏛️ Architecture Details
+### Development
 
-### React Components
+```bash
+npm run dev              # Watch mode (Chrome)
+npm run dev:chrome       # Chrome
+npm run dev:firefox      # Firefox
+npm run dev:edge         # Edge
+npm run dev:safari       # Safari
+```
 
-#### Core Components
+Load the extension from `dist/<browser>/` in your browser's developer mode.
 
-1. **App.jsx**
-   - Main application wrapper
-   - Provides context providers and error boundary
-   - Handles popup lifecycle events
+### Build
 
-2. **HeaderForm.jsx**
-   - Complex form with real-time validation
-   - Dynamic source selection
-   - Domain pattern management
-   - Prefix/suffix formatting
+```bash
+npm run build            # All browsers
+npm run build:chrome     # Chrome only
+npm run build:firefox    # Firefox only
+npm run build:edge       # Edge only
+npm run build:safari     # Safari only
+npm run release          # Build + create .zip packages
+```
 
-3. **HeaderTable.jsx**
-   - Advanced table with sorting and filtering
-   - Real-time status indicators
-   - Inline enable/disable toggles
-   - Search functionality
+### Testing
 
-4. **DomainTags.jsx**
-   - Tag-based domain input
-   - Comma/Enter separated input
-   - Validation on input
-   - Edit capabilities
+```bash
+# Type checking
+npm run typecheck
 
-#### State Management
+# Unit tests (795+ tests)
+npm test                 # Run once
+npm run test:watch       # Watch mode
+npm run test:coverage    # With coverage
 
-**HeaderContext** manages:
-- Header entries (CRUD operations)
-- Dynamic sources from companion app
-- Connection status
-- Edit mode state
-- Form draft values
-- UI state persistence
+# E2E tests (23 tests, requires Chrome build)
+npm run build:chrome     # Build first
+npm run test:e2e         # Run e2e
+npm run test:e2e:headed  # Run headed
 
-**ThemeContext** manages:
-- Theme mode (light/dark/auto)
-- System preference detection
-- Ant Design theme configuration
+# Slow-motion e2e (for debugging)
+SLOW_MO=500 npm run test:e2e
+```
 
-### Background Service Architecture
+### Test Architecture
 
-#### Key Modules
+Tests follow enterprise-grade standards:
 
-1. **background.js**
-   - Main coordination point
-   - Message handling from popup
-   - Request monitoring
-   - Badge updates
+- **Factory functions** at the top of each file (`makeSource()`, `makeHeaderEntry()`) with `Partial<T>` overrides
+- **Realistic test data**: UUIDs, JWT tokens, enterprise URLs, ISO timestamps
+- **Full shape assertions**: `toEqual` for complete objects, not shallow checks
+- **Types from source**: import from `src/types/`, never re-declare in tests
+- **Chrome mock**: `tests/__mocks__/chrome.ts` provides full `chrome.*` API stubs
 
-2. **header-manager.js**
-   - Creates declarativeNetRequest rules
-   - Handles dynamic value substitution
-   - Manages placeholder values
+## Type System
 
-3. **websocket.js**
-   - WebSocket client implementation
-   - Browser-specific connection handling
-   - Automatic reconnection
-   - Source synchronization
+Shared types in `src/types/` are the single source of truth, aligned with the desktop app's types:
 
-4. **rule-validator.js**
-   - Header name/value validation
-   - Browser API compliance
-   - Sanitization functions
+| File | Key Types |
+|------|-----------|
+| `header.ts` | `HeaderEntry`, `ProcessedEntry`, `PlaceholderInfo`, `HeaderRule`, `SavedDataMap` |
+| `websocket.ts` | `Source`, `HeaderRuleFromApp`, `RulesData`, WS message types |
+| `recording.ts` | `Recording`, `RecordingEvent`, `IRecordingService`, `RecordingMetadata` |
+| `browser.ts` | `getBrowserAPI()`, `ExtensionMessage`, `BadgeState`, `MessageHandlerContext` |
 
-### Browser-Specific Implementations
+The extension is the **source of truth for recording types** (recordings originate here and are sent to the desktop app).
 
-#### Chrome/Edge
-- Standard WebSocket on port 59210
-- Direct file input for import
-- Service worker with full API support
+## Cross-Browser Compatibility
 
-#### Firefox
-- Secure WebSocket (wss://) on port 59211
-- Certificate acceptance flow
-- Separate import/export pages
-- Enhanced CSP handling
+### browser-api.ts
 
-#### Safari
-- Custom API adapters in SafariAPIs.js
-- Xcode project generation
-- WebKit-specific optimizations
+The `src/utils/browser-api.ts` module wraps Chrome/Firefox/Safari API differences:
 
-## 🔧 Key Implementation Details
+- Chrome uses callback-based APIs
+- Firefox uses promise-based APIs (`browser.*`)
+- Safari has limited API support with polyfills in `SafariAPIs.js`
+
+`getBrowserAPI()` from `src/types/browser.ts` returns the correct API object.
+
+### Browser-Specific Behavior
+
+| Feature | Chrome/Edge | Firefox | Safari |
+|---------|------------|---------|--------|
+| WebSocket | `ws://` port 59210 | `wss://` port 59211 (cert required) | `ws://` port 59210 |
+| Background | Service worker | Background scripts | Background scripts |
+| Manifest | MV3 | MV3 (gecko settings) | MV3 (limited perms) |
+| Storage sync | Native | Native | Local fallback |
+
+### Messaging
+
+`src/utils/messaging.ts` provides two shared helpers (eliminating 6 prior duplicates):
+
+- `sendMessage(msg)` — Promise-based, used in popup components
+- `sendMessageWithCallback(msg, cb)` — Callback-based, used in background scripts
+
+## Storage Architecture
+
+```typescript
+// chrome.storage.sync (cross-device, 8KB/item limit — chunked automatically)
+{
+  savedData: SavedDataMap,        // or savedData_chunked + savedData_chunk_0..N
+  isRulesExecutionPaused: boolean,
+  useRecordingWidget: boolean
+}
+
+// chrome.storage.local (device-specific)
+{
+  dynamicSources: Source[],
+  popupState: { uiState: UiState },
+  themeMode: 'light' | 'dark' | 'auto',
+  connectionAlertDismissed: boolean,
+  lastSuccessfulConnection: LastSuccessfulConnection
+}
+```
+
+## CI/CD
+
+### CI Pipeline (`.github/workflows/ci.yml`)
+
+Runs on push/PR to main:
+1. TypeScript typecheck (`tsc --noEmit`)
+2. Unit tests (`vitest run`)
+3. Build Chrome extension (`vite build`)
+4. E2E tests (`playwright test` via `xvfb-run`)
+
+Playwright browsers are cached between runs.
+
+### Release Pipeline (`.github/workflows/release.yml`)
+
+Triggered by `v*` tags:
+1. Builds all 4 browser packages
+2. Creates GitHub release with `.zip` downloads
+
+## Key Implementation Details
 
 ### Dynamic Source System
 
-1. **Source Types**
-   - HTTP requests
-   - Environment variables
-   - Local files
+Sources are provided by the desktop app over WebSocket:
 
-2. **Value Resolution**
-   ```javascript
-   // When connected and source available
-   finalValue = prefix + sourceContent + suffix
+```typescript
+// Connected with source available
+finalValue = prefix + sourceContent + suffix
 
-   // When disconnected
-   finalValue = "[APP_DISCONNECTED]"
+// Disconnected
+finalValue = "[APP_DISCONNECTED]"
 
-   // When source not found
-   finalValue = "[SOURCE_NOT_FOUND:id]"
+// Source not found
+finalValue = "[SOURCE_NOT_FOUND:<sourceId>]"
 
-   // When source empty
-   finalValue = "[EMPTY_SOURCE:id]"
-   ```
-
-3. **Real-time Updates**
-   - WebSocket receives source changes
-   - Background script updates rules
-   - Badge reflects current state
-
-### Validation System
-
-The extension implements comprehensive validation:
-
-1. **Header Names**
-   - Checks against browser-forbidden headers
-   - RFC 7230 compliance
-   - Context-aware (request vs response)
-
-2. **Header Values**
-   - Character validation
-   - Length limits (8192 chars)
-   - Control character detection
-
-3. **Domain Patterns**
-   - URL pattern validation
-   - Wildcard support
-   - Conflict detection
-   - IPv4/IPv6 support
-
-### Storage Architecture
-
-```javascript
-// Sync storage (cross-device)
-{
-  savedData: {
-    "entryId": {
-      headerName: string,
-      headerValue: string,
-      domains: string[],
-      isDynamic: boolean,
-      sourceId: string,
-      prefix: string,
-      suffix: string,
-      isResponse: boolean,
-      isEnabled: boolean
-    }
-  }
-}
-
-// Local storage (device-specific)
-{
-  dynamicSources: [...],
-  popupState: {...},
-  themeMode: "light" | "dark" | "auto",
-  connectionAlertDismissed: boolean
-}
+// Source empty
+finalValue = "[EMPTY_SOURCE:<sourceId>]"
 ```
 
-## 🧪 Testing & Debugging
+### Badge State Priority
 
-### React DevTools
+`badge-manager.ts` determines the extension icon badge:
 
-1. Install React Developer Tools extension
-2. Open Open Headers popup
-3. Inspect component tree and state
-4. Monitor re-renders and performance
-
-### Debug Mode
-
-Enable verbose logging:
-```javascript
-// In background.js
-console.log('Info: Detailed logging enabled');
+```
+placeholders (red !) > disconnected (yellow !, after 3 retries) > paused (gray −) > active (count) > none
 ```
 
-### Common Debugging Areas
+### Recording State Machine
 
-1. **WebSocket Connection**
-   - Check port availability (59210/59211)
-   - Verify companion app is running
-   - Check browser console for errors
+`state-machine.ts` manages per-tab recording states:
 
-2. **Header Application**
-   - Use browser DevTools Network tab
-   - Check for rule conflicts
-   - Verify domain patterns match
-
-3. **State Management**
-   - Use React DevTools
-   - Check browser storage
-   - Monitor Context updates
-
-## 🚀 Performance Considerations
-
-### Optimization Strategies
-
-1. **React Optimization**
-   - Use React.memo for expensive components
-   - Implement proper key props
-   - Avoid unnecessary re-renders
-
-2. **Background Script**
-   - Debounced rule updates
-   - Efficient request tracking
-   - Memory leak prevention
-
-3. **Storage**
-   - Minimal storage writes
-   - Batch updates when possible
-   - Clean up old data
-
-### Bundle Size
-
-- React + Ant Design: ~500KB (minified)
-- Background scripts: ~50KB
-- Total extension size: ~1MB
-
-## 🔒 Security Considerations
-
-1. **Content Security Policy**
-   - Strict CSP in manifest
-   - No inline scripts
-   - Limited external connections
-
-2. **Input Validation**
-   - All user inputs validated
-   - XSS prevention
-   - Injection attack protection
-
-3. **Communication**
-   - Local-only WebSocket
-   - No external data transmission
-   - Secure storage practices
-
-## 📝 Code Style Guidelines
-
-### React Components
-```jsx
-// Use functional components with hooks
-const MyComponent = ({ prop1, prop2 }) => {
-  const [state, setState] = useState(initialValue);
-  
-  useEffect(() => {
-    // Side effects
-  }, [dependencies]);
-  
-  return (
-    <div>
-      {/* JSX content */}
-    </div>
-  );
-};
-
-// Export with React.memo when appropriate
-export default React.memo(MyComponent);
+```
+idle → starting → recording → stopping → idle
+                ↘ pre_navigation ↗
+idle → error (recoverable)
 ```
 
-### Naming Conventions
-- Components: PascalCase (e.g., `HeaderForm`)
-- Files: Match component name (e.g., `HeaderForm.jsx`)
-- Hooks: camelCase with 'use' prefix (e.g., `useHeader`)
-- Constants: UPPER_SNAKE_CASE
-- Functions: camelCase
+## Security
 
-## 🤝 Contributing
+- **CSP**: Strict Content Security Policy in manifests, no inline scripts
+- **Local-only**: WebSocket connects only to `127.0.0.1`
+- **Validation**: All header names/values/domains validated against RFC 7230 and browser restrictions
+- **No external transmission**: Extension never sends data to external servers
+- **Chrome Web Store compliant**: No minification, no `eval()`, no `Function()` constructor
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed contribution guidelines.
+## Code Style
 
-## 📚 Additional Resources
+- **TypeScript strict mode** — no `any`, proper types from `src/types/`
+- **Functional React components** with hooks
+- **File naming**: PascalCase for components (`.tsx`), camelCase for utilities (`.ts`)
+- **Imports**: Use path aliases (`@utils/`, `@context/`, etc.) or relative paths
+- **No duplicate interfaces** — single source of truth in `src/types/`
 
-- [React Documentation](https://react.dev/)
-- [Ant Design Components](https://ant.design/components/overview)
-- [Chrome Extension APIs](https://developer.chrome.com/docs/extensions/reference/)
-- [WebExtensions API](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions)
+## License
 
-## 🐛 Known Issues & Limitations
-
-1. **Safari WebSocket**: Limited support, may require additional permissions
-2. **Firefox CSP**: Stricter content security policy requires certificate acceptance
-3. **Response Headers**: Limited visibility in DevTools due to browser restrictions
-4. **Dynamic Sources**: Require companion app to be running
-
-## 📄 License
-
-This project is licensed under the MIT License.
+MIT License

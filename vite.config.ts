@@ -1,0 +1,135 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import fs from 'fs';
+
+const browser = process.env.BROWSER || 'chrome';
+
+/**
+ * Vite plugin to ensure Chrome Web Store compliance.
+ * Replaces webpack's Function constructor usage and removes source map references.
+ */
+function chromeSafePlugin() {
+    return {
+        name: 'chrome-safe-plugin',
+        generateBundle(_options: unknown, bundle: Record<string, { type: string; code?: string }>) {
+            for (const [, chunk] of Object.entries(bundle)) {
+                if (chunk.type === 'chunk' && chunk.code) {
+                    chunk.code = chunk.code
+                        .replace(
+                            /return this \|\| new Function\('return this'\)\(\)/g,
+                            'return this || globalThis || self || window'
+                        )
+                        .replace(/\/\/# sourceMappingURL=.+$/gm, '');
+                }
+            }
+        },
+    };
+}
+
+/**
+ * Simple plugin to copy static assets to the dist folder with flat paths.
+ */
+function copyAssetsPlugin() {
+    const copies: Array<{ from: string; to: string }> = [
+        { from: `manifests/${browser}/manifest.json`, to: 'manifest.json' },
+        // Images
+        { from: 'src/assets/images/icon16.png', to: 'images/icon16.png' },
+        { from: 'src/assets/images/icon48.png', to: 'images/icon48.png' },
+        { from: 'src/assets/images/icon128.png', to: 'images/icon128.png' },
+        { from: 'src/assets/images/companion-app.png', to: 'images/companion-app.png' },
+        { from: 'src/assets/images/firefox-certificate.png', to: 'images/firefox-certificate.png' },
+        // Welcome page
+        { from: 'src/assets/welcome/welcome.html', to: 'welcome.html' },
+        { from: 'src/assets/welcome/welcome.js', to: 'js/welcome.js' },
+        // Recording
+        { from: 'src/assets/recording/inject/recorder-rrweb.js', to: 'js/recording/inject/recorder.js' },
+        { from: 'src/assets/recording/inject/recording-widget.js', to: 'js/recording/inject/recording-widget.js' },
+        { from: 'src/assets/recording/viewer/record-viewer.html', to: 'record-viewer.html' },
+        // Vendored libs
+        { from: 'src/assets/lib/rrweb.js', to: 'js/lib/rrweb.js' },
+        { from: 'src/assets/lib/rrweb-player.js', to: 'js/lib/rrweb-player.js' },
+        { from: 'src/assets/lib/rrweb-player.css', to: 'css/rrweb-player.css' },
+        { from: 'src/assets/lib/assets/image-bitmap-data-url-worker-IJpC7g_b.js', to: 'js/lib/assets/image-bitmap-data-url-worker-IJpC7g_b.js' },
+    ];
+
+    // Safari-specific
+    if (browser === 'safari') {
+        copies.push({ from: 'manifests/safari/SafariAPIs.js', to: 'js/safari/SafariAPIs.js' });
+    }
+
+    return {
+        name: 'copy-assets',
+        writeBundle() {
+            const outDir = path.resolve(__dirname, `dist/${browser}`);
+            for (const { from, to } of copies) {
+                const src = path.resolve(__dirname, from);
+                const dest = path.resolve(outDir, to);
+                if (fs.existsSync(src)) {
+                    fs.mkdirSync(path.dirname(dest), { recursive: true });
+                    fs.copyFileSync(src, dest);
+                }
+            }
+        },
+    };
+}
+
+export default defineConfig({
+    plugins: [
+        react(),
+        chromeSafePlugin(),
+        copyAssetsPlugin(),
+    ],
+
+    resolve: {
+        alias: {
+            '@': path.resolve(__dirname, 'src'),
+            '@shared': path.resolve(__dirname, 'src/shared'),
+            '@components': path.resolve(__dirname, 'src/components'),
+            '@assets': path.resolve(__dirname, 'src/assets'),
+            '@styles': path.resolve(__dirname, 'src/assets/styles'),
+            '@utils': path.resolve(__dirname, 'src/utils'),
+            '@services': path.resolve(__dirname, 'src/services'),
+            '@context': path.resolve(__dirname, 'src/context'),
+            '@hooks': path.resolve(__dirname, 'src/hooks'),
+        },
+    },
+
+    build: {
+        outDir: `dist/${browser}`,
+        emptyOutDir: true,
+        // Chrome Web Store requires human-readable code
+        minify: false,
+        sourcemap: browser === 'firefox' ? 'inline' : false,
+        rollupOptions: {
+            input: {
+                popup: path.resolve(__dirname, 'popup.html'),
+                background: path.resolve(__dirname, 'src/background/index.ts'),
+                'content/record-recorder': path.resolve(__dirname, 'src/assets/recording/content/record-recorder.js'),
+            },
+            output: {
+                entryFileNames: 'js/[name]/index.js',
+                chunkFileNames: 'js/chunks/[name].js',
+                assetFileNames: (assetInfo) => {
+                    if (assetInfo.names?.[0]?.endsWith('.css')) {
+                        return 'css/[name][extname]';
+                    }
+                    return 'assets/[name][extname]';
+                },
+            },
+        },
+    },
+
+    // Prevent Vite from using globalThis detection that violates CSP
+    define: {
+        'globalThis': 'globalThis',
+    },
+
+    css: {
+        preprocessorOptions: {
+            less: {
+                javascriptEnabled: true,
+            },
+        },
+    },
+});
