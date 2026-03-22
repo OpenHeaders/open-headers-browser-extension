@@ -192,6 +192,7 @@ export class RecordingService {
           await browserAPI.scripting.executeScript({
             target: { tabId },
             files: ['js/content/record-recorder/index.js'],
+            world: 'ISOLATED' as chrome.scripting.ExecutionWorld,
           });
 
           await new Promise(resolve => setTimeout(resolve, 100));

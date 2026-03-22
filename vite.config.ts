@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, build as viteBuild } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
@@ -74,11 +74,48 @@ function copyAssetsPlugin() {
     };
 }
 
+/**
+ * Plugin to build the content script as a separate self-contained IIFE bundle.
+ * Content scripts injected via chrome.scripting.executeScript cannot use
+ * ES module imports, so they must be bundled into a single file.
+ */
+function buildContentScriptPlugin() {
+    return {
+        name: 'build-content-script',
+        async writeBundle() {
+            await viteBuild({
+                configFile: false,
+                build: {
+                    outDir: `dist/${browser}/js/content/record-recorder`,
+                    emptyOutDir: false,
+                    minify: false,
+                    sourcemap: browser === 'firefox' ? 'inline' : false,
+                    lib: {
+                        entry: path.resolve(__dirname, 'src/assets/recording/content/record-recorder.js'),
+                        formats: ['iife'],
+                        name: 'RecordRecorder',
+                        fileName: () => 'index.js',
+                    },
+                    rollupOptions: {
+                        output: {
+                            inlineDynamicImports: true,
+                        },
+                    },
+                },
+                define: {
+                    'globalThis': 'globalThis',
+                },
+            });
+        },
+    };
+}
+
 export default defineConfig({
     plugins: [
         react(),
         chromeSafePlugin(),
         copyAssetsPlugin(),
+        buildContentScriptPlugin(),
     ],
 
     resolve: {
@@ -108,7 +145,6 @@ export default defineConfig({
             input: {
                 popup: path.resolve(__dirname, 'popup.html'),
                 background: path.resolve(__dirname, 'src/background/index.ts'),
-                'content/record-recorder': path.resolve(__dirname, 'src/assets/recording/content/record-recorder.js'),
             },
             output: {
                 entryFileNames: 'js/[name]/index.js',
