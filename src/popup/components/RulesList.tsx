@@ -101,7 +101,7 @@ const RulesList: React.FC = () => {
       items={items}
       type="card"
       size="middle"
-      animated
+      animated={{ inkBar: true, tabPane: false }}
       destroyInactiveTabPane={false}
       className="header-rules-tabs"
       style={{ height: '100%' }}
