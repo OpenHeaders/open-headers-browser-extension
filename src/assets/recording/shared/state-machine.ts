@@ -80,11 +80,11 @@ export class RecordingStateMachine {
     );
 
     if (!transition) {
-      logger.warn(`[StateMachine] Invalid transition: ${currentState.state} -> ${event}`);
+      logger.warn('StateMachine', `Invalid transition: ${currentState.state} -> ${event}`);
       return false;
     }
 
-    logger.debug(`[StateMachine] Tab ${tabId}: ${currentState.state} -> ${transition.to} (${event})`);
+    logger.debug('StateMachine', `Tab ${tabId}: ${currentState.state} -> ${transition.to} (${event})`);
 
     currentState.state = transition.to;
 
@@ -143,7 +143,7 @@ export class RecordingStateMachine {
           !err.message?.includes('context') &&
           !err.message?.includes('receiving end does not exist') &&
           !err.message?.includes('Could not establish connection')) {
-        logger.info(`[StateMachine] Could not notify tab ${tabId}:`, err.message);
+        logger.info('StateMachine', `Could not notify tab ${tabId}:`, err.message);
       }
     }
   }

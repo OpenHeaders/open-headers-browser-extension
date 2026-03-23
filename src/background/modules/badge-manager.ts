@@ -30,7 +30,7 @@ export async function updateExtensionBadge(
     const actionAPI = browserAPI.action || (browserAPI as unknown as { browserAction?: typeof chrome.action }).browserAction;
 
     if (!actionAPI) {
-        logger.debug('Badge API not available');
+        logger.debug('BadgeManager', 'Badge API not available');
         return;
     }
 
@@ -46,7 +46,7 @@ export async function updateExtensionBadge(
 
         if (anyTabRecording) {
             // Skip badge update if any tab is recording
-            logger.info('[BadgeManager] Skipping badge update - recording is active on some tab');
+            logger.info('BadgeManager', 'Skipping badge update - recording is active on some tab');
             return;
         }
     }
@@ -82,12 +82,12 @@ export async function updateExtensionBadge(
         // Show a red exclamation when headers are using placeholders
         actionAPI.setBadgeText({ text: '!' }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge text error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge text error:', browserAPI.runtime.lastError);
             }
         });
         actionAPI.setBadgeBackgroundColor({ color: '#ff4d4f' }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge color error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge color error:', browserAPI.runtime.lastError);
             }
         });
 
@@ -101,12 +101,12 @@ export async function updateExtensionBadge(
         // Show a yellow dot/exclamation when disconnected
         actionAPI.setBadgeText({ text: '!' }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge text error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge text error:', browserAPI.runtime.lastError);
             }
         });
         actionAPI.setBadgeBackgroundColor({ color: '#ffcd04' }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge color error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge color error:', browserAPI.runtime.lastError);
             }
         });
 
@@ -120,12 +120,12 @@ export async function updateExtensionBadge(
         // Show a gray dash when rules execution is paused
         actionAPI.setBadgeText({ text: '\u2212' }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge text error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge text error:', browserAPI.runtime.lastError);
             }
         });
         actionAPI.setBadgeBackgroundColor({ color: '#8c8c8c' }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge color error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge color error:', browserAPI.runtime.lastError);
             }
         });
 
@@ -140,12 +140,12 @@ export async function updateExtensionBadge(
         const badgeText = activeRulesCount > 99 ? '99+' : activeRulesCount.toString();
         actionAPI.setBadgeText({ text: badgeText }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge text error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge text error:', browserAPI.runtime.lastError);
             }
         });
         actionAPI.setBadgeBackgroundColor({ color: '#E8E8E8' }, () => {
             if (browserAPI.runtime.lastError) {
-                logger.debug('Badge color error:', browserAPI.runtime.lastError);
+                logger.debug('BadgeManager', 'Badge color error:', browserAPI.runtime.lastError);
             }
         });
 

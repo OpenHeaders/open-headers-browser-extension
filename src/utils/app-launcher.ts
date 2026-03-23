@@ -56,7 +56,7 @@ export class AppLauncher {
           // Check for errors
           const lastError = this.runtime.lastError;
           if (lastError) {
-            logger.info('[AppLauncher] Could not send focusApp via background:', lastError.message);
+            logger.info('AppLauncher', 'Could not send focusApp via background:', lastError.message);
             resolve(false);
           } else {
             resolve(response?.success || false);
@@ -64,7 +64,7 @@ export class AppLauncher {
         });
       });
     } catch (e) {
-      logger.info('[AppLauncher] Failed to communicate with background script:', e);
+      logger.info('AppLauncher', 'Failed to communicate with background script:', e);
       return false;
     }
   }
@@ -95,7 +95,7 @@ export class AppLauncher {
         }, 100);
         return;
       } catch (e) {
-        logger.info('[AppLauncher] Failed to create tab for protocol launch:', e);
+        logger.info('AppLauncher', 'Failed to create tab for protocol launch:', e);
       }
     }
 

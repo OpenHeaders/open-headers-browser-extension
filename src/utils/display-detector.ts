@@ -66,7 +66,7 @@ export class DisplayDetector {
         this.displays = await this.getDisplaysFromChromeAPI();
         return this.displays;
       } catch (error) {
-        logger.info('[DisplayDetector] Chrome API failed, falling back:', error);
+        logger.info('DisplayDetector', 'Chrome API failed, falling back:', error);
       }
     }
 

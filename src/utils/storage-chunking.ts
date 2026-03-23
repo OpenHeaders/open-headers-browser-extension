@@ -40,7 +40,7 @@ export function setChunkedData(key: string, data: Record<string, unknown>, callb
             }
             if (keysToRemove.length > 0) {
                 storage.sync.remove(keysToRemove, () => {
-                    logger.debug(`[StorageChunking] Cleaned up ${keysToRemove.length} old chunks for key: ${key}`);
+                    logger.debug('StorageChunking', `Cleaned up ${keysToRemove.length} old chunks for key: ${key}`);
                 });
             }
         });
@@ -99,7 +99,7 @@ export function getChunkedData<T extends Record<string, unknown> = Record<string
                 const data = JSON.parse(reconstructed) as T;
                 callback(data);
             } catch (e) {
-                logger.error('[StorageChunking] Error parsing chunked data:', e);
+                logger.error('StorageChunking', 'Error parsing chunked data:', e);
                 callback(null);
             }
         });

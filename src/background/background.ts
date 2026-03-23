@@ -92,7 +92,7 @@ async function initializeExtension(): Promise<void> {
     storage.local.get(['dynamicSources'], (result: Record<string, unknown>) => {
         if (result.dynamicSources && Array.isArray(result.dynamicSources) && (result.dynamicSources as Source[]).length > 0) {
             const sources = result.dynamicSources as Source[];
-            logger.info('Restored dynamic sources from storage:', sources.length);
+            logger.info('Background', 'Restored dynamic sources from storage:', sources.length);
             setLastSourcesHash(generateSourcesHash(sources));
             scheduleUpdate('init', { immediate: true, sources });
         }
@@ -101,7 +101,7 @@ async function initializeExtension(): Promise<void> {
     getChunkedData('savedData', (savedData: SavedDataMap | null) => {
         if (savedData) {
             updateSavedDataHash(savedData);
-            logger.debug('Initialized saved data hash');
+            logger.debug('Background', 'Initialized saved data hash');
         }
     });
 
@@ -121,14 +121,14 @@ alarms!.create('updateBadge', { delayInMinutes: 0.01, periodInMinutes: 0.033 });
 
 alarms!.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
     if (alarm.name === 'keepAlive') {
-        logger.debug('Keep alive ping');
+        logger.debug('Background', 'Keep alive ping');
 
         if (!isWebSocketConnected() && !isWebSocketConnecting()) {
-            logger.info('WebSocket disconnected, reconnecting via keepAlive...');
+            logger.info('Background', 'WebSocket disconnected, reconnecting via keepAlive...');
             try {
                 await connectWebSocket();
             } catch (error) {
-                logger.debug('Failed to reconnect WebSocket:', (error as Error).message);
+                logger.debug('Background', 'Failed to reconnect WebSocket:', (error as Error).message);
             }
         }
     } else if (alarm.name === 'updateBadge') {
@@ -141,7 +141,7 @@ storage.onChanged.addListener((changes: { [key: string]: chrome.storage.StorageC
     // Pause state — immediate rule update
     if (area === 'sync' && changes.isRulesExecutionPaused) {
         const paused = (changes.isRulesExecutionPaused.newValue as boolean) || false;
-        logger.info('Rules execution pause state changed to:', paused);
+        logger.info('Background', 'Rules execution pause state changed to:', paused);
         setRulesPaused(paused);
         scheduleUpdate('pause', { immediate: true });
         debouncedUpdateBadge();
@@ -163,36 +163,36 @@ storage.onChanged.addListener((changes: { [key: string]: chrome.storage.StorageC
         if (command.type === 'TOGGLE_RECORDING') {
             tabs.query({ active: true, currentWindow: true }, (tabList: chrome.tabs.Tab[]) => {
                 if (!tabList || !tabList[0]) {
-                    logger.info('No active tab found for recording toggle');
+                    logger.info('Background', 'No active tab found for recording toggle');
                     return;
                 }
 
                 const tabId = tabList[0].id!;
 
                 if (recordingService.isRecording(tabId)) {
-                    logger.info('Stopping recording from hotkey for tab:', tabId);
+                    logger.info('Background', 'Stopping recording from hotkey for tab:', tabId);
                     recordingService.stopRecording(tabId)
-                        .then(() => logger.info('Recording stopped from hotkey for tab:', tabId))
-                        .catch((error: Error) => logger.error('Failed to stop recording from hotkey:', error));
+                        .then(() => logger.info('Background', 'Recording stopped from hotkey for tab:', tabId))
+                        .catch((error: Error) => logger.error('Background', 'Failed to stop recording from hotkey:', error));
                 } else {
                     tabs.query({}, (allTabs: chrome.tabs.Tab[]) => {
                         let hasActiveRecording = false;
                         for (const tab of allTabs) {
                             if (tab.id && recordingService.isRecording(tab.id)) {
                                 hasActiveRecording = true;
-                                logger.info('Stopping recording on tab:', tab.id, 'from hotkey');
+                                logger.info('Background', 'Stopping recording on tab:', tab.id, 'from hotkey');
                                 recordingService.stopRecording(tab.id)
-                                    .then(() => logger.info('Recording stopped on tab:', tab.id))
-                                    .catch((error: Error) => logger.error('Failed to stop recording:', error));
+                                    .then(() => logger.info('Background', 'Recording stopped on tab:', tab.id))
+                                    .catch((error: Error) => logger.error('Background', 'Failed to stop recording:', error));
                                 break;
                             }
                         }
 
                         if (!hasActiveRecording) {
-                            logger.info('Starting recording from hotkey for tab:', tabId);
+                            logger.info('Background', 'Starting recording from hotkey for tab:', tabId);
                             recordingService.startRecording(tabId, { useWidget: true })
-                                .then(() => logger.info('Recording started from hotkey for tab:', tabId))
-                                .catch((error: Error) => logger.error('Failed to start recording from hotkey:', error));
+                                .then(() => logger.info('Background', 'Recording started from hotkey for tab:', tabId))
+                                .catch((error: Error) => logger.error('Background', 'Failed to start recording from hotkey:', error));
                         }
                     });
                 }
@@ -217,11 +217,11 @@ storage.onChanged.addListener((changes: { [key: string]: chrome.storage.StorageC
                     const newHash = generateSavedDataHash(effectiveSavedData);
 
                     if (newHash === getLastSavedDataHash()) {
-                        logger.debug('Saved data changed but content is identical, skipping update');
+                        logger.debug('Background', 'Saved data changed but content is identical, skipping update');
                         return;
                     }
 
-                    logger.info('Saved header data changed, scheduling rule update');
+                    logger.info('Background', 'Saved header data changed, scheduling rule update');
                     updateSavedDataHash(effectiveSavedData);
                     revalidateTrackedRequests().then(() => {
                         scheduleUpdate('savedData');
@@ -258,21 +258,21 @@ runtime.onMessage.addListener((message: unknown, sender: chrome.runtime.MessageS
 });
 
 runtime.onStartup.addListener(() => {
-    logger.info('Browser started up, connecting WebSocket...');
+    logger.info('Background', 'Browser started up, connecting WebSocket...');
     initializeExtension();
 });
 
 runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails) => {
-    logger.info('Extension installed or updated:', details.reason);
-    logger.info('Browser detected:', isFirefox ? 'Firefox' : 'Other');
+    logger.info('Background', 'Extension installed or updated:', details.reason);
+    logger.info('Background', 'Browser detected:', isFirefox ? 'Firefox' : 'Other');
 
     if (details.reason === 'install') {
-        logger.info('Fresh install detected, opening welcome page');
+        logger.info('Background', 'Fresh install detected, opening welcome page');
         setTimeout(() => openWelcomePageOnInstall(), 500);
     } else if (isFirefox && details.reason === 'update') {
         storage.local.get(['hasSeenWelcome', 'setupCompleted'], (result: Record<string, unknown>) => {
             if (!result.setupCompleted) {
-                logger.info('Firefox update detected but setup not completed, opening welcome page');
+                logger.info('Background', 'Firefox update detected but setup not completed, opening welcome page');
                 storage.local.set({ hasSeenWelcome: true }, () => {
                     setTimeout(() => openWelcomePageOnInstall(), 500);
                 });
@@ -283,6 +283,6 @@ runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails) => {
     initializeExtension();
 });
 
-logger.info('Background script started, initializing...');
+logger.info('Background', 'Background script started, initializing...');
 initializeExtension();
 checkFirefoxFirstRun();

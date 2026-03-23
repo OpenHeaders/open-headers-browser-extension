@@ -117,10 +117,10 @@ export function handleRecordingMessage(
                 return true;
 
             case 'SEND_WORKFLOW_TO_APP': {
-                logger.info('[Recording Handler] Received SEND_WORKFLOW_TO_APP message');
+                logger.info('RecordingHandler', 'Received SEND_WORKFLOW_TO_APP message');
                 // Send recording via WebSocket
                 const success = sendRecordingViaWebSocket(message.recording);
-                logger.info('[Recording Handler] sendRecordingViaWebSocket returned:', success);
+                logger.info('RecordingHandler', 'sendRecordingViaWebSocket returned:', success);
                 sendResponse({ success, error: success ? null : 'App not connected' });
                 return true;
             }

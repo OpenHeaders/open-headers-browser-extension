@@ -60,7 +60,7 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
     headersWithPlaceholders = [];
 
     if (isPaused) {
-        logger.info('Rules execution is paused, clearing all active rules');
+        logger.info('HeaderManager', 'Rules execution is paused, clearing all active rules');
         const removeIds = lastMaxRuleId > 0
             ? Array.from({ length: lastMaxRuleId }, (_, i) => i + 1)
             : [];
@@ -69,7 +69,7 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
             addRules: []
         }).then(() => {
             lastMaxRuleId = 0;
-            logger.debug('All rules cleared while paused');
+            logger.debug('HeaderManager', 'All rules cleared while paused');
         });
         return;
     }
@@ -90,7 +90,7 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
             const entry: HeaderEntry = savedData[id];
 
             if (entry.isEnabled === false) {
-                logger.debug(`Skipping disabled rule for ${entry.headerName}`);
+                logger.debug('HeaderManager', `Skipping disabled rule for ${entry.headerName}`);
                 continue;
             }
 
@@ -117,7 +117,7 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
         });
 
         if (headersWithPlaceholders.length > 0) {
-            logger.warn(`${headersWithPlaceholders.length} headers using diagnostic placeholders:`, headersWithPlaceholders);
+            logger.warn('HeaderManager', `${headersWithPlaceholders.length} headers using diagnostic placeholders:`, headersWithPlaceholders);
 
             sendMessageWithCallback({
                 type: 'headersUsingPlaceholders',
@@ -140,9 +140,9 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
             addRules: rules
         }).then(() => {
             lastMaxRuleId = ruleId - 1;
-            logger.info(`Successfully updated ${rules.length} network rules`);
+            logger.info('HeaderManager', `Successfully updated ${rules.length} network rules`);
         }).catch((e: Error) => {
-            logger.error('Error updating rules:', e.message || 'Unknown error');
+            logger.error('HeaderManager', 'Error updating rules:', e.message || 'Unknown error');
             sendMessageWithCallback({
                 type: 'ruleUpdateError',
                 error: e.message || 'Unknown error'
@@ -154,7 +154,7 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
 function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected: boolean): ProcessedEntry | null {
     const headerNameValidation = validateHeaderName(entry.headerName, entry.isResponse);
     if (!headerNameValidation.valid) {
-        logger.debug(`Skipping rule for ${entry.headerName} - ${headerNameValidation.message}`);
+        logger.debug('HeaderManager', `Skipping rule for ${entry.headerName} - ${headerNameValidation.message}`);
         return null;
     }
 
@@ -167,7 +167,7 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
             headerValue = '[APP_DISCONNECTED]';
             usingPlaceholder = true;
             placeholderReason = 'app_disconnected';
-            logger.warn(`Header "${entry.headerName}" using placeholder - app disconnected`);
+            logger.warn('HeaderManager', `Header "${entry.headerName}" using placeholder - app disconnected`);
         } else {
             const source = dynamicSources.find(s =>
                 s.sourceId?.toString() === entry.sourceId?.toString()
@@ -177,7 +177,7 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
                 headerValue = `[SOURCE_NOT_FOUND:${entry.sourceId}]`;
                 usingPlaceholder = true;
                 placeholderReason = 'source_not_found';
-                logger.warn(`Header "${entry.headerName}" using placeholder - source #${entry.sourceId} not found`);
+                logger.warn('HeaderManager', `Header "${entry.headerName}" using placeholder - source #${entry.sourceId} not found`);
             } else {
                 const dynamicContent = source.sourceContent || '';
 
@@ -185,7 +185,7 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
                     headerValue = `[EMPTY_SOURCE:${entry.sourceId}]`;
                     usingPlaceholder = true;
                     placeholderReason = 'empty_source';
-                    logger.warn(`Header "${entry.headerName}" using placeholder - source #${entry.sourceId} is empty`);
+                    logger.warn('HeaderManager', `Header "${entry.headerName}" using placeholder - source #${entry.sourceId} is empty`);
                 } else {
                     headerValue = `${entry.prefix || ''}${dynamicContent}${entry.suffix || ''}`;
                 }
@@ -212,7 +212,7 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
     if (!isPlaceholder && !isValidHeaderValue(headerValue, entry.headerName)) {
         headerValue = sanitizeHeaderValue(headerValue);
         if (!isValidHeaderValue(headerValue, entry.headerName)) {
-            logger.debug(`Skipping invalid header value for ${entry.headerName}`);
+            logger.debug('HeaderManager', `Skipping invalid header value for ${entry.headerName}`);
             return null;
         }
     }
@@ -221,7 +221,7 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
         (entry.domain ? [entry.domain] : []);
 
     if (domains.length === 0) {
-        logger.debug(`Skipping rule for ${entry.headerName} - no domains specified`);
+        logger.debug('HeaderManager', `Skipping rule for ${entry.headerName} - no domains specified`);
         return null;
     }
 

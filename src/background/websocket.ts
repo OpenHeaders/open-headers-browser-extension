@@ -33,10 +33,10 @@ const MAX_RECONNECT_DELAY = 6000;
 
 // Debug socket state - exposed on globalThis for service workers
 (globalThis as Record<string, unknown>)._debugWebSocket = () => {
-    logger.debug('Socket:', socket);
-    logger.debug('Socket state:', socket?.readyState);
-    logger.debug('Is connected:', isConnected);
-    logger.debug('WebSocket.OPEN:', WebSocket.OPEN);
+    logger.debug('WebSocket', 'Socket:', socket);
+    logger.debug('WebSocket', 'Socket state:', socket?.readyState);
+    logger.debug('WebSocket', 'Is connected:', isConnected);
+    logger.debug('WebSocket', 'WebSocket.OPEN:', WebSocket.OPEN);
 };
 
 // Track last sources hash to avoid redundant updates
@@ -80,7 +80,7 @@ function getBrowserVersion(): string {
             }
         }
     } catch (e) {
-        logger.debug('Could not determine browser version');
+        logger.debug('WebSocket', 'Could not determine browser version');
     }
     return '';
 }
@@ -94,7 +94,7 @@ function sendRulesToElectronApp(rulesData: unknown): void {
             type: 'rules-update',
             data: rulesData
         }));
-        logger.info('Sent updated rules to Electron app');
+        logger.info('WebSocket', 'Sent updated rules to Electron app');
     }
 }
 
@@ -114,13 +114,13 @@ function broadcastConnectionStatus(): void {
 export function connectWebSocket(onSourcesReceived?: OnSourcesReceivedCallback): Promise<boolean> {
     // Check if already connected
     if (socket && socket.readyState === WebSocket.OPEN) {
-        logger.debug('WebSocket already connected');
+        logger.debug('WebSocket', 'WebSocket already connected');
         return Promise.resolve(true);
     }
 
     // Check if connection is already in progress
     if (isConnecting) {
-        logger.debug('Connection already in progress, skipping duplicate attempt');
+        logger.debug('WebSocket', 'Connection already in progress, skipping duplicate attempt');
         return Promise.resolve(false);
     }
 
@@ -145,7 +145,7 @@ export function connectWebSocket(onSourcesReceived?: OnSourcesReceivedCallback):
                 if (canConnect) {
                     connectStandardWebSocket(adaptWebSocketUrl(WS_SERVER_URL), wrappedCallback);
                 } else {
-                    logger.info('Safari pre-check failed, will retry');
+                    logger.info('WebSocket', 'Safari pre-check failed, will retry');
                     handleConnectionFailure();
                     resolve(false);
                 }
@@ -175,9 +175,9 @@ function handleConnectionFailure(): void {
     reconnectAttempts++;
     const delay = Math.min(RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
 
-    logger.debug(`Scheduling reconnection attempt ${reconnectAttempts} in ${delay}ms`);
+    logger.debug('WebSocket', `Scheduling reconnection attempt ${reconnectAttempts} in ${delay}ms`);
     reconnectTimer = setTimeout(() => {
-        logger.debug('Attempting WebSocket reconnection');
+        logger.debug('WebSocket', 'Attempting WebSocket reconnection');
         connectWebSocket();
     }, delay);
 }
@@ -218,7 +218,7 @@ function handleSourcesMessage(
     const isInitialConnection = parsed.type === 'sourcesInitial';
 
     allSources = parsed.sources;
-    logger.info('Sources received:', allSources.length, 'at', new Date().toISOString());
+    logger.info('WebSocket', 'Sources received:', allSources.length, 'at', new Date().toISOString());
 
     const previousSourceIds = new Set(previousSources.map(s => s.sourceId));
     const newSourceIds = new Set(parsed.sources.map(s => s.sourceId || (s as Source & { locationId?: string }).locationId));
@@ -231,7 +231,7 @@ function handleSourcesMessage(
     });
 
     if (removedSourceIds.length > 0) {
-        logger.info('Detected removed sources:', removedSourceIds.join(', '));
+        logger.info('WebSocket', 'Detected removed sources:', removedSourceIds.join(', '));
 
         getChunkedData('savedData', (savedData: SavedDataMap | null) => {
             savedData = savedData || {};
@@ -241,7 +241,7 @@ function handleSourcesMessage(
             for (const id in savedData) {
                 const entry = savedData[id];
                 if (entry.isDynamic && removedSourceIds.includes(entry.sourceId?.toString() || '')) {
-                    logger.info(`Header "${entry.headerName}" was using removed source ${entry.sourceId}`);
+                    logger.info('WebSocket', `Header "${entry.headerName}" was using removed source ${entry.sourceId}`);
                     updatedSavedData[id] = {
                         ...entry,
                         sourceMissing: true
@@ -251,10 +251,10 @@ function handleSourcesMessage(
             }
 
             if (headersNeedUpdate) {
-                logger.info('Updating header configuration to reflect removed sources');
+                logger.info('WebSocket', 'Updating header configuration to reflect removed sources');
                 setChunkedData('savedData', updatedSavedData, () => {
                     if (runtime.lastError) {
-                        logger.error('Error updating header configuration:', runtime.lastError);
+                        logger.error('WebSocket', 'Error updating header configuration:', runtime.lastError);
                     }
                 });
             }
@@ -262,7 +262,7 @@ function handleSourcesMessage(
     }
 
     storage.local.set({ dynamicSources: allSources }, () => {
-        logger.debug('Sources saved to storage');
+        logger.debug('WebSocket', 'Sources saved to storage');
 
         if (isInitialConnection || newSourcesHash !== lastSourcesHash || !lastRulesUpdateTime) {
             scheduleUpdate('sources', { sources: allSources });
@@ -297,12 +297,12 @@ function handleSourcesMessage(
  * Handle incoming rules-update messages
  */
 function handleRulesUpdateMessage(parsed: { data: { rules: RulesData } }): void {
-    logger.info('WebSocket received unified rules update');
+    logger.info('WebSocket', 'WebSocket received unified rules update');
 
     rules = parsed.data.rules || {};
 
     const headerRules: HeaderRuleFromApp[] = (rules as RulesData & { header?: HeaderRuleFromApp[] }).header || [];
-    logger.info('Extracted', headerRules.length, 'header rules from unified format');
+    logger.info('WebSocket', 'Extracted', headerRules.length, 'header rules from unified format');
 
     const savedData: SavedDataMap = {};
     headerRules.forEach((rule) => {
@@ -323,9 +323,9 @@ function handleRulesUpdateMessage(parsed: { data: { rules: RulesData } }): void 
 
     setChunkedData('savedData', savedData, () => {
         if (runtime.lastError) {
-            logger.error('Error saving header rules:', runtime.lastError);
+            logger.error('WebSocket', 'Error saving header rules:', runtime.lastError);
         } else {
-            logger.debug('Header rules saved to sync storage');
+            logger.debug('WebSocket', 'Header rules saved to sync storage');
         }
 
         scheduleUpdate('rules');
@@ -340,7 +340,7 @@ function handleRulesUpdateMessage(parsed: { data: { rules: RulesData } }): void 
     });
 
     storage.local.set({ rulesData: parsed.data }, () => {
-        logger.debug('Full rules data saved to local storage');
+        logger.debug('WebSocket', 'Full rules data saved to local storage');
     });
 }
 
@@ -349,20 +349,20 @@ function handleRulesUpdateMessage(parsed: { data: { rules: RulesData } }): void 
  */
 function handleOtherMessages(parsed: Record<string, unknown>): void {
     if (parsed.type === 'videoRecordingStateChanged') {
-        logger.info('WebSocket received video recording state change:', parsed.enabled);
+        logger.info('WebSocket', 'WebSocket received video recording state change:', parsed.enabled);
         sendMessageWithCallback({
             type: 'videoRecordingStateChanged',
             enabled: parsed.enabled as boolean
         }, (_response, _error) => {});
     } else if (parsed.type === 'recordingHotkeyResponse' || parsed.type === 'recordingHotkeyChanged') {
-        logger.info('WebSocket received recording hotkey:', parsed.hotkey, 'enabled:', parsed.enabled);
+        logger.info('WebSocket', 'WebSocket received recording hotkey:', parsed.hotkey, 'enabled:', parsed.enabled);
 
         if (parsed.type === 'recordingHotkeyChanged') {
             storage.local.set({
                 recordingHotkey: parsed.hotkey,
                 recordingHotkeyEnabled: parsed.enabled !== undefined ? parsed.enabled : true
             }, () => {
-                logger.info('Updated recording hotkey in storage:', parsed.hotkey, 'enabled:', parsed.enabled);
+                logger.info('WebSocket', 'Updated recording hotkey in storage:', parsed.hotkey, 'enabled:', parsed.enabled);
             });
         }
 
@@ -372,14 +372,14 @@ function handleOtherMessages(parsed: Record<string, unknown>): void {
             enabled: parsed.enabled !== undefined ? parsed.enabled as boolean : true
         }, (_response, _error) => {});
     } else if (parsed.type === 'recordingHotkeyPressed') {
-        logger.info('WebSocket received recording hotkey press');
+        logger.info('WebSocket', 'WebSocket received recording hotkey press');
         storage.local.set({
             hotkeyCommand: {
                 type: 'TOGGLE_RECORDING',
                 timestamp: Date.now()
             }
         }, () => {
-            logger.info('Triggered recording toggle from hotkey');
+            logger.info('WebSocket', 'Triggered recording toggle from hotkey');
         });
     }
 }
@@ -400,7 +400,7 @@ function createMessageHandler(onSourcesReceived: OnSourcesReceivedCallback | und
                 handleOtherMessages(parsed);
             }
         } catch (err) {
-            logger.warn('Error parsing message from WebSocket:', err);
+            logger.warn('WebSocket', 'Error parsing message from WebSocket:', err);
         }
     };
 }
@@ -417,10 +417,10 @@ function sendBrowserInfoAndRequestRules(): void {
             extensionVersion: runtime.getManifest().version
         };
         socket.send(JSON.stringify(browserInfo));
-        logger.info('Sent browser info to Electron app');
+        logger.info('WebSocket', 'Sent browser info to Electron app');
 
         socket.send(JSON.stringify({ type: 'requestRules' }));
-        logger.info('Requested rules from Electron app');
+        logger.info('WebSocket', 'Requested rules from Electron app');
     }
 }
 
@@ -428,11 +428,11 @@ function sendBrowserInfoAndRequestRules(): void {
  * Standard WebSocket connection implementation
  */
 function connectStandardWebSocket(url: string, onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    logger.info('Starting WebSocket connection using URL:', url);
+    logger.info('WebSocket', 'Starting WebSocket connection using URL:', url);
 
     checkServerReachable(url).then(isReachable => {
         if (!isReachable) {
-            logger.debug('WebSocket server not reachable, will retry later');
+            logger.debug('WebSocket', 'WebSocket server not reachable, will retry later');
             handleConnectionFailure();
             return;
         }
@@ -440,7 +440,7 @@ function connectStandardWebSocket(url: string, onSourcesReceived: OnSourcesRecei
         let connectionTimeout: ReturnType<typeof setTimeout> | undefined;
         try {
             connectionTimeout = setTimeout(() => {
-                logger.debug('WebSocket connection timed out');
+                logger.debug('WebSocket', 'WebSocket connection timed out');
                 handleConnectionFailure();
             }, 3000);
 
@@ -448,12 +448,12 @@ function connectStandardWebSocket(url: string, onSourcesReceived: OnSourcesRecei
 
             socket.onerror = (_error: Event) => {
                 clearTimeout(connectionTimeout);
-                logger.debug('WebSocket connection issue detected');
+                logger.debug('WebSocket', 'WebSocket connection issue detected');
             };
 
             socket.onopen = () => {
                 clearTimeout(connectionTimeout);
-                logger.info('WebSocket connection opened successfully!');
+                logger.info('WebSocket', 'WebSocket connection opened successfully!');
                 isConnecting = false;
                 isConnected = true;
                 reconnectAttempts = 0;
@@ -465,12 +465,12 @@ function connectStandardWebSocket(url: string, onSourcesReceived: OnSourcesRecei
 
             socket.onclose = (_event: CloseEvent) => {
                 clearTimeout(connectionTimeout);
-                logger.info('WebSocket closed');
+                logger.info('WebSocket', 'WebSocket closed');
                 handleConnectionFailure();
             };
         } catch (e) {
             clearTimeout(connectionTimeout);
-            logger.debug('Error creating WebSocket connection');
+            logger.debug('WebSocket', 'Error creating WebSocket connection');
             handleConnectionFailure();
         }
     });
@@ -486,18 +486,18 @@ function connectWebSocketFirefox(onSourcesReceived: OnSourcesReceivedCallback | 
         const setupCompleted = result.setupCompleted as boolean | undefined;
 
         if (certificateAccepted || setupCompleted) {
-            logger.debug('Certificate already accepted or setup completed, skipping welcome page');
+            logger.debug('WebSocket', 'Certificate already accepted or setup completed, skipping welcome page');
 
             if (lastConnection && lastConnection.type === 'ws-fallback' &&
                 Date.now() - lastConnection.timestamp < 86400000) {
-                logger.debug('Using previous successful WS connection');
+                logger.debug('WebSocket', 'Using previous successful WS connection');
                 connectFirefoxWs(onSourcesReceived);
             } else {
                 connectFirefoxWss(onSourcesReceived);
             }
         } else if (!certificateAccepted && !welcomePageOpenedBySocket) {
             welcomePageOpenedBySocket = true;
-            logger.info('First time user detected, showing welcome page');
+            logger.info('WebSocket', 'First time user detected, showing welcome page');
 
             if (typeof browser !== 'undefined' && browser!.tabs) {
                 const welcomePageUrl = browser!.runtime.getURL('welcome.html');
@@ -509,23 +509,23 @@ function connectWebSocketFirefox(onSourcesReceived: OnSourcesReceivedCallback | 
                     );
 
                     if (welcomeTabs.length > 0) {
-                        logger.info('Welcome page already exists, focusing it');
+                        logger.info('WebSocket', 'Welcome page already exists, focusing it');
                         (browser!.tabs.update(welcomeTabs[0].id!, { active: true }) as unknown as Promise<chrome.tabs.Tab>).catch((err: Error) => {
-                            logger.info('Error focusing existing welcome tab:', err.message);
+                            logger.info('WebSocket', 'Error focusing existing welcome tab:', err.message);
                         });
                     } else {
-                        logger.info('Opening Firefox welcome page');
+                        logger.info('WebSocket', 'Opening Firefox welcome page');
                         (browser!.tabs.create({
                             url: welcomePageUrl,
                             active: true
                         }) as unknown as Promise<chrome.tabs.Tab>).then((tab: chrome.tabs.Tab) => {
-                            logger.info('Opened Firefox welcome tab:', tab.id);
+                            logger.info('WebSocket', 'Opened Firefox welcome tab:', tab.id);
                         }).catch((err: Error) => {
-                            logger.info('Failed to open welcome page:', err.message);
+                            logger.info('WebSocket', 'Failed to open welcome page:', err.message);
                         });
                     }
                 }).catch((err: Error) => {
-                    logger.info('Error checking for existing welcome tabs:', err.message);
+                    logger.info('WebSocket', 'Error checking for existing welcome tabs:', err.message);
                 });
             }
 
@@ -533,7 +533,7 @@ function connectWebSocketFirefox(onSourcesReceived: OnSourcesReceivedCallback | 
         } else {
             if (lastConnection && lastConnection.type === 'ws-fallback' &&
                 Date.now() - lastConnection.timestamp < 86400000) {
-                logger.debug('Using previous successful WS connection');
+                logger.debug('WebSocket', 'Using previous successful WS connection');
                 connectFirefoxWs(onSourcesReceived);
             } else {
                 connectFirefoxWss(onSourcesReceived);
@@ -546,11 +546,11 @@ function connectWebSocketFirefox(onSourcesReceived: OnSourcesReceivedCallback | 
  * Connect to WSS endpoint for Firefox
  */
 function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    logger.info('Starting Firefox WebSocket connection using WSS');
+    logger.info('WebSocket', 'Starting Firefox WebSocket connection using WSS');
 
     checkServerReachable(WSS_SERVER_URL).then(isReachable => {
         if (!isReachable) {
-            logger.debug('Firefox WSS server not reachable, trying WS fallback');
+            logger.debug('WebSocket', 'Firefox WSS server not reachable, trying WS fallback');
             connectFirefoxWs(onSourcesReceived);
             return;
         }
@@ -558,23 +558,23 @@ function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefi
         let connectionTimeout: ReturnType<typeof setTimeout> | undefined;
         try {
             connectionTimeout = setTimeout(() => {
-                logger.info('Firefox WebSocket connection timed out');
+                logger.info('WebSocket', 'Firefox WebSocket connection timed out');
                 handleConnectionFailure();
             }, 3000);
 
-            logger.info('Connecting to secure endpoint:', WSS_SERVER_URL);
+            logger.info('WebSocket', 'Connecting to secure endpoint:', WSS_SERVER_URL);
             socket = new WebSocket(WSS_SERVER_URL);
 
             socket.onerror = (_error: Event) => {
                 clearTimeout(connectionTimeout);
-                logger.debug('Firefox WebSocket error');
+                logger.debug('WebSocket', 'Firefox WebSocket error');
             };
 
-            logger.debug('Firefox WSS connection created, readyState:', socket.readyState);
+            logger.debug('WebSocket', 'Firefox WSS connection created, readyState:', socket.readyState);
 
             socket.onopen = () => {
                 clearTimeout(connectionTimeout);
-                logger.info('Firefox secure WebSocket connection opened successfully!');
+                logger.info('WebSocket', 'Firefox secure WebSocket connection opened successfully!');
                 isConnecting = false;
                 isConnected = true;
                 reconnectAttempts = 0;
@@ -594,19 +594,19 @@ function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefi
 
             socket.onclose = (event: CloseEvent) => {
                 clearTimeout(connectionTimeout);
-                logger.info('Firefox WSS WebSocket closed with code:', event.code);
+                logger.info('WebSocket', 'Firefox WSS WebSocket closed with code:', event.code);
 
                 if (event.code === 1015) {
-                    logger.info('Firefox TLS handshake failure detected');
+                    logger.info('WebSocket', 'Firefox TLS handshake failure detected');
 
                     storage.local.get(['certificateAccepted'], (certResult: Record<string, unknown>) => {
                         if (!certResult.certificateAccepted) {
-                            logger.info('Firefox certificate not accepted, prompting user');
+                            logger.info('WebSocket', 'Firefox certificate not accepted, prompting user');
                             storage.local.set({ certificateAccepted: false });
                         }
                     });
 
-                    logger.info('Firefox attempting fallback to regular WebSocket');
+                    logger.info('WebSocket', 'Firefox attempting fallback to regular WebSocket');
                     connectFirefoxWs(onSourcesReceived);
                 } else {
                     handleConnectionFailure();
@@ -614,8 +614,8 @@ function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefi
             };
         } catch (e) {
             clearTimeout(connectionTimeout);
-            logger.info('Firefox WSS connection failed:', (e as Error).message);
-            logger.info('Firefox falling back to regular WebSocket');
+            logger.info('WebSocket', 'Firefox WSS connection failed:', (e as Error).message);
+            logger.info('WebSocket', 'Firefox falling back to regular WebSocket');
             connectFirefoxWs(onSourcesReceived);
         }
     });
@@ -625,11 +625,11 @@ function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefi
  * Connect to WS endpoint for Firefox (fallback)
  */
 function connectFirefoxWs(onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    logger.info('Starting Firefox WebSocket connection using WS (fallback)');
+    logger.info('WebSocket', 'Starting Firefox WebSocket connection using WS (fallback)');
 
     checkServerReachable(WS_SERVER_URL).then(isReachable => {
         if (!isReachable) {
-            logger.debug('Firefox WS server not reachable, will retry later');
+            logger.debug('WebSocket', 'Firefox WS server not reachable, will retry later');
             handleConnectionFailure();
             return;
         }
@@ -637,7 +637,7 @@ function connectFirefoxWs(onSourcesReceived: OnSourcesReceivedCallback | undefin
         let connectionTimeout: ReturnType<typeof setTimeout> | undefined;
         try {
             connectionTimeout = setTimeout(() => {
-                logger.debug('Firefox WS connection timed out');
+                logger.debug('WebSocket', 'Firefox WS connection timed out');
                 handleConnectionFailure();
             }, 3000);
 
@@ -645,12 +645,12 @@ function connectFirefoxWs(onSourcesReceived: OnSourcesReceivedCallback | undefin
 
             socket.onerror = (_error: Event) => {
                 clearTimeout(connectionTimeout);
-                logger.debug('Firefox WS WebSocket error');
+                logger.debug('WebSocket', 'Firefox WS WebSocket error');
             };
 
             socket.onopen = () => {
                 clearTimeout(connectionTimeout);
-                logger.info('Firefox WebSocket connection opened (WS fallback)!');
+                logger.info('WebSocket', 'Firefox WebSocket connection opened (WS fallback)!');
                 isConnecting = false;
                 isConnected = true;
                 reconnectAttempts = 0;
@@ -677,30 +677,30 @@ function connectFirefoxWs(onSourcesReceived: OnSourcesReceivedCallback | undefin
                     } else if (parsed.type === 'certificateTrustChanged' && parsed.trusted) {
                         checkServerReachable(WSS_SERVER_URL).then(reachable => {
                             if (reachable) {
-                                logger.info('Certificate trusted and WSS reachable, upgrading to WSS');
+                                logger.info('WebSocket', 'Certificate trusted and WSS reachable, upgrading to WSS');
                                 storage.local.remove(['lastSuccessfulConnection'], () => {
                                     if (socket) { socket.close(); }
                                 });
                             } else {
-                                logger.info('Certificate trusted in OS but WSS not reachable in Firefox, staying on WS');
+                                logger.info('WebSocket', 'Certificate trusted in OS but WSS not reachable in Firefox, staying on WS');
                             }
                         });
                     } else {
                         handleOtherMessages(parsed);
                     }
                 } catch (err) {
-                    logger.info('Firefox WS error parsing message:', err);
+                    logger.info('WebSocket', 'Firefox WS error parsing message:', err);
                 }
             };
 
             socket.onclose = (_event: CloseEvent) => {
                 clearTimeout(connectionTimeout);
-                logger.debug('Firefox WS closed');
+                logger.debug('WebSocket', 'Firefox WS closed');
                 handleConnectionFailure();
             };
         } catch (e) {
             clearTimeout(connectionTimeout);
-            logger.info('Firefox WS connection failed:', (e as Error).message);
+            logger.info('WebSocket', 'Firefox WS connection failed:', (e as Error).message);
             handleConnectionFailure();
         }
     });
@@ -750,7 +750,7 @@ export function sendViaWebSocket(data: Record<string, unknown>): boolean {
             socket.send(JSON.stringify(data));
             return true;
         } catch (error) {
-            logger.error('Error sending via WebSocket:', error);
+            logger.error('WebSocket', 'Error sending via WebSocket:', error);
             return false;
         }
     }
@@ -762,7 +762,7 @@ export function sendViaWebSocket(data: Record<string, unknown>): boolean {
  */
 export function sendRecordingViaWebSocket(recording: unknown): boolean {
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-        logger.info('[WebSocket] Not connected, cannot send workflow');
+        logger.info('WebSocket', 'Not connected, cannot send workflow');
         return false;
     }
 
@@ -773,10 +773,10 @@ export function sendRecordingViaWebSocket(recording: unknown): boolean {
         };
 
         socket.send(JSON.stringify(message));
-        logger.info('[WebSocket] Workflow sent to app');
+        logger.info('WebSocket', 'Workflow sent to app');
         return true;
     } catch (error) {
-        logger.error('[WebSocket] Error sending workflow:', error);
+        logger.error('WebSocket', 'Error sending workflow:', error);
         return false;
     }
 }

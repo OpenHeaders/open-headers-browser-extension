@@ -23,7 +23,7 @@ function createSafeResponse(sendResponse: SendResponse): SendResponse {
         try {
             sendResponse(data);
         } catch (error) {
-            logger.info(' Could not send response, channel closed');
+            logger.info('MessageHandler', 'Could not send response, channel closed');
         }
     };
 }
@@ -55,7 +55,7 @@ export function handleGeneralMessage(
     // Handle each message type
     try {
         if (message.type === 'popupOpen') {
-            logger.info(' Popup opened, sending current sources');
+            logger.info('MessageHandler', 'Popup opened, sending current sources');
             // Send current sources to popup immediately
             const response = {
                 type: 'sourcesUpdated',
@@ -86,7 +86,7 @@ export function handleGeneralMessage(
             return true;
         } else if (message.type === 'rulesUpdated') {
             // Handle rule update request (for enable/disable toggle)
-            logger.info(' Rule update requested');
+            logger.info('MessageHandler', 'Rule update requested');
 
             // First revalidate tracked requests
             revalidateTrackedRequests().then(() => {
@@ -103,7 +103,7 @@ export function handleGeneralMessage(
                 // Send response
                 safeResponse({ success: true });
             }).catch((error: Error) => {
-                logger.info(' Error updating rules:', error.message);
+                logger.info('MessageHandler', 'Error updating rules:', error.message);
                 safeResponse({ success: false, error: error.message });
             });
 
@@ -112,7 +112,7 @@ export function handleGeneralMessage(
         } else if (message.type === 'headersUsingPlaceholders') {
             // Update placeholder tracking from header-manager
             setHeadersUsingPlaceholders(message.headers as MessageHandlerContext['headersUsingPlaceholders'] || []);
-            logger.info(' Headers using placeholders:', ((message.headers as unknown[]) || []).length);
+            logger.info('MessageHandler', 'Headers using placeholders:', ((message.headers as unknown[]) || []).length);
 
             // Update badge immediately
             updateBadgeCallback();
@@ -120,16 +120,16 @@ export function handleGeneralMessage(
             safeResponse({ acknowledged: true });
         } else if (message.type === 'configurationImported') {
             // Handle configuration import
-            logger.info(' Configuration imported, updating rules');
+            logger.info('MessageHandler', 'Configuration imported, updating rules');
 
             // Clear all request tracking when importing new config
             clearAllTracking();
-            logger.info(' Cleared all request tracking after configuration import');
+            logger.info('MessageHandler', 'Cleared all request tracking after configuration import');
 
             // If dynamic sources were provided, update them in storage
             if (message.dynamicSources && Array.isArray(message.dynamicSources)) {
                 storage.local.set({ dynamicSources: message.dynamicSources }, () => {
-                    logger.info(' Imported dynamic sources saved to storage:', (message.dynamicSources as Source[]).length);
+                    logger.info('MessageHandler', 'Imported dynamic sources saved to storage:', (message.dynamicSources as Source[]).length);
                 });
             }
 
@@ -160,7 +160,7 @@ export function handleGeneralMessage(
             safeResponse({ success: true });
         } else if (message.type === 'importConfiguration') {
             // Handle configuration import in the background script
-            logger.info(' Handling configuration import in background');
+            logger.info('MessageHandler', 'Handling configuration import in background');
 
             try {
                 const config = message.config as { savedData?: SavedDataMap; dynamicSources?: Source[] };
@@ -174,7 +174,7 @@ export function handleGeneralMessage(
                 // Save data to storage using chunked storage (preserve empty values as-is)
                 setChunkedData('savedData', savedData, () => {
                     if (browserAPI.runtime.lastError) {
-                        logger.info(' Error saving savedData:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
+                        logger.info('MessageHandler', 'Error saving savedData:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
                         safeResponse({ success: false, error: 'Failed to save configuration' });
                         return;
                     }
@@ -184,16 +184,16 @@ export function handleGeneralMessage(
                         // Import has dynamic sources, use them
                         storage.local.set({ dynamicSources }, () => {
                             if (browserAPI.runtime.lastError) {
-                                logger.info(' Error saving dynamicSources:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
+                                logger.info('MessageHandler', 'Error saving dynamicSources:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
                                 safeResponse({ success: false, error: 'Failed to save dynamic sources' });
                                 return;
                             }
 
-                            logger.info(' Configuration imported successfully with dynamic sources');
+                            logger.info('MessageHandler', 'Configuration imported successfully with dynamic sources');
 
                             // Clear all request tracking when importing new config
                             clearAllTracking();
-                            logger.info(' Cleared all request tracking after configuration import');
+                            logger.info('MessageHandler', 'Cleared all request tracking after configuration import');
 
                             // Update network rules with the imported sources
                             scheduleUpdate('import', { immediate: true, sources: dynamicSources });
@@ -211,7 +211,7 @@ export function handleGeneralMessage(
                         });
                     } else {
                         // No dynamic sources in import, preserve existing ones
-                        logger.info(' Configuration imported successfully (preserving existing dynamic sources)');
+                        logger.info('MessageHandler', 'Configuration imported successfully (preserving existing dynamic sources)');
 
                         // Clear all request tracking
                         clearAllTracking();
@@ -235,23 +235,23 @@ export function handleGeneralMessage(
                 });
 
             } catch (error) {
-                logger.info(' Import error in background:', (error as Error).message);
+                logger.info('MessageHandler', 'Import error in background:', (error as Error).message);
                 safeResponse({ success: false, error: (error as Error).message });
             }
 
             // Return true to indicate async response
             return true;
         } else if (message.type === 'sourcesUpdated') {
-            logger.info(' Background received sources update notification:',
+            logger.info('MessageHandler', 'Background received sources update notification:',
                 message.sources ? (message.sources as Source[]).length : 0, 'sources at',
                 new Date(message.timestamp as number).toISOString());
 
             safeResponse({ acknowledged: true });
         } else if (message.type === 'openWelcomePage') {
-            logger.info(' Ignoring openWelcomePage request - welcome page should only open on install');
+            logger.info('MessageHandler', 'Ignoring openWelcomePage request - welcome page should only open on install');
             safeResponse({ acknowledged: true });
         } else if (message.type === 'forceOpenWelcomePage') {
-            logger.info(' Force opening welcome page requested from popup');
+            logger.info('MessageHandler', 'Force opening welcome page requested from popup');
             openWelcomePageDirectly();
             safeResponse({ acknowledged: true });
         } else if (message.type === 'openTab') {
@@ -325,13 +325,13 @@ export function handleGeneralMessage(
             getActiveRulesForTab(tabId, tabUrl).then(activeRules => {
                 safeResponse({ activeRules });
             }).catch((error: Error) => {
-                logger.error('Error getting active rules:', error);
+                logger.error('MessageHandler', 'Error getting active rules:', error);
                 safeResponse({ activeRules: [] });
             });
             return true;
         } else if (message.type === 'setRulesExecutionPaused') {
             // Handle pause/resume of rules execution
-            logger.info(' Setting rules execution paused state:', message.paused);
+            logger.info('MessageHandler', 'Setting rules execution paused state:', message.paused);
 
             // Update network rules to apply or clear them based on pause state
             scheduleUpdate('pause', { immediate: true });
@@ -357,11 +357,11 @@ export function handleGeneralMessage(
             return false;
         } else {
             // Unknown message type - don't handle it, let other listeners try
-            logger.info(' Unknown message type:', message.type);
+            logger.info('MessageHandler', 'Unknown message type:', message.type);
             return false;
         }
     } catch (error) {
-        logger.info(' Error handling message:', (error as Error).message);
+        logger.info('MessageHandler', 'Error handling message:', (error as Error).message);
         safeResponse({ error: (error as Error).message });
         return true;
     }

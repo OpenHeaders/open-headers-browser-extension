@@ -19,11 +19,11 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
     const webRequestAPI = browserAPI.webRequest;
 
     if (!webRequestAPI) {
-        logger.info(' webRequest API not available');
+        logger.info('RequestMonitor', 'webRequest API not available');
         return;
     }
 
-    logger.info(' Setting up request monitoring for badge updates');
+    logger.info('RequestMonitor', 'Setting up request monitoring for badge updates');
 
     // Track pending requests to handle failures
     const pendingRequests = new Map<string, PendingRequest>();

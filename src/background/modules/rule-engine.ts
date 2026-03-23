@@ -61,11 +61,11 @@ function flushUpdate(reason: string, explicitSources?: Source[]): void {
     // Skip if nothing changed (unless it's a forced reason like pause/import/init)
     const forcedReasons = ['pause', 'import', 'init', 'rules'];
     if (currentHash === lastSourcesHash && !forcedReasons.includes(reason)) {
-        logger.debug(`Rule update skipped (${reason}) — hash unchanged`);
+        logger.debug('RuleEngine', `Rule update skipped (${reason}) — hash unchanged`);
         return;
     }
 
-    logger.info(`Updating network rules (${reason})`);
+    logger.info('RuleEngine', `Updating network rules (${reason})`);
     updateNetworkRules(sources);
     lastSourcesHash = currentHash;
     lastRulesUpdateTime = Date.now();

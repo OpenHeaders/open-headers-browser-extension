@@ -1,6 +1,8 @@
 /**
  * Centralized logger with configurable log levels.
  *
+ * Output format: [HH:MM:SS.mmm] [LEVEL] [Module          ] message
+ *
  * Log levels (each includes all levels above it):
  * - error: Operation failures and exceptions
  * - warn:  Anomalies, retries, and fallbacks
@@ -21,6 +23,15 @@ const LOG_LEVELS: Record<LogLevel, number> = {
     debug: 3,
 };
 
+const LEVEL_LABELS: Record<LogLevel, string> = {
+    error: 'ERROR',
+    warn: 'WARN ',
+    info: 'INFO ',
+    debug: 'DEBUG',
+};
+
+const MODULE_PAD = 16; // Longest module name: RecordingService
+
 let currentLevel: LogLevel = 'info';
 let initialized = false;
 
@@ -28,21 +39,34 @@ function shouldLog(level: LogLevel): boolean {
     return LOG_LEVELS[level] <= LOG_LEVELS[currentLevel];
 }
 
+function timestamp(): string {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    return `${h}:${m}:${s}.${ms}`;
+}
+
+function formatPrefix(level: LogLevel, module: string): string {
+    return `[${timestamp()}] [${LEVEL_LABELS[level]}] [${module.padEnd(MODULE_PAD)}]`;
+}
+
 export const logger = {
-    error(...args: unknown[]): void {
-        if (shouldLog('error')) console.error(...args);
+    error(module: string, ...args: unknown[]): void {
+        if (shouldLog('error')) console.error(formatPrefix('error', module), ...args);
     },
 
-    warn(...args: unknown[]): void {
-        if (shouldLog('warn')) console.warn(...args);
+    warn(module: string, ...args: unknown[]): void {
+        if (shouldLog('warn')) console.warn(formatPrefix('warn', module), ...args);
     },
 
-    info(...args: unknown[]): void {
-        if (shouldLog('info')) console.log(...args);
+    info(module: string, ...args: unknown[]): void {
+        if (shouldLog('info')) console.log(formatPrefix('info', module), ...args);
     },
 
-    debug(...args: unknown[]): void {
-        if (shouldLog('debug')) console.log('[DEBUG]', ...args);
+    debug(module: string, ...args: unknown[]): void {
+        if (shouldLog('debug')) console.log(formatPrefix('debug', module), ...args);
     },
 
     getLevel(): LogLevel {

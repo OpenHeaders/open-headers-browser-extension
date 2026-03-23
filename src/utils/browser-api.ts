@@ -9,8 +9,9 @@ import { logger } from './logger';
 
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
-// Browser detection flags
-export const isFirefox: boolean = typeof browser !== 'undefined';
+// Browser detection flags — use userAgent, not `typeof browser`, because
+// Chrome MV3 now defines a `browser` alias for `chrome`.
+export const isFirefox: boolean = /Firefox/.test(navigator.userAgent);
 export const isEdge: boolean = !isFirefox && navigator.userAgent.indexOf('Edg') !== -1;
 export const isChrome: boolean = !isFirefox && !isEdge && navigator.userAgent.indexOf('Chrome') !== -1;
 export const isSafari: boolean = !isFirefox && navigator.userAgent.indexOf('Safari') !== -1 && navigator.userAgent.indexOf('Chrome') === -1;
@@ -106,7 +107,7 @@ export const runtime = {
         promise
             .then((response: unknown) => callback(response))
             .catch((error: Error) => {
-              logger.info('[BrowserAPI] Firefox message error:', error.message);
+              logger.info('BrowserAPI', 'Firefox message error:', error.message);
               // Call callback with no response to maintain compatibility
               callback(undefined);
             });
@@ -121,7 +122,7 @@ export const runtime = {
           }
         });
       } catch (error) {
-        logger.info('[BrowserAPI] Chrome message error:', (error as Error).message);
+        logger.info('BrowserAPI', 'Chrome message error:', (error as Error).message);
         if (callback) {
           // Call callback with no response
           setTimeout(() => callback(undefined), 0);
