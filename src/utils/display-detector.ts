@@ -4,6 +4,7 @@
  */
 
 import { isChrome, isEdge } from './browser-api';
+import { logger } from './logger';
 
 export interface DisplayBounds {
   left: number;
@@ -65,7 +66,7 @@ export class DisplayDetector {
         this.displays = await this.getDisplaysFromChromeAPI();
         return this.displays;
       } catch (error) {
-        console.log('[DisplayDetector] Chrome API failed, falling back:', error);
+        logger.info('[DisplayDetector] Chrome API failed, falling back:', error);
       }
     }
 

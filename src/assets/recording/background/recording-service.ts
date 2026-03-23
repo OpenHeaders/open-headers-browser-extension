@@ -9,6 +9,7 @@ import { MESSAGE_TYPES } from '../shared/constants';
 import { tabs, downloads } from '../../../utils/browser-api';
 import { isWebSocketConnected, sendViaWebSocket, sendRecordingViaWebSocket } from '../../../background/websocket.js';
 import { DisplayDetector } from '../../../utils/display-detector';
+import { logger } from '../../../utils/logger';
 import type { RecordingEvent } from '../../../types/recording';
 
 declare const browser: typeof chrome | undefined;
@@ -82,7 +83,7 @@ export class RecordingService {
   }
 
   async startRecording(tabId: number, options: RecordingOptions = {}): Promise<RecordingResult> {
-    console.log('[RecordingService] Starting recording for tab:', tabId);
+    logger.info('[RecordingService] Starting recording for tab:', tabId);
 
     if (!this.stateMachine.canTransition(tabId, 'START_RECORDING')) {
       throw new Error('Cannot start recording in current state');
@@ -161,9 +162,9 @@ export class RecordingService {
 
           const detector = new DisplayDetector();
           displayInfo = await detector.getDisplayForWindow(windowInfo);
-          console.log('[RecordingService] Detected display for recording:', displayInfo);
+          logger.debug('[RecordingService] Detected display for recording:', displayInfo);
         } catch (error) {
-          console.log('[RecordingService] Could not detect display:', error);
+          logger.debug('[RecordingService] Could not detect display:', error);
         }
 
         const syncData = {
@@ -182,7 +183,7 @@ export class RecordingService {
         });
 
         if (sent) {
-          console.log('[RecordingService] Sent sync recording request with display info:', displayInfo);
+          logger.info('[RecordingService] Sent sync recording request with display info:', displayInfo);
           recordingState.hasVideoSync = true;
         }
       }
@@ -196,12 +197,12 @@ export class RecordingService {
           });
 
           await new Promise(resolve => setTimeout(resolve, 100));
-          console.log('[RecordingService] Content script injected, it will check recording state');
+          logger.debug('[RecordingService] Content script injected, it will check recording state');
         } catch (error) {
-          console.log('[RecordingService] Failed to inject content script:', (error as Error).message);
+          logger.info('[RecordingService] Failed to inject content script:', (error as Error).message);
         }
       } else {
-        console.log('[RecordingService] Pre-navigation recording started - waiting for navigation');
+        logger.info('[RecordingService] Pre-navigation recording started - waiting for navigation');
       }
 
       return {
@@ -220,16 +221,16 @@ export class RecordingService {
   }
 
   async stopRecording(tabId: number, options: StopOptions = {}): Promise<RecordingData | null> {
-    console.log('[RecordingService] Stopping recording for tab:', tabId, 'options:', options);
+    logger.info('[RecordingService] Stopping recording for tab:', tabId, 'options:', options);
 
     const recordingState = this.recordings.get(tabId);
     if (!recordingState) {
-      console.log('[RecordingService] No recording state found for tab:', tabId);
+      logger.info('[RecordingService] No recording state found for tab:', tabId);
       return null;
     }
 
     if (!this.stateMachine.canTransition(tabId, 'STOP_RECORDING')) {
-      console.warn('Cannot stop recording in current state');
+      logger.warn('Cannot stop recording in current state');
       return null;
     }
 
@@ -245,7 +246,7 @@ export class RecordingService {
             if (browserAPI.runtime.lastError) {
               if (!browserAPI.runtime.lastError.message?.includes('tab was closed') &&
                   !browserAPI.runtime.lastError.message?.includes('context invalidated')) {
-                console.log('[RecordingService] Could not send stop message:', browserAPI.runtime.lastError.message);
+                logger.info('[RecordingService] Could not send stop message:', browserAPI.runtime.lastError.message);
               }
             }
             resolve();
@@ -254,7 +255,7 @@ export class RecordingService {
       } catch (error) {
         const err = error as Error;
         if (!err.message?.includes('tab') && !err.message?.includes('context')) {
-          console.log('[RecordingService] Could not send stop message:', error);
+          logger.info('[RecordingService] Could not send stop message:', error);
         }
       }
     }
@@ -281,7 +282,7 @@ export class RecordingService {
         }
       });
     } catch (error) {
-      console.log('[RecordingService] Could not add stop event:', error);
+      logger.info('[RecordingService] Could not add stop event:', error);
     }
 
     recordingState.isRecording = false;
@@ -300,7 +301,7 @@ export class RecordingService {
       });
       tabInfo = { url: tab.url || recordingState.currentUrl || '', title: tab.title || 'Recording' };
     } catch (error) {
-      console.log('[RecordingService] Could not get tab info:', error);
+      logger.info('[RecordingService] Could not get tab info:', error);
     }
 
     const recording: RecordingData = {
@@ -329,7 +330,7 @@ export class RecordingService {
     try {
       await this.exportRecording(recording);
     } catch (error) {
-      console.error('[RecordingService] Failed to export recording:', error);
+      logger.error('[RecordingService] Failed to export recording:', error);
     }
 
     this.recordings.delete(tabId);
@@ -344,7 +345,7 @@ export class RecordingService {
   addEvent(tabId: number, event: RecordingEvent): void {
     const recordingState = this.recordings.get(tabId);
     if (!recordingState) {
-      console.warn('[RecordingService] No recording found for tab:', tabId);
+      logger.warn('[RecordingService] No recording found for tab:', tabId);
       return;
     }
 
@@ -357,11 +358,11 @@ export class RecordingService {
     events.push(adjustedEvent);
     this.recordingData.set(recordingState.recordId, events);
 
-    console.log(`[RecordingService] Event added: ${adjustedEvent.type}, Total: ${events.length}`);
+    logger.debug(`[RecordingService] Event added: ${adjustedEvent.type}, Total: ${events.length}`);
   }
 
   async exportRecording(recording: RecordingData): Promise<void> {
-    console.log('[RecordingService] Exporting recording:', recording.id);
+    logger.info('[RecordingService] Exporting recording:', recording.id);
 
     let viewport = { width: 1920, height: 1080 };
     const rrwebEvents = recording.events.filter(e => e.type === 'rrweb');
@@ -405,7 +406,7 @@ export class RecordingService {
       const sent = sendRecordingViaWebSocket(recordingData);
 
       if (sent) {
-        console.log('[RecordingService] Successfully sent recording to desktop app');
+        logger.info('[RecordingService] Successfully sent recording to desktop app');
         return;
       }
     }
@@ -421,10 +422,10 @@ export class RecordingService {
         saveAs: false
       }, (downloadId: number) => {
         if (browserAPI.runtime.lastError) {
-          console.error('[RecordingService] Download failed:', browserAPI.runtime.lastError);
+          logger.error('[RecordingService] Download failed:', browserAPI.runtime.lastError);
           reject(new Error(browserAPI.runtime.lastError.message));
         } else {
-          console.log('[RecordingService] Download started with ID:', downloadId);
+          logger.debug('[RecordingService] Download started with ID:', downloadId);
           resolve();
         }
       });
@@ -457,7 +458,7 @@ export class RecordingService {
       if (!err.message?.includes('No tab with id') &&
           !err.message?.includes('tab') &&
           !err.message?.includes('Cannot access')) {
-        console.log('[RecordingService] Badge update skipped:', err.message);
+        logger.debug('[RecordingService] Badge update skipped:', err.message);
       }
     }
   }
@@ -605,7 +606,7 @@ export class RecordingService {
         });
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
-        console.log('[RecordingService] Failed to inject content script:', (error as Error).message);
+        logger.info('[RecordingService] Failed to inject content script:', (error as Error).message);
       }
     } else if (tabState.state === RecordingStates.RECORDING &&
                recordingState && !this.isNewTabUrl(url)) {
@@ -633,7 +634,7 @@ export class RecordingService {
           files: ['js/content/record-recorder/index.js'],
         });
       } catch (error) {
-        console.log('[RecordingService] Failed to inject content script:', (error as Error).message);
+        logger.info('[RecordingService] Failed to inject content script:', (error as Error).message);
       }
     }
   }
@@ -681,7 +682,7 @@ export class RecordingService {
         try {
           await this.exportRecording(recording);
         } catch (error) {
-          console.log('[RecordingService] Failed to export recording on tab close:', (error as Error).message);
+          logger.info('[RecordingService] Failed to export recording on tab close:', (error as Error).message);
         }
       }
     }

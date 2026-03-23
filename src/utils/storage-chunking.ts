@@ -4,6 +4,7 @@
  */
 
 import { storage } from './browser-api';
+import { logger } from './logger';
 
 // Storage quota constants
 const CHUNK_SIZE = 4000; // Conservative size to avoid quota errors (Chrome limit is 8192 bytes per item)
@@ -39,7 +40,7 @@ export function setChunkedData(key: string, data: Record<string, unknown>, callb
             }
             if (keysToRemove.length > 0) {
                 storage.sync.remove(keysToRemove, () => {
-                    console.log(`Cleaned up ${keysToRemove.length} old chunks for key: ${key}`);
+                    logger.debug(`[StorageChunking] Cleaned up ${keysToRemove.length} old chunks for key: ${key}`);
                 });
             }
         });
@@ -98,7 +99,7 @@ export function getChunkedData<T extends Record<string, unknown> = Record<string
                 const data = JSON.parse(reconstructed) as T;
                 callback(data);
             } catch (e) {
-                console.error('Error parsing chunked data:', e);
+                logger.error('[StorageChunking] Error parsing chunked data:', e);
                 callback(null);
             }
         });

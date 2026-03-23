@@ -8,6 +8,7 @@
 
 import { runtime } from './browser-api';
 import { getBrowserAPI } from '../types/browser';
+import { logger } from './logger';
 
 /** Standard response shape for extension messages */
 export interface MessageResponse {
@@ -26,7 +27,7 @@ export function sendMessage(message: { type: string; [key: string]: unknown }): 
         runtime.sendMessage(message, (response: unknown) => {
             const browserAPI = getBrowserAPI();
             if (browserAPI.runtime.lastError) {
-                console.log(`Info: Message '${message.type}' failed:`, browserAPI.runtime.lastError.message);
+                logger.info(`[Messaging] Message '${message.type}' failed:`, browserAPI.runtime.lastError.message);
                 resolve({ error: browserAPI.runtime.lastError.message });
             } else {
                 resolve((response as MessageResponse) || {});

@@ -5,6 +5,8 @@
 
 // Detect browser environment
 declare const browser: typeof chrome | undefined;
+import { logger } from './logger';
+
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Browser detection flags
@@ -104,7 +106,7 @@ export const runtime = {
         promise
             .then((response: unknown) => callback(response))
             .catch((error: Error) => {
-              console.log('Info: Firefox message error:', error.message);
+              logger.info('[BrowserAPI] Firefox message error:', error.message);
               // Call callback with no response to maintain compatibility
               callback(undefined);
             });
@@ -119,7 +121,7 @@ export const runtime = {
           }
         });
       } catch (error) {
-        console.log('Info: Chrome message error:', (error as Error).message);
+        logger.info('[BrowserAPI] Chrome message error:', (error as Error).message);
         if (callback) {
           // Call callback with no response
           setTimeout(() => callback(undefined), 0);
@@ -131,7 +133,7 @@ export const runtime = {
     addListener: (listener: MessageListener): void => browserAPI.runtime.onMessage.addListener(listener),
     removeListener: (listener: MessageListener): void => browserAPI.runtime.onMessage.removeListener(listener)
   },
-  lastError: browserAPI.runtime.lastError,
+  get lastError() { return browserAPI.runtime.lastError; },
   getManifest: (): chrome.runtime.Manifest => browserAPI.runtime.getManifest(),
   onInstalled: {
     addListener: (listener: (details: chrome.runtime.InstalledDetails) => void): void => browserAPI.runtime.onInstalled.addListener(listener),

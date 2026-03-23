@@ -3,6 +3,8 @@
  * Uses multiple methods for reliability: WebSocket (via background), then protocol handler
  */
 
+import { logger } from './logger';
+
 declare const browser: typeof chrome | undefined;
 
 export interface LaunchData {
@@ -54,7 +56,7 @@ export class AppLauncher {
           // Check for errors
           const lastError = this.runtime.lastError;
           if (lastError) {
-            console.log('Info: Could not send focusApp via background:', lastError.message);
+            logger.info('[AppLauncher] Could not send focusApp via background:', lastError.message);
             resolve(false);
           } else {
             resolve(response?.success || false);
@@ -62,7 +64,7 @@ export class AppLauncher {
         });
       });
     } catch (e) {
-      console.log('Info: Failed to communicate with background script:', e);
+      logger.info('[AppLauncher] Failed to communicate with background script:', e);
       return false;
     }
   }
@@ -93,7 +95,7 @@ export class AppLauncher {
         }, 100);
         return;
       } catch (e) {
-        console.log('Info: Failed to create tab for protocol launch:', e);
+        logger.info('[AppLauncher] Failed to create tab for protocol launch:', e);
       }
     }
 
