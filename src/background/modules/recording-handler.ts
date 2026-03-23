@@ -7,6 +7,7 @@ import { NewMessageTypes } from '../../assets/recording/shared/message-adapter.j
 
 import type { IRecordingService } from '../../types/recording';
 import type { SendResponse } from '../../types/browser';
+import { logger } from '../../utils/logger';
 
 const browserAPI = { runtime: browserRuntime };
 
@@ -116,10 +117,10 @@ export function handleRecordingMessage(
                 return true;
 
             case 'SEND_WORKFLOW_TO_APP': {
-                console.log('[Recording Handler] Received SEND_WORKFLOW_TO_APP message');
+                logger.info('[Recording Handler] Received SEND_WORKFLOW_TO_APP message');
                 // Send recording via WebSocket
                 const success = sendRecordingViaWebSocket(message.recording);
-                console.log('[Recording Handler] sendRecordingViaWebSocket returned:', success);
+                logger.info('[Recording Handler] sendRecordingViaWebSocket returned:', success);
                 sendResponse({ success, error: success ? null : 'App not connected' });
                 return true;
             }

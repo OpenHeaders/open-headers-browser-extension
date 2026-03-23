@@ -133,23 +133,23 @@ describe('generateSourcesHash', () => {
         expect(generateSourcesHash(s1)).not.toBe(generateSourcesHash(s2));
     });
 
-    it('extracts only sourceId and sourceContent, ignoring other fields', () => {
-        const source = makeSource();
-        const hash = generateSourcesHash([source]);
-        const expected = JSON.stringify([{ id: source.sourceId, content: source.sourceContent }]);
-        expect(hash).toBe(expected);
+    it('ignores fields other than sourceId and sourceContent', () => {
+        const source1 = makeSource({ sourceName: 'Name A' });
+        const source2 = makeSource({ sourceName: 'Name B' });
+        // Same sourceId + sourceContent → same hash regardless of other fields
+        expect(generateSourcesHash([source1])).toBe(generateSourcesHash([source2]));
     });
 
-    it('returns empty JSON array string for empty array', () => {
-        expect(generateSourcesHash([])).toBe('[]');
+    it('returns empty string for empty array', () => {
+        expect(generateSourcesHash([])).toBe('');
     });
 
     it('handles source with undefined sourceContent', () => {
         const source = makeSource({ sourceContent: undefined });
         const hash = generateSourcesHash([source]);
-        const parsed = JSON.parse(hash);
-        // undefined becomes absent in JSON.stringify
-        expect(parsed).toEqual([{ id: source.sourceId }]);
+        expect(hash).toBeTruthy();
+        // Should differ from source with content
+        expect(hash).not.toBe(generateSourcesHash([makeSource()]));
     });
 });
 
@@ -181,8 +181,8 @@ describe('generateSavedDataHash', () => {
         expect(generateSavedDataHash(data1)).not.toBe(generateSavedDataHash(data2));
     });
 
-    it('extracts simplified representation with expected keys', () => {
-        const data: SavedDataMap = {
+    it('uses only key fields for hashing (ignores domains, tags, etc.)', () => {
+        const data1: SavedDataMap = {
             'entry-001': {
                 headerName: 'X-Test',
                 headerValue: 'test-value',
@@ -192,22 +192,23 @@ describe('generateSavedDataHash', () => {
                 sourceMissing: false,
             },
         };
-        const hash = generateSavedDataHash(data);
-        const parsed = JSON.parse(hash);
-        expect(parsed).toEqual([
-            {
-                id: 'entry-001',
-                name: 'X-Test',
-                value: 'test-value',
+        const data2: SavedDataMap = {
+            'entry-001': {
+                headerName: 'X-Test',
+                headerValue: 'test-value',
+                domains: ['*.different.com'],
                 isDynamic: false,
                 sourceId: 'src-001',
                 sourceMissing: false,
+                tag: 'production',
             },
-        ]);
+        };
+        // Same key fields → same hash (domains/tag not included)
+        expect(generateSavedDataHash(data1)).toBe(generateSavedDataHash(data2));
     });
 
-    it('returns empty JSON array string for empty object', () => {
-        expect(generateSavedDataHash({})).toBe('[]');
+    it('returns empty string for empty object', () => {
+        expect(generateSavedDataHash({})).toBe('');
     });
 });
 

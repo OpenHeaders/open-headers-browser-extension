@@ -1,8 +1,10 @@
-import React from 'react';
-import { Typography, Space, Badge, Button, Dropdown, Switch, type MenuProps } from 'antd';
-import { BulbOutlined, BulbFilled, CompressOutlined, MenuOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Typography, Space, Badge, Button, Dropdown, Switch, Select, Tooltip, type MenuProps } from 'antd';
+import { BulbOutlined, BulbFilled, CompressOutlined, MenuOutlined, QuestionCircleOutlined, CloseCircleOutlined, WarningOutlined, InfoCircleOutlined, BugOutlined } from '@ant-design/icons';
 import { useHeader } from '../../hooks/useHeader';
 import { useTheme } from '../../context';
+import { logger, type LogLevel } from '../../utils/logger';
+import { getBrowserAPI } from '../../types/browser';
 
 const { Title, Text } = Typography;
 
@@ -18,9 +20,31 @@ interface ThemeDisplayConfig {
     color: string;
 }
 
+const LOG_LEVEL_OPTIONS: Array<{ value: LogLevel; label: React.ReactNode }> = [
+    { value: 'error', label: <Space size={4}><CloseCircleOutlined style={{ fontSize: 12, color: '#ff4d4f' }} /><span>Error</span></Space> },
+    { value: 'warn', label: <Space size={4}><WarningOutlined style={{ fontSize: 12, color: '#faad14' }} /><span>Warning</span></Space> },
+    { value: 'info', label: <Space size={4}><InfoCircleOutlined style={{ fontSize: 12, color: '#1890ff' }} /><span>Info</span></Space> },
+    { value: 'debug', label: <Space size={4}><BugOutlined style={{ fontSize: 12, color: '#52c41a' }} /><span>Debug</span></Space> },
+];
+
 const Header: React.FC<HeaderProps> = ({ onOpenSetupGuide }) => {
     const { isConnected } = useHeader();
     const { isDarkMode, themeMode, setThemeMode, isCompactMode, toggleCompactMode } = useTheme();
+    const [logLevel, setLogLevel] = useState<LogLevel>(logger.getLevel());
+
+    useEffect(() => {
+        const browserAPI = getBrowserAPI();
+        browserAPI.storage.sync.get(['logLevel'], (result: Record<string, unknown>) => {
+            if (result.logLevel && typeof result.logLevel === 'string') {
+                setLogLevel(result.logLevel as LogLevel);
+            }
+        });
+    }, []);
+
+    const handleLogLevelChange = (level: LogLevel) => {
+        setLogLevel(level);
+        logger.setLevel(level);
+    };
 
     const themeDisplay: Record<ThemeMode, ThemeDisplayConfig> = {
         light: {
@@ -108,12 +132,42 @@ const Header: React.FC<HeaderProps> = ({ onOpenSetupGuide }) => {
         }
     ];
 
-    const menuItems = [
+    const menuItems: MenuProps['items'] = [
         {
             key: 'setup',
             icon: <QuestionCircleOutlined />,
             label: 'Setup Guide',
             onClick: onOpenSetupGuide
+        },
+        { type: 'divider' as const },
+        {
+            key: 'logLevel',
+            label: (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: '200px' }} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                    <Tooltip overlayStyle={{ maxWidth: 280 }} title={
+                        <>
+                            <div style={{ marginBottom: 4, opacity: 0.75 }}>Each level includes all levels above it:</div>
+                            <div><strong>Error:</strong> <span style={{ opacity: 0.75 }}>Operation failures</span></div>
+                            <div><strong>Warning:</strong> <span style={{ opacity: 0.75 }}>Anomalies and fallbacks</span></div>
+                            <div><strong>Info:</strong> <span style={{ opacity: 0.75 }}>State changes (default)</span></div>
+                            <div><strong>Debug:</strong> <span style={{ opacity: 0.75 }}>Verbose internals</span></div>
+                        </>
+                    }>
+                        <Space>
+                            <span>Log Level</span>
+                            <QuestionCircleOutlined style={{ fontSize: 11, cursor: 'help' }} />
+                        </Space>
+                    </Tooltip>
+                    <Select
+                        size="small"
+                        value={logLevel}
+                        onChange={handleLogLevelChange}
+                        options={LOG_LEVEL_OPTIONS}
+                        style={{ width: 110 }}
+                        popupMatchSelectWidth={false}
+                    />
+                </div>
+            ),
         }
     ];
 

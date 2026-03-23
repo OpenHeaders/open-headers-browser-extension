@@ -11,6 +11,7 @@ import { getChunkedData, setChunkedData } from '../../utils/storage-chunking.js'
 import type { MessageHandlerContext, SendResponse } from '../../types/browser';
 import type { SavedDataMap } from '../../types/header';
 import type { Source } from '../../types/websocket';
+import { logger } from '../../utils/logger';
 
 const browserAPI = { runtime: browserRuntime };
 
@@ -22,7 +23,7 @@ function createSafeResponse(sendResponse: SendResponse): SendResponse {
         try {
             sendResponse(data);
         } catch (error) {
-            console.log('Info: Could not send response, channel closed');
+            logger.info(' Could not send response, channel closed');
         }
     };
 }
@@ -42,7 +43,7 @@ export function handleGeneralMessage(
         getCurrentSources,
         isWebSocketConnected,
         sendViaWebSocket,
-        updateNetworkRules,
+        scheduleUpdate,
         revalidateTrackedRequests,
         updateBadgeCallback,
         setHeadersUsingPlaceholders,
@@ -54,7 +55,7 @@ export function handleGeneralMessage(
     // Handle each message type
     try {
         if (message.type === 'popupOpen') {
-            console.log('Info: Popup opened, sending current sources');
+            logger.info(' Popup opened, sending current sources');
             // Send current sources to popup immediately
             const response = {
                 type: 'sourcesUpdated',
@@ -85,12 +86,12 @@ export function handleGeneralMessage(
             return true;
         } else if (message.type === 'rulesUpdated') {
             // Handle rule update request (for enable/disable toggle)
-            console.log('Info: Rule update requested');
+            logger.info(' Rule update requested');
 
             // First revalidate tracked requests
             revalidateTrackedRequests().then(() => {
                 // Update network rules with the current sources
-                updateNetworkRules(getCurrentSources());
+                scheduleUpdate('rulesUpdated', { immediate: true });
 
                 // Update tracking variables
                 setLastSourcesHash(generateSourcesHash(getCurrentSources()));
@@ -102,7 +103,7 @@ export function handleGeneralMessage(
                 // Send response
                 safeResponse({ success: true });
             }).catch((error: Error) => {
-                console.log('Info: Error updating rules:', error.message);
+                logger.info(' Error updating rules:', error.message);
                 safeResponse({ success: false, error: error.message });
             });
 
@@ -111,7 +112,7 @@ export function handleGeneralMessage(
         } else if (message.type === 'headersUsingPlaceholders') {
             // Update placeholder tracking from header-manager
             setHeadersUsingPlaceholders(message.headers as MessageHandlerContext['headersUsingPlaceholders'] || []);
-            console.log('Info: Headers using placeholders:', ((message.headers as unknown[]) || []).length);
+            logger.info(' Headers using placeholders:', ((message.headers as unknown[]) || []).length);
 
             // Update badge immediately
             updateBadgeCallback();
@@ -119,16 +120,16 @@ export function handleGeneralMessage(
             safeResponse({ acknowledged: true });
         } else if (message.type === 'configurationImported') {
             // Handle configuration import
-            console.log('Info: Configuration imported, updating rules');
+            logger.info(' Configuration imported, updating rules');
 
             // Clear all request tracking when importing new config
             clearAllTracking();
-            console.log('Info: Cleared all request tracking after configuration import');
+            logger.info(' Cleared all request tracking after configuration import');
 
             // If dynamic sources were provided, update them in storage
             if (message.dynamicSources && Array.isArray(message.dynamicSources)) {
                 storage.local.set({ dynamicSources: message.dynamicSources }, () => {
-                    console.log('Info: Imported dynamic sources saved to storage:', (message.dynamicSources as Source[]).length);
+                    logger.info(' Imported dynamic sources saved to storage:', (message.dynamicSources as Source[]).length);
                 });
             }
 
@@ -141,7 +142,7 @@ export function handleGeneralMessage(
             }
 
             // Apply the rules
-            updateNetworkRules(dynamicSources);
+            scheduleUpdate('import', { immediate: true, sources: dynamicSources });
 
             // Update tracking variables
             setLastSourcesHash(generateSourcesHash(dynamicSources));
@@ -159,7 +160,7 @@ export function handleGeneralMessage(
             safeResponse({ success: true });
         } else if (message.type === 'importConfiguration') {
             // Handle configuration import in the background script
-            console.log('Info: Handling configuration import in background');
+            logger.info(' Handling configuration import in background');
 
             try {
                 const config = message.config as { savedData?: SavedDataMap; dynamicSources?: Source[] };
@@ -173,7 +174,7 @@ export function handleGeneralMessage(
                 // Save data to storage using chunked storage (preserve empty values as-is)
                 setChunkedData('savedData', savedData, () => {
                     if (browserAPI.runtime.lastError) {
-                        console.log('Info: Error saving savedData:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
+                        logger.info(' Error saving savedData:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
                         safeResponse({ success: false, error: 'Failed to save configuration' });
                         return;
                     }
@@ -183,19 +184,19 @@ export function handleGeneralMessage(
                         // Import has dynamic sources, use them
                         storage.local.set({ dynamicSources }, () => {
                             if (browserAPI.runtime.lastError) {
-                                console.log('Info: Error saving dynamicSources:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
+                                logger.info(' Error saving dynamicSources:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
                                 safeResponse({ success: false, error: 'Failed to save dynamic sources' });
                                 return;
                             }
 
-                            console.log('Info: Configuration imported successfully with dynamic sources');
+                            logger.info(' Configuration imported successfully with dynamic sources');
 
                             // Clear all request tracking when importing new config
                             clearAllTracking();
-                            console.log('Info: Cleared all request tracking after configuration import');
+                            logger.info(' Cleared all request tracking after configuration import');
 
                             // Update network rules with the imported sources
-                            updateNetworkRules(dynamicSources);
+                            scheduleUpdate('import', { immediate: true, sources: dynamicSources });
 
                             // Update tracking variables
                             setLastSourcesHash(generateSourcesHash(dynamicSources));
@@ -210,7 +211,7 @@ export function handleGeneralMessage(
                         });
                     } else {
                         // No dynamic sources in import, preserve existing ones
-                        console.log('Info: Configuration imported successfully (preserving existing dynamic sources)');
+                        logger.info(' Configuration imported successfully (preserving existing dynamic sources)');
 
                         // Clear all request tracking
                         clearAllTracking();
@@ -219,7 +220,7 @@ export function handleGeneralMessage(
                         const currentSources = getCurrentSources();
 
                         // Update network rules with existing sources
-                        updateNetworkRules(currentSources);
+                        scheduleUpdate('import', { immediate: true });
 
                         // Update tracking variables
                         setLastRulesUpdateTime(Date.now());
@@ -234,23 +235,23 @@ export function handleGeneralMessage(
                 });
 
             } catch (error) {
-                console.log('Info: Import error in background:', (error as Error).message);
+                logger.info(' Import error in background:', (error as Error).message);
                 safeResponse({ success: false, error: (error as Error).message });
             }
 
             // Return true to indicate async response
             return true;
         } else if (message.type === 'sourcesUpdated') {
-            console.log('Info: Background received sources update notification:',
+            logger.info(' Background received sources update notification:',
                 message.sources ? (message.sources as Source[]).length : 0, 'sources at',
                 new Date(message.timestamp as number).toISOString());
 
             safeResponse({ acknowledged: true });
         } else if (message.type === 'openWelcomePage') {
-            console.log('Info: Ignoring openWelcomePage request - welcome page should only open on install');
+            logger.info(' Ignoring openWelcomePage request - welcome page should only open on install');
             safeResponse({ acknowledged: true });
         } else if (message.type === 'forceOpenWelcomePage') {
-            console.log('Info: Force opening welcome page requested from popup');
+            logger.info(' Force opening welcome page requested from popup');
             openWelcomePageDirectly();
             safeResponse({ acknowledged: true });
         } else if (message.type === 'openTab') {
@@ -324,16 +325,16 @@ export function handleGeneralMessage(
             getActiveRulesForTab(tabId, tabUrl).then(activeRules => {
                 safeResponse({ activeRules });
             }).catch((error: Error) => {
-                console.error('Error getting active rules:', error);
+                logger.error('Error getting active rules:', error);
                 safeResponse({ activeRules: [] });
             });
             return true;
         } else if (message.type === 'setRulesExecutionPaused') {
             // Handle pause/resume of rules execution
-            console.log('Info: Setting rules execution paused state:', message.paused);
+            logger.info(' Setting rules execution paused state:', message.paused);
 
             // Update network rules to apply or clear them based on pause state
-            updateNetworkRules(getCurrentSources());
+            scheduleUpdate('pause', { immediate: true });
 
             safeResponse({ success: true });
             return true;
@@ -356,11 +357,11 @@ export function handleGeneralMessage(
             return false;
         } else {
             // Unknown message type - don't handle it, let other listeners try
-            console.log('Info: Unknown message type:', message.type);
+            logger.info(' Unknown message type:', message.type);
             return false;
         }
     } catch (error) {
-        console.log('Info: Error handling message:', (error as Error).message);
+        logger.info(' Error handling message:', (error as Error).message);
         safeResponse({ error: (error as Error).message });
         return true;
     }

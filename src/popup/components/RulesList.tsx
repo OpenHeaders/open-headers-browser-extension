@@ -5,8 +5,7 @@ import HeaderTable from './HeaderTable';
 import ActiveRules from './ActiveRules';
 import TagManager from './TagManager';
 import { useHeader } from '../../hooks/useHeader';
-
-declare const browser: typeof chrome | undefined;
+import { getBrowserAPI } from '../../types/browser';
 
 const RulesList: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -14,9 +13,10 @@ const RulesList: React.FC = () => {
   const { headerEntries } = useHeader();
 
   useEffect(() => {
+    const browserAPI = getBrowserAPI();
+
     const getCurrentTab = async () => {
       try {
-        const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
         const tabs = await browserAPI.tabs.query({ active: true, currentWindow: true });
         if (tabs[0] && tabs[0].url) {
           try {
@@ -33,7 +33,6 @@ const RulesList: React.FC = () => {
 
     getCurrentTab();
 
-    const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
     const handleTabUpdate = (_tabId: number, changeInfo: chrome.tabs.OnUpdatedInfo, tab: chrome.tabs.Tab) => {
       if (changeInfo.status === 'complete' && tab.active) getCurrentTab();
     };
@@ -49,27 +48,16 @@ const RulesList: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const loadSavedTab = async () => {
-      try {
-        const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-        const result = await browserAPI.storage.local.get('activeRulesTab');
-        setActiveTab((result as Record<string, string>).activeRulesTab || 'all-rules');
-      } catch (error) {
-        const saved = localStorage.getItem('activeRulesTab');
-        setActiveTab(saved || 'all-rules');
-      }
-    };
-    loadSavedTab();
+    const browserAPI = getBrowserAPI();
+    browserAPI.storage.local.get(['activeRulesTab'], (result: Record<string, unknown>) => {
+      setActiveTab((result.activeRulesTab as string) || 'all-rules');
+    });
   }, []);
 
-  const handleTabChange = async (key: string) => {
+  const handleTabChange = (key: string) => {
     setActiveTab(key);
-    try {
-      const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-      await browserAPI.storage.local.set({ activeRulesTab: key });
-    } catch (error) {
-      localStorage.setItem('activeRulesTab', key);
-    }
+    const browserAPI = getBrowserAPI();
+    browserAPI.storage.local.set({ activeRulesTab: key });
   };
 
   const stats = useMemo(() => {

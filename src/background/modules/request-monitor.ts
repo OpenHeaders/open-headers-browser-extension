@@ -8,6 +8,7 @@ import { checkIfUrlMatchesAnyRule, addTrackedUrl, tabsWithActiveRules } from './
 
 import type { PendingRequest } from '../../types/browser';
 import { getBrowserAPI } from '../../types/browser';
+import { logger } from '../../utils/logger';
 
 /**
  * Set up request monitoring to track which domains tabs are making requests to
@@ -18,11 +19,11 @@ export function setupRequestMonitoring(updateBadgeCallback: () => void): void {
     const webRequestAPI = browserAPI.webRequest;
 
     if (!webRequestAPI) {
-        console.log('Info: webRequest API not available');
+        logger.info(' webRequest API not available');
         return;
     }
 
-    console.log('Info: Setting up request monitoring for badge updates');
+    logger.info(' Setting up request monitoring for badge updates');
 
     // Track pending requests to handle failures
     const pendingRequests = new Map<string, PendingRequest>();

@@ -90,7 +90,7 @@ export interface MessageHandlerContext {
     getCurrentSources: () => import('./websocket').Source[];
     isWebSocketConnected: () => boolean;
     sendViaWebSocket: (data: Record<string, unknown>) => boolean;
-    updateNetworkRules: (sources: import('./websocket').Source[]) => void;
+    scheduleUpdate: (reason: string, options?: { immediate?: boolean; sources?: import('./websocket').Source[] }) => void;
     revalidateTrackedRequests: () => Promise<void>;
     updateBadgeCallback: () => void;
     headersUsingPlaceholders: import('./header').PlaceholderInfo[];

@@ -224,11 +224,29 @@ class EnvironmentService {
   }
 
   private async getStoredEnvironment(): Promise<string | null> {
-    return localStorage.getItem('currentEnvironment');
+    return new Promise((resolve) => {
+      try {
+        const browserAPI = (typeof (globalThis as Record<string, unknown>).browser !== 'undefined'
+          ? (globalThis as Record<string, unknown>).browser
+          : (globalThis as Record<string, unknown>).chrome) as typeof chrome;
+        browserAPI.storage.local.get(['currentEnvironment'], (result: Record<string, unknown>) => {
+          resolve((result.currentEnvironment as string) || null);
+        });
+      } catch {
+        resolve(null);
+      }
+    });
   }
 
   private async storeEnvironment(environmentId: string): Promise<void> {
-    localStorage.setItem('currentEnvironment', environmentId);
+    try {
+      const browserAPI = (typeof (globalThis as Record<string, unknown>).browser !== 'undefined'
+        ? (globalThis as Record<string, unknown>).browser
+        : (globalThis as Record<string, unknown>).chrome) as typeof chrome;
+      browserAPI.storage.local.set({ currentEnvironment: environmentId });
+    } catch {
+      // Storage not available
+    }
   }
 
   private async fetchWorkspace(): Promise<WorkspaceData> {

@@ -16,7 +16,18 @@ function makeService(): EnvironmentService {
 
 describe('EnvironmentService', () => {
     beforeEach(() => {
-        localStorage.clear();
+        vi.clearAllMocks();
+        // Reset chrome.storage.local mock to empty
+        const storageData: Record<string, unknown> = {};
+        (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockImplementation(
+            (_keys: string[], callback: (result: Record<string, unknown>) => void) => callback(storageData)
+        );
+        (chrome.storage.local.set as ReturnType<typeof vi.fn>).mockImplementation(
+            (items: Record<string, unknown>, callback?: () => void) => {
+                Object.assign(storageData, items);
+                callback?.();
+            }
+        );
     });
 
     describe('initial state', () => {
@@ -75,8 +86,10 @@ describe('EnvironmentService', () => {
             expect(stateAfterFirst.workspace).toEqual(stateAfterSecond.workspace);
         });
 
-        it('restores saved environment from localStorage', async () => {
-            localStorage.setItem('currentEnvironment', 'production');
+        it('restores saved environment from chrome.storage.local', async () => {
+            (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockImplementation(
+                (_keys: string[], callback: (result: Record<string, unknown>) => void) => callback({ currentEnvironment: 'production' })
+            );
             const service = makeService();
             await service.initialize();
 
@@ -84,7 +97,9 @@ describe('EnvironmentService', () => {
         });
 
         it('falls back to first environment if saved one is invalid', async () => {
-            localStorage.setItem('currentEnvironment', 'nonexistent-env');
+            (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockImplementation(
+                (_keys: string[], callback: (result: Record<string, unknown>) => void) => callback({ currentEnvironment: 'nonexistent-env' })
+            );
             const service = makeService();
             await service.initialize();
 
@@ -142,12 +157,12 @@ describe('EnvironmentService', () => {
             expect(service.getState().currentEnvironmentId).toBe('production');
         });
 
-        it('persists environment to localStorage', async () => {
+        it('persists environment to chrome.storage.local', async () => {
             const service = makeService();
             await service.initialize();
 
             await service.switchEnvironment('staging');
-            expect(localStorage.getItem('currentEnvironment')).toBe('staging');
+            expect(chrome.storage.local.set).toHaveBeenCalledWith({ currentEnvironment: 'staging' });
         });
 
         it('throws for invalid environment', async () => {
