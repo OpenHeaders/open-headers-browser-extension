@@ -46,7 +46,6 @@ export function handleGeneralMessage(
         scheduleUpdate,
         revalidateTrackedRequests,
         updateBadgeCallback,
-        setHeadersUsingPlaceholders,
         setLastSourcesHash,
         setLastRulesUpdateTime,
         setLastSavedDataHash
@@ -109,15 +108,6 @@ export function handleGeneralMessage(
 
             // Return true to indicate async response
             return true;
-        } else if (message.type === 'headersUsingPlaceholders') {
-            // Update placeholder tracking from header-manager
-            setHeadersUsingPlaceholders(message.headers as MessageHandlerContext['headersUsingPlaceholders'] || []);
-            logger.info('MessageHandler', 'Headers using placeholders:', ((message.headers as unknown[]) || []).length);
-
-            // Update badge immediately
-            updateBadgeCallback();
-
-            safeResponse({ acknowledged: true });
         } else if (message.type === 'configurationImported') {
             // Handle configuration import
             logger.info('MessageHandler', 'Configuration imported, updating rules');

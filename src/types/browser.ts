@@ -25,7 +25,6 @@ export type ExtensionMessageType =
     | 'checkConnection'
     | 'getDynamicSources'
     | 'rulesUpdated'
-    | 'headersUsingPlaceholders'
     | 'configurationImported'
     | 'importConfiguration'
     | 'sourcesUpdated'
@@ -67,7 +66,7 @@ export interface ExtensionMessage {
 export type SendResponse = (response: unknown) => void;
 
 /** Badge states used by the badge manager */
-export type BadgeState = 'none' | 'active' | 'disconnected' | 'placeholders' | 'paused';
+export type BadgeState = 'none' | 'active' | 'disconnected' | 'paused';
 
 /** Pending request info tracked by the request monitor */
 export interface PendingRequest {
@@ -93,8 +92,6 @@ export interface MessageHandlerContext {
     scheduleUpdate: (reason: string, options?: { immediate?: boolean; sources?: import('./websocket').Source[] }) => void;
     revalidateTrackedRequests: () => Promise<void>;
     updateBadgeCallback: () => void;
-    headersUsingPlaceholders: import('./header').PlaceholderInfo[];
-    setHeadersUsingPlaceholders: (headers: import('./header').PlaceholderInfo[]) => void;
     lastSourcesHash: string;
     setLastSourcesHash: (hash: string) => void;
     lastRulesUpdateTime: number;

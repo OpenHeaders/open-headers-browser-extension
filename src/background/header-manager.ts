@@ -113,11 +113,6 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
             logger.warn('HeaderManager', `${placeholders.length} headers not injected (unresolved):`, placeholders);
         }
 
-        sendMessageWithCallback({
-            type: 'headersUsingPlaceholders',
-            headers: placeholders
-        }, (_response, _error) => {});
-
         const removeCount = Math.max(lastMaxRuleId, ruleId - 1);
         const removeRuleIds = removeCount > 0
             ? Array.from({ length: removeCount }, (_, i) => i + 1)

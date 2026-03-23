@@ -28,7 +28,7 @@ const LOG_LEVEL_OPTIONS: Array<{ value: LogLevel; label: React.ReactNode }> = [
 ];
 
 const Header: React.FC<HeaderProps> = ({ onOpenSetupGuide }) => {
-    const { isConnected } = useHeader();
+    const { isConnected, isStatusLoaded } = useHeader();
     const { isDarkMode, themeMode, setThemeMode, isCompactMode, toggleCompactMode } = useTheme();
     const [logLevel, setLogLevel] = useState<LogLevel>(logger.getLevel());
 
@@ -181,11 +181,11 @@ const Header: React.FC<HeaderProps> = ({ onOpenSetupGuide }) => {
                 <div className="connection-status">
                     <Space align="center" size={6}>
                         <Badge
-                            status={isConnected ? 'success' : 'error'}
+                            status={!isStatusLoaded ? 'default' : isConnected ? 'success' : 'error'}
                             text={
                                 <Space size={4}>
                                     <Text style={{ fontSize: '12px' }}>
-                                        {isConnected ? 'Connected' : 'Disconnected'}
+                                        {!isStatusLoaded ? '' : isConnected ? 'Connected' : 'Disconnected'}
                                     </Text>
                                 </Space>
                             }

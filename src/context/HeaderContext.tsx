@@ -37,6 +37,7 @@ export interface HeaderContextValue {
   headerEntries: Record<string, HeaderEntry>;
   dynamicSources: DynamicSource[];
   isConnected: boolean;
+  isStatusLoaded: boolean;
   rulesFromApp: boolean;
   uiState: UiState;
   loadHeaderEntries: (forceRefresh?: boolean) => void;
@@ -60,6 +61,7 @@ const defaultContextValue: HeaderContextValue = {
   headerEntries: {},
   dynamicSources: [],
   isConnected: false,
+  isStatusLoaded: false,
   rulesFromApp: false,
   uiState: {
     tableState: {
@@ -87,6 +89,7 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
   const [headerEntries, setHeaderEntries] = useState<Record<string, HeaderEntry>>({});
   const [dynamicSources, setDynamicSources] = useState<DynamicSource[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isStatusLoaded, setIsStatusLoaded] = useState(false);
   const [rulesFromApp, setRulesFromApp] = useState(false);
   const [uiState, setUiState] = useState<UiState>({
     tableState: {
@@ -125,6 +128,7 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
         const sources = (response.sources as DynamicSource[]) || [];
         setDynamicSources(sources);
         setIsConnected((response.isConnected as boolean) || false);
+        setIsStatusLoaded(true);
         setRulesFromApp((response.rulesFromApp as boolean) || false);
 
         if (response.rulesFromApp && response.headerEntries) {
@@ -133,6 +137,7 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
       } else {
         setDynamicSources([]);
         setIsConnected(false);
+        setIsStatusLoaded(true);
       }
     });
   }, []);
@@ -232,6 +237,7 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
     headerEntries,
     dynamicSources,
     isConnected,
+    isStatusLoaded,
     rulesFromApp,
     uiState,
     loadHeaderEntries,

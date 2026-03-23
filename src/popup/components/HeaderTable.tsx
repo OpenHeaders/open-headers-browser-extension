@@ -380,7 +380,7 @@ const HeaderTable: React.FC = () => {
           <Table
               dataSource={filteredData} columns={columns}
               pagination={{ pageSize: 10, size: 'small', showSizeChanger: false, showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`, style: { marginBottom: 0, marginTop: 4 } }}
-              size="small" scroll={{ x: 1000, y: 290 }} onChange={handleChange}
+              size="small" scroll={{ x: 920, y: 290 }} onChange={handleChange}
               rowClassName={(record: TableRecord) => record.isEnabled && record.placeholderType ? 'row-not-injecting' : ''}
               locale={{ emptyText: (
                 <Empty image={<FileTextOutlined style={{ fontSize: 28, color: 'var(--text-tertiary)' }} />}

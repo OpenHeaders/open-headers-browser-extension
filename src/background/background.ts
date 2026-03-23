@@ -31,7 +31,7 @@ import {
 } from './modules/rule-engine';
 
 import type { Source } from '../types/websocket';
-import type { PlaceholderInfo, SavedDataMap } from '../types/header';
+import type { SavedDataMap } from '../types/header';
 import type { IRecordingService } from '../types/recording';
 import type { ActiveRule, HotkeyCommand } from '../types/browser';
 
@@ -40,12 +40,9 @@ initPauseState();
 
 const recordingService: IRecordingService = new RecordingService();
 
-let headersUsingPlaceholders: PlaceholderInfo[] = [];
-
 async function updateBadgeForCurrentTab(): Promise<void> {
     const isConnected = isWebSocketConnected();
     const reconnectAttempts = getReconnectAttempts();
-    const hasPlaceholders = headersUsingPlaceholders.length > 0;
 
     const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
     browserAPI.storage.sync.get(['isRulesExecutionPaused'], async (result: { [key: string]: unknown }) => {
@@ -60,7 +57,7 @@ async function updateBadgeForCurrentTab(): Promise<void> {
             }
 
             const activeRules: ActiveRule[] = await getActiveRulesForTab(currentTab?.id, currentUrl);
-            await updateExtensionBadge(isConnected, activeRules, hasPlaceholders, isPaused, recordingService, reconnectAttempts);
+            await updateExtensionBadge(isConnected, activeRules, isPaused, recordingService, reconnectAttempts);
         });
     });
 }
@@ -81,7 +78,7 @@ async function initializeExtension(): Promise<void> {
     }
     extensionInitialized = true;
 
-    await updateExtensionBadge(false, [], false, false, recordingService, 0);
+    await updateExtensionBadge(false, [], false, recordingService, 0);
     setupRequestMonitoring(debouncedUpdateBadge);
     setupTabListeners(debouncedUpdateBadge, recordingService);
     setupPeriodicCleanup();
@@ -248,8 +245,6 @@ runtime.onMessage.addListener((message: unknown, sender: chrome.runtime.MessageS
         scheduleUpdate,
         revalidateTrackedRequests,
         updateBadgeCallback: debouncedUpdateBadge,
-        headersUsingPlaceholders,
-        setHeadersUsingPlaceholders: (headers: PlaceholderInfo[]) => { headersUsingPlaceholders = headers; },
         lastSourcesHash: getLastSourcesHash(),
         setLastSourcesHash,
         lastRulesUpdateTime: getLastRulesUpdateTime(),

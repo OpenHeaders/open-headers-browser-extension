@@ -21,7 +21,6 @@ let lastBadgeState: string | null = null;
 export async function updateExtensionBadge(
     connected: boolean,
     activeRules: unknown[],
-    hasPlaceholders: boolean,
     isPaused: boolean,
     recordingService: IRecordingService | null,
     reconnectAttempts: number = 0
@@ -55,12 +54,8 @@ export async function updateExtensionBadge(
     let badgeState: BadgeState = 'none';
     const activeRulesCount = activeRules ? activeRules.length : 0;
 
-    // Priority: placeholders > disconnected > paused > active > none
-    // Only show disconnected badge after multiple failed reconnect attempts
-    // to avoid flashing yellow during brief disconnections
-    if (hasPlaceholders) {
-        badgeState = 'placeholders';
-    } else if (!connected && reconnectAttempts >= DISCONNECTED_BADGE_THRESHOLD) {
+    // Priority: disconnected > paused > active > none
+    if (!connected && reconnectAttempts >= DISCONNECTED_BADGE_THRESHOLD) {
         badgeState = 'disconnected';
     } else if (isPaused) {
         badgeState = 'paused';
@@ -78,26 +73,7 @@ export async function updateExtensionBadge(
 
     lastBadgeState = currentStateKey;
 
-    if (badgeState === 'placeholders') {
-        // Show a red exclamation when headers are using placeholders
-        actionAPI.setBadgeText({ text: '!' }, () => {
-            if (browserAPI.runtime.lastError) {
-                logger.debug('BadgeManager', 'Badge text error:', browserAPI.runtime.lastError);
-            }
-        });
-        actionAPI.setBadgeBackgroundColor({ color: '#ff4d4f' }, () => {
-            if (browserAPI.runtime.lastError) {
-                logger.debug('BadgeManager', 'Badge color error:', browserAPI.runtime.lastError);
-            }
-        });
-
-        // Update the tooltip with specific information
-        if (actionAPI.setTitle) {
-            actionAPI.setTitle({
-                title: `Open Headers - Warning\nHeaders using placeholder values`
-            });
-        }
-    } else if (badgeState === 'disconnected') {
+    if (badgeState === 'disconnected') {
         // Show a yellow dot/exclamation when disconnected
         actionAPI.setBadgeText({ text: '!' }, () => {
             if (browserAPI.runtime.lastError) {

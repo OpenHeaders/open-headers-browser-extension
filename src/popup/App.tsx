@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Layout, App as AntApp } from 'antd';
+import { Layout } from 'antd';
 import { HeaderProvider } from '../context/HeaderContext';
 import { useTheme } from '../context/ThemeContext';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -68,14 +68,12 @@ const AppContent: React.FC = () => {
             <Header
               onOpenSetupGuide={handleOpenSetupGuide}
             />
-
             <Content className="content">
               <ConnectionInfo />
               <div className="entries-list">
                 <RulesList />
               </div>
             </Content>
-
             <Footer />
           </Layout>
         </HeaderProvider>

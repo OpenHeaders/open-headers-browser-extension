@@ -6,7 +6,7 @@ import { storage } from '../../utils/browser-api';
 import { sendMessage } from '../../utils/messaging';
 
 const ConnectionInfo: React.FC = () => {
-  const { isConnected } = useHeader();
+  const { isConnected, isStatusLoaded } = useHeader();
   const [dismissed, setDismissed] = useState(false);
   const [lastConnectionState, setLastConnectionState] = useState(isConnected);
 
@@ -39,7 +39,7 @@ const ConnectionInfo: React.FC = () => {
     storage.local.set({ connectionAlertDismissed: true });
   };
 
-  if (isConnected || dismissed) {
+  if (!isStatusLoaded || isConnected || dismissed) {
     return null;
   }
 
@@ -71,7 +71,7 @@ const ConnectionInfo: React.FC = () => {
                 </Button>
               </Space>
             }
-            type="warning"
+            type="info"
             showIcon
             closable
             onClose={handleDismiss}

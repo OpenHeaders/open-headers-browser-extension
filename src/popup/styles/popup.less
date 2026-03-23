@@ -119,6 +119,21 @@ body {
       border-radius: 0;
     }
 
+    .ant-table-cell-fix-left,
+    .ant-table-cell-fix-right,
+    .ant-table-cell-fix-left-last,
+    .ant-table-cell-fix-right-first {
+      transition: none !important;
+      * {
+        transition: none !important;
+      }
+    }
+
+    .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+    .ant-table-ping-left .ant-table-cell-fix-left-last::after {
+      transition: none !important;
+    }
+
     .ant-table-thead > tr > th {
       font-weight: 500;
     }
