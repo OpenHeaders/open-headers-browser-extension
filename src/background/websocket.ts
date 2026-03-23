@@ -13,7 +13,6 @@ import { scheduleUpdate } from './modules/rule-engine';
 
 import type { Source, OnSourcesReceivedCallback, RulesData, HeaderRuleFromApp, LastSuccessfulConnection } from '../types/websocket';
 import type { SavedDataMap } from '../types/header';
-import { getBrowserAPI } from '../types/browser';
 
 // Configuration
 const WS_SERVER_URL = 'ws://127.0.0.1:59210';
@@ -59,7 +58,6 @@ function getBrowserName(): string {
  */
 function getBrowserVersion(): string {
     try {
-        const _manifest = runtime.getManifest();
         // Try to get browser version from user agent
         if (navigator && navigator.userAgent) {
             const ua = navigator.userAgent;
@@ -83,19 +81,6 @@ function getBrowserVersion(): string {
         logger.debug('WebSocket', 'Could not determine browser version');
     }
     return '';
-}
-
-/**
- * Send updated rules to the Electron app
- */
-function sendRulesToElectronApp(rulesData: unknown): void {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-            type: 'rules-update',
-            data: rulesData
-        }));
-        logger.info('WebSocket', 'Sent updated rules to Electron app');
-    }
 }
 
 // Function to broadcast connection status to any open popups
@@ -735,13 +720,6 @@ export function getCurrentSources(): Source[] {
 }
 
 /**
- * Get current rules
- */
-export function getCurrentRules(): RulesData {
-    return rules;
-}
-
-/**
  * Send data via WebSocket
  */
 export function sendViaWebSocket(data: Record<string, unknown>): boolean {
@@ -780,6 +758,3 @@ export function sendRecordingViaWebSocket(recording: unknown): boolean {
         return false;
     }
 }
-
-// Export for use in other modules
-export { sendRulesToElectronApp };

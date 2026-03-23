@@ -198,8 +198,16 @@ export function setupTabListeners(updateBadgeCallback: () => void, recordingServ
     if (webNavigation && recordingService) {
         logger.info('TabListeners', 'Setting up webNavigation listener');
         webNavigation.onCommitted?.addListener(async (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => {
-            logger.info('TabListeners', 'Navigation committed:', details.tabId, details.url, 'frameId:', details.frameId);
-            if (details.frameId !== 0) return;
+            if (details.frameId !== 0) {
+                logger.debug('TabListeners', 'Sub-frame navigation:', details.tabId, details.url, 'frameId:', details.frameId);
+                return;
+            }
+
+            if (!isTrackableUrl(details.url)) {
+                logger.debug('TabListeners', 'Internal navigation:', details.tabId, details.url);
+            } else {
+                logger.info('TabListeners', 'Navigation committed:', details.tabId, details.url);
+            }
 
             await recordingService.handleNavigation(details.tabId, details.url);
         });

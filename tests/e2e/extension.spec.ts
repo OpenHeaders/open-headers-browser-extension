@@ -238,19 +238,6 @@ test.describe('Welcome Page', () => {
     });
 });
 
-test.describe('Record Viewer Page', () => {
-    test('record-viewer.html loads and has content', async () => {
-        const viewerPage = await context.newPage();
-        await viewerPage.goto(`chrome-extension://${extensionId}/record-viewer.html`);
-        await viewerPage.waitForLoadState('domcontentloaded');
-
-        const body = await viewerPage.textContent('body');
-        expect(body).toBeTruthy();
-
-        await viewerPage.close();
-    });
-});
-
 // ---------------------------------------------------------------------------
 // Manifest & Extension Assets
 // ---------------------------------------------------------------------------

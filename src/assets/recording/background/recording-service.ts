@@ -1,16 +1,21 @@
 /**
- * New Recording Service that integrates with existing infrastructure
+ * Recording Service — single authority for recording lifecycle.
+ *
+ * Architecture:
+ * - Owns all state transitions (via StateMachine)
+ * - Owns all tab notifications (notifyTab moved here from StateMachine)
+ * - Uses per-tab stop lock to make concurrent stop calls idempotent
+ * - Uses atomic tryTransition to prevent TOCTOU races
  */
 
 import { RecordingStateMachine, RecordingStates } from '../shared/state-machine';
 import { RecordingState } from '../shared/recording-state';
-import { NewMessageTypes } from '../shared/message-adapter';
 import { MESSAGE_TYPES } from '../shared/constants';
 import { tabs, downloads } from '../../../utils/browser-api';
 import { isWebSocketConnected, sendViaWebSocket, sendRecordingViaWebSocket } from '../../../background/websocket.js';
 import { DisplayDetector } from '../../../utils/display-detector';
 import { logger } from '../../../utils/logger';
-import type { RecordingEvent } from '../../../types/recording';
+import type { RecordingEvent, IRecordingService } from '../../../types/recording';
 
 declare const browser: typeof chrome | undefined;
 
@@ -51,13 +56,6 @@ interface RecordingData {
   [key: string]: unknown;
 }
 
-interface RecordData {
-  events?: Array<{ timestamp?: number; [key: string]: unknown }>;
-  console?: Array<{ timestamp?: number; [key: string]: unknown }>;
-  network?: Array<{ timestamp?: number; [key: string]: unknown }>;
-  url?: string;
-}
-
 interface ContentScriptReadyResult {
   shouldStartRecording: boolean;
   state: {
@@ -70,26 +68,67 @@ interface ContentScriptReadyResult {
   };
 }
 
-export class RecordingService {
+export class RecordingService implements IRecordingService {
   private stateMachine: RecordingStateMachine;
   private recordings: Map<number, RecordingState>;
   private recordingData: Map<string, RecordingEvent[]>;
-  private widgetPreferences?: Map<number, boolean>;
+  /**
+   * Per-tab stop lock. While a tabId is in this set, concurrent stopRecording
+   * calls for that tab are dropped. This makes stop fully idempotent regardless
+   * of how many sources trigger it simultaneously (widget, popup, hotkey, tab close).
+   */
+  private stoppingTabs: Set<number>;
 
   constructor() {
     this.stateMachine = new RecordingStateMachine();
     this.recordings = new Map();
     this.recordingData = new Map();
+    this.stoppingTabs = new Set();
   }
+
+  // ── Tab notification (moved from StateMachine) ─────────────────────
+
+  /**
+   * Notify a tab's content script about a recording state change.
+   * This is the ONLY place tab notifications originate.
+   */
+  private async notifyTab(tabId: number, state: string, recording: RecordingState | null): Promise<void> {
+    // Don't notify during pre-navigation (no content script yet)
+    if (state === RecordingStates.PRE_NAVIGATION) return;
+
+    try {
+      await browserAPI.tabs.sendMessage(tabId, {
+        type: 'RECORDING_STATE_CHANGED',
+        action: 'recordingStateChanged',
+        data: {
+          state: state,
+          isRecording: state === RecordingStates.RECORDING || state === RecordingStates.PRE_NAVIGATION,
+          isPreNav: state === RecordingStates.PRE_NAVIGATION,
+          recordingId: recording?.recordId,
+          startTime: recording?.actualStartTime || recording?.startTime
+        }
+      });
+    } catch (error) {
+      const err = error as Error;
+      // Silently ignore expected errors (tab closed, context invalidated, etc.)
+      if (!err.message?.includes('tab') &&
+          !err.message?.includes('context') &&
+          !err.message?.includes('receiving end does not exist') &&
+          !err.message?.includes('Could not establish connection')) {
+        logger.info('RecordingService', `Could not notify tab ${tabId}:`, err.message);
+      }
+    }
+  }
+
+  // ── Start recording ────────────────────────────────────────────────
 
   async startRecording(tabId: number, options: RecordingOptions = {}): Promise<RecordingResult> {
     logger.info('RecordingService', 'Starting recording for tab:', tabId);
 
-    if (!this.stateMachine.canTransition(tabId, 'START_RECORDING')) {
+    const newState = this.stateMachine.tryTransition(tabId, 'START_RECORDING');
+    if (!newState) {
       throw new Error('Cannot start recording in current state');
     }
-
-    this.stateMachine.transition(tabId, 'START_RECORDING');
 
     try {
       const tab = await new Promise<chrome.tabs.Tab>((resolve, reject) => {
@@ -145,7 +184,10 @@ export class RecordingService {
         });
       }
 
-      this.stateMachine.transition(tabId, isPreNavigation ? 'START_PRE_NAV' : 'RECORDING_READY');
+      const readyState = this.stateMachine.tryTransition(tabId, isPreNavigation ? 'START_PRE_NAV' : 'RECORDING_READY');
+      if (readyState) {
+        await this.notifyTab(tabId, readyState, recordingState);
+      }
 
       if (isWebSocketConnected() && !isPreNavigation) {
         let displayInfo = null;
@@ -192,7 +234,7 @@ export class RecordingService {
         try {
           await browserAPI.scripting.executeScript({
             target: { tabId },
-            files: ['js/content/record-recorder/index.js'],
+            files: ['js/content/workflow-recorder/index.js'],
             world: 'ISOLATED' as chrome.scripting.ExecutionWorld,
           });
 
@@ -215,132 +257,162 @@ export class RecordingService {
       };
 
     } catch (error) {
-      this.stateMachine.transition(tabId, 'ERROR', { error: (error as Error).message });
+      this.stateMachine.tryTransition(tabId, 'ERROR', { error: (error as Error).message });
       throw error;
     }
   }
 
+  // ── Stop recording (idempotent, lock-protected) ────────────────────
+
   async stopRecording(tabId: number, options: StopOptions = {}): Promise<RecordingData | null> {
-    logger.info('RecordingService', 'Stopping recording for tab:', tabId, 'options:', options);
+    // Per-tab lock: if a stop is already in progress for this tab, drop silently.
+    if (this.stoppingTabs.has(tabId)) {
+      logger.debug('RecordingService', 'Stop already in progress for tab:', tabId, '— skipping duplicate');
+      return null;
+    }
 
     const recordingState = this.recordings.get(tabId);
     if (!recordingState) {
-      logger.info('RecordingService', 'No recording state found for tab:', tabId);
+      logger.debug('RecordingService', 'No recording state found for tab:', tabId);
       return null;
     }
 
-    if (!this.stateMachine.canTransition(tabId, 'STOP_RECORDING')) {
-      logger.warn('RecordingService', 'Cannot stop recording in current state');
+    // Atomic transition: if we can't move to STOPPING, another caller already did.
+    const newState = this.stateMachine.tryTransition(tabId, 'STOP_RECORDING');
+    if (!newState) {
+      logger.debug('RecordingService', 'Cannot stop recording in current state for tab:', tabId);
       return null;
     }
 
-    this.stateMachine.transition(tabId, 'STOP_RECORDING');
+    // Acquire lock
+    this.stoppingTabs.add(tabId);
+    logger.info('RecordingService', 'Stopping recording for tab:', tabId, 'options:', options);
 
-    if (!options.fromWidget) {
+    try {
+      // Notify content script about the stop (unless it came from the widget,
+      // which means the content script already knows).
+      if (!options.fromWidget) {
+        await this.sendStopToContentScript(tabId);
+      }
+
+      // Notify tab about state change to STOPPING
+      await this.notifyTab(tabId, RecordingStates.STOPPING, recordingState);
+
+      // Add stop event
       try {
-        await new Promise<void>((resolve) => {
-          tabs.sendMessage(tabId, {
-            type: MESSAGE_TYPES.STOP_RECORDING,
-            action: 'stopRecording'
-          }, () => {
-            if (browserAPI.runtime.lastError) {
-              if (!browserAPI.runtime.lastError.message?.includes('tab was closed') &&
-                  !browserAPI.runtime.lastError.message?.includes('context invalidated')) {
-                logger.info('RecordingService', 'Could not send stop message:', browserAPI.runtime.lastError.message);
-              }
-            }
-            resolve();
-          });
+        const tab = await this.getTab(tabId);
+        this.addEvent(tabId, {
+          timestamp: Date.now(),
+          type: 'recording-stop',
+          url: tab.url || recordingState.currentUrl || '',
+          data: {
+            finalUrl: tab.url,
+            finalTitle: tab.title,
+            duration: Date.now() - (recordingState.actualStartTime || recordingState.startTime),
+            totalEvents: this.recordingData.get(recordingState.recordId)?.length || 0
+          }
         });
       } catch (error) {
-        const err = error as Error;
-        if (!err.message?.includes('tab') && !err.message?.includes('context')) {
-          logger.info('RecordingService', 'Could not send stop message:', error);
+        logger.info('RecordingService', 'Could not add stop event:', error);
+      }
+
+      recordingState.isRecording = false;
+      const events = this.recordingData.get(recordingState.recordId) || [];
+
+      let tabInfo = { url: recordingState.currentUrl || '', title: 'Recording' };
+      try {
+        const tab = await this.getTab(tabId);
+        tabInfo = { url: tab.url || recordingState.currentUrl || '', title: tab.title || 'Recording' };
+      } catch (error) {
+        logger.info('RecordingService', 'Could not get tab info:', error);
+      }
+
+      const recording: RecordingData = {
+        id: recordingState.recordId,
+        tabId: tabId,
+        startTime: recordingState.startTime,
+        endTime: Date.now(),
+        status: 'stopped',
+        url: tabInfo.url,
+        title: tabInfo.title,
+        events: events,
+        preNavTimeAdjustment: recordingState.preNavTimeAdjustment,
+        hasVideoSync: recordingState.hasVideoSync || false
+      };
+
+      if (recordingState.hasVideoSync && isWebSocketConnected()) {
+        sendViaWebSocket({
+          type: 'stopSyncRecording',
+          data: {
+            recordingId: recordingState.recordId,
+            timestamp: Date.now()
+          }
+        });
+      }
+
+      try {
+        await this.exportRecording(recording);
+      } catch (error) {
+        logger.error('RecordingService', 'Failed to export recording:', error);
+      }
+
+      // Cleanup state
+      this.recordings.delete(tabId);
+      this.recordingData.delete(recordingState.recordId);
+
+      await this.updateBadge(tabId, false);
+
+      const idleState = this.stateMachine.tryTransition(tabId, 'RECORDING_STOPPED');
+      if (idleState) {
+        await this.notifyTab(tabId, idleState, null);
+      }
+
+      return recording;
+    } finally {
+      // Always release the lock
+      this.stoppingTabs.delete(tabId);
+    }
+  }
+
+  // ── Internal helpers ───────────────────────────────────────────────
+
+  private async getTab(tabId: number): Promise<chrome.tabs.Tab> {
+    return new Promise<chrome.tabs.Tab>((resolve, reject) => {
+      tabs.get(tabId, (tab: chrome.tabs.Tab) => {
+        if (browserAPI.runtime.lastError) {
+          reject(new Error(browserAPI.runtime.lastError.message));
+        } else {
+          resolve(tab);
         }
+      });
+    });
+  }
+
+  private async sendStopToContentScript(tabId: number): Promise<void> {
+    try {
+      await new Promise<void>((resolve) => {
+        tabs.sendMessage(tabId, {
+          type: MESSAGE_TYPES.STOP_RECORDING,
+          action: 'stopRecording'
+        }, () => {
+          if (browserAPI.runtime.lastError) {
+            if (!browserAPI.runtime.lastError.message?.includes('tab was closed') &&
+                !browserAPI.runtime.lastError.message?.includes('context invalidated')) {
+              logger.info('RecordingService', 'Could not send stop message:', browserAPI.runtime.lastError.message);
+            }
+          }
+          resolve();
+        });
+      });
+    } catch (error) {
+      const err = error as Error;
+      if (!err.message?.includes('tab') && !err.message?.includes('context')) {
+        logger.info('RecordingService', 'Could not send stop message:', error);
       }
     }
-
-    try {
-      const tab = await new Promise<chrome.tabs.Tab>((resolve, reject) => {
-        tabs.get(tabId, (tab: chrome.tabs.Tab) => {
-          if (browserAPI.runtime.lastError) {
-            reject(new Error(browserAPI.runtime.lastError.message));
-          } else {
-            resolve(tab);
-          }
-        });
-      });
-      this.addEvent(tabId, {
-        timestamp: Date.now(),
-        type: 'recording-stop',
-        url: tab.url || recordingState.currentUrl || '',
-        data: {
-          finalUrl: tab.url,
-          finalTitle: tab.title,
-          duration: Date.now() - (recordingState.actualStartTime || recordingState.startTime),
-          totalEvents: this.recordingData.get(recordingState.recordId)?.length || 0
-        }
-      });
-    } catch (error) {
-      logger.info('RecordingService', 'Could not add stop event:', error);
-    }
-
-    recordingState.isRecording = false;
-    const events = this.recordingData.get(recordingState.recordId) || [];
-
-    let tabInfo = { url: recordingState.currentUrl || '', title: 'Recording' };
-    try {
-      const tab = await new Promise<chrome.tabs.Tab>((resolve, reject) => {
-        tabs.get(tabId, (tab: chrome.tabs.Tab) => {
-          if (browserAPI.runtime.lastError) {
-            reject(new Error(browserAPI.runtime.lastError.message));
-          } else {
-            resolve(tab);
-          }
-        });
-      });
-      tabInfo = { url: tab.url || recordingState.currentUrl || '', title: tab.title || 'Recording' };
-    } catch (error) {
-      logger.info('RecordingService', 'Could not get tab info:', error);
-    }
-
-    const recording: RecordingData = {
-      id: recordingState.recordId,
-      tabId: tabId,
-      startTime: recordingState.startTime,
-      endTime: Date.now(),
-      status: 'stopped',
-      url: tabInfo.url,
-      title: tabInfo.title,
-      events: events,
-      preNavTimeAdjustment: recordingState.preNavTimeAdjustment,
-      hasVideoSync: recordingState.hasVideoSync || false
-    };
-
-    if (recordingState.hasVideoSync && isWebSocketConnected()) {
-      sendViaWebSocket({
-        type: 'stopSyncRecording',
-        data: {
-          recordingId: recordingState.recordId,
-          timestamp: Date.now()
-        }
-      });
-    }
-
-    try {
-      await this.exportRecording(recording);
-    } catch (error) {
-      logger.error('RecordingService', 'Failed to export recording:', error);
-    }
-
-    this.recordings.delete(tabId);
-    this.recordingData.delete(recordingState.recordId);
-
-    await this.updateBadge(tabId, false);
-    this.stateMachine.transition(tabId, 'RECORDING_STOPPED');
-
-    return recording;
   }
+
+  // ── Events ─────────────────────────────────────────────────────────
 
   addEvent(tabId: number, event: RecordingEvent): void {
     const recordingState = this.recordings.get(tabId);
@@ -360,6 +432,8 @@ export class RecordingService {
 
     logger.debug('RecordingService', `Event added: ${adjustedEvent.type}, Total: ${events.length}`);
   }
+
+  // ── Export ─────────────────────────────────────────────────────────
 
   async exportRecording(recording: RecordingData): Promise<void> {
     logger.info('RecordingService', 'Exporting recording:', recording.id);
@@ -412,7 +486,7 @@ export class RecordingService {
     }
 
     const json = JSON.stringify(recording, null, 2);
-    const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
+    const dataUrl = 'data:application/json;base64,' + btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
     const filename = `recording_${recording.id}_${new Date(recording.startTime).toISOString().replace(/[:.]/g, '-')}.json`;
 
     await new Promise<void>((resolve, reject) => {
@@ -432,17 +506,11 @@ export class RecordingService {
     });
   }
 
+  // ── Badge ──────────────────────────────────────────────────────────
+
   async updateBadge(tabId: number, isRecording: boolean): Promise<void> {
     try {
-      await new Promise<chrome.tabs.Tab>((resolve, reject) => {
-        tabs.get(tabId, (tab: chrome.tabs.Tab) => {
-          if (browserAPI.runtime.lastError) {
-            reject(new Error(browserAPI.runtime.lastError.message));
-          } else {
-            resolve(tab);
-          }
-        });
-      });
+      await this.getTab(tabId);
 
       if (isRecording) {
         await browserAPI.action.setBadgeText({ tabId, text: '\u2022' });
@@ -462,6 +530,8 @@ export class RecordingService {
       }
     }
   }
+
+  // ── State queries ──────────────────────────────────────────────────
 
   isRecording(tabId: number): boolean {
     return this.stateMachine.isRecording(tabId);
@@ -515,6 +585,8 @@ export class RecordingService {
     };
   }
 
+  // ── Navigation handling ────────────────────────────────────────────
+
   isNewTabUrl(url: string | undefined): boolean {
     return !url || url === '' || url === 'about:blank' ||
            url === 'chrome://newtab/' || url === 'edge://newtab/' ||
@@ -540,7 +612,11 @@ export class RecordingService {
 
       recordingState.addNavigation(url);
       recordingState.currentUrl = url;
-      this.stateMachine.transition(tabId, 'NAVIGATION_COMMITTED');
+
+      const newState = this.stateMachine.tryTransition(tabId, 'NAVIGATION_COMMITTED');
+      if (newState) {
+        await this.notifyTab(tabId, newState, recordingState);
+      }
 
       if (recordingState.hasVideoSync && isWebSocketConnected()) {
         sendViaWebSocket({
@@ -570,15 +646,7 @@ export class RecordingService {
       recordingState.actualStartTime = Date.now();
 
       if (isWebSocketConnected()) {
-        const tab = await new Promise<chrome.tabs.Tab>((resolve, reject) => {
-          tabs.get(tabId, (tab: chrome.tabs.Tab) => {
-            if (browserAPI.runtime.lastError) {
-              reject(new Error(browserAPI.runtime.lastError.message));
-            } else {
-              resolve(tab);
-            }
-          });
-        });
+        const tab = await this.getTab(tabId);
 
         const syncData = {
           tabId,
@@ -602,7 +670,7 @@ export class RecordingService {
       try {
         await browserAPI.scripting.executeScript({
           target: { tabId },
-          files: ['js/content/record-recorder/index.js'],
+          files: ['js/content/workflow-recorder/index.js'],
         });
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
@@ -631,13 +699,15 @@ export class RecordingService {
       try {
         await browserAPI.scripting.executeScript({
           target: { tabId },
-          files: ['js/content/record-recorder/index.js'],
+          files: ['js/content/workflow-recorder/index.js'],
         });
       } catch (error) {
         logger.info('RecordingService', 'Failed to inject content script:', (error as Error).message);
       }
     }
   }
+
+  // ── Tab cleanup ────────────────────────────────────────────────────
 
   async cleanupTab(tabId: number): Promise<void> {
     if (this.isRecording(tabId)) {
@@ -687,6 +757,9 @@ export class RecordingService {
       }
     }
 
+    // Release any stuck stop lock for this tab
+    this.stoppingTabs.delete(tabId);
+
     const recordingState = this.recordings.get(tabId);
     this.recordings.delete(tabId);
     if (recordingState) {
@@ -695,119 +768,4 @@ export class RecordingService {
     this.stateMachine.cleanupTab(tabId);
   }
 
-  setWidgetPreference(tabId: number, useWidget: boolean): void {
-    if (!this.widgetPreferences) {
-      this.widgetPreferences = new Map();
-    }
-    this.widgetPreferences.set(tabId, useWidget);
-  }
-
-  async cancelRecording(tabId: number, _options: StopOptions = {}): Promise<{ success: boolean; error?: string }> {
-    const recordingState = this.recordings.get(tabId);
-    if (!recordingState) return { success: false, error: 'Not recording' };
-
-    this.stateMachine.transition(tabId, 'STOP_RECORDING');
-
-    this.recordings.delete(tabId);
-    this.recordingData.delete(recordingState.recordId);
-
-    await this.updateBadge(tabId, false);
-    this.stateMachine.transition(tabId, 'RECORDING_STOPPED');
-
-    return { success: true };
-  }
-
-  async downloadRecord(url: string, filename: string): Promise<void> {
-    await new Promise<void>((resolve) => {
-      downloads!.download({
-        url: url,
-        filename: filename,
-        saveAs: true
-      }, () => resolve());
-    });
-  }
-
-  getNetworkData(tabId: number): Array<Record<string, unknown>> {
-    const recordingState = this.recordings.get(tabId);
-    if (!recordingState) return [];
-
-    const events = this.recordingData.get(recordingState.recordId) || [];
-    return events
-      .filter(e => e.type === 'network')
-      .map(e => e.data || {});
-  }
-
-  accumulateRecordData(tabId: number, recordData: RecordData): void {
-    const recordingState = this.recordings.get(tabId);
-    if (!recordingState) return;
-
-    if (recordData.events) {
-      recordData.events.forEach(event => {
-        this.addEvent(tabId, {
-          timestamp: event.timestamp || Date.now(),
-          type: 'rrweb',
-          url: recordData.url || '',
-          data: event as Record<string, unknown>
-        });
-      });
-    }
-
-    if (recordData.console) {
-      recordData.console.forEach(log => {
-        this.addEvent(tabId, {
-          timestamp: log.timestamp || Date.now(),
-          type: 'console',
-          url: recordData.url || '',
-          data: log as Record<string, unknown>
-        });
-      });
-    }
-
-    if (recordData.network) {
-      recordData.network.forEach(req => {
-        this.addEvent(tabId, {
-          timestamp: req.timestamp || Date.now(),
-          type: 'network',
-          url: recordData.url || '',
-          data: req as Record<string, unknown>
-        });
-      });
-    }
-  }
-
-  getAccumulatedRecordData(tabId: number): {
-    recordId: string;
-    events: Array<Record<string, unknown>>;
-    console: Array<Record<string, unknown>>;
-    network: Array<Record<string, unknown>>;
-    storage: Array<Record<string, unknown>>;
-    url: string | null;
-  } | null {
-    const recordingState = this.recordings.get(tabId);
-    if (!recordingState) return null;
-
-    const events = this.recordingData.get(recordingState.recordId) || [];
-
-    return {
-      recordId: recordingState.recordId,
-      events: events.filter(e => e.type === 'rrweb').map(e => e.data || {}),
-      console: events.filter(e => e.type === 'console').map(e => e.data || {}),
-      network: events.filter(e => e.type === 'network').map(e => e.data || {}),
-      storage: events.filter(e => e.type === 'storage').map(e => e.data || {}),
-      url: recordingState.currentUrl
-    };
-  }
-
-  markPageVisited(tabId: number): boolean {
-    const recordingState = this.recordings.get(tabId);
-    if (!recordingState) return false;
-
-    const wasPreNav = recordingState.isPreNav;
-    if (wasPreNav) {
-      recordingState.isPreNav = false;
-      recordingState.hasNavigated = true;
-    }
-
-    return wasPreNav;
-  }
 }

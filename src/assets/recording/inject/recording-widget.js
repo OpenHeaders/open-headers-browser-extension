@@ -170,7 +170,6 @@
 
         // Store drag handlers for cleanup
         dragHandlers = {
-            dragStart: dragStart,
             drag: drag,
             dragEnd: dragEnd
         };

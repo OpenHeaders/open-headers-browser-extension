@@ -37,13 +37,6 @@ export function setRulesPaused(paused: boolean): void {
 }
 
 /**
- * Get the cached paused state.
- */
-export function isRulesPaused(): boolean {
-    return isPaused;
-}
-
-/**
  * Initialize pause state from storage. Called once at startup.
  */
 export function initPauseState(): void {
@@ -354,8 +347,4 @@ export function formatUrlPattern(domain: string): string {
     }
 
     return urlFilter;
-}
-
-export function getHeadersWithPlaceholders(): PlaceholderInfo[] {
-    return [...headersWithPlaceholders];
 }

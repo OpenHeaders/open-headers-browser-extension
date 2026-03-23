@@ -92,39 +92,7 @@ export interface Source {
 /** Callback invoked when sources are received from the WebSocket */
 export type OnSourcesReceivedCallback = (sources: Source[]) => void;
 
-// ── Incoming WebSocket messages ────────────────────────────────────
-
-export type IncomingMessageType =
-    | 'sourcesInitial'
-    | 'sourcesUpdated'
-    | 'rules-update'
-    | 'videoRecordingStateChanged'
-    | 'recordingHotkeyResponse'
-    | 'recordingHotkeyChanged'
-    | 'recordingHotkeyPressed'
-    | 'certificateTrustChanged';
-
-export interface IncomingWSMessage {
-    type: IncomingMessageType;
-    [key: string]: unknown;
-}
-
-export interface SourcesWSMessage extends IncomingWSMessage {
-    type: 'sourcesInitial' | 'sourcesUpdated';
-    sources: Source[];
-}
-
-export interface RulesUpdateWSMessage extends IncomingWSMessage {
-    type: 'rules-update';
-    data: {
-        rules: RulesData;
-        [key: string]: unknown;
-    };
-}
-
 // ── Rules data from desktop app (matches rules.ts) ─────────────────
-
-export type RuleType = 'header' | 'payload' | 'url';
 
 export type MatchType = 'contains' | 'regex' | 'exact';
 
@@ -198,44 +166,6 @@ export interface RulesData {
     response?: Array<HeaderRuleFromApp | PayloadRuleFromApp | UrlRuleFromApp>;
     [key: string]: unknown;
 }
-
-// ── Outgoing WebSocket messages ────────────────────────────────────
-
-export interface BrowserInfoMessage {
-    type: 'browserInfo';
-    browser: string;
-    version: string;
-    extensionVersion: string;
-    platform?: string;
-    userAgent?: string;
-}
-
-export interface RequestRulesMessage {
-    type: 'requestRules';
-}
-
-export interface RulesUpdateOutMessage {
-    type: 'rules-update';
-    data: unknown;
-}
-
-export interface SaveWorkflowMessage {
-    type: 'saveWorkflow';
-    recording: unknown;
-}
-
-export interface FocusAppMessage {
-    type: 'focusApp';
-    navigation?: string;
-}
-
-export type OutgoingWSMessage =
-    | BrowserInfoMessage
-    | RequestRulesMessage
-    | RulesUpdateOutMessage
-    | SaveWorkflowMessage
-    | FocusAppMessage
-    | { type: string; [key: string]: unknown };
 
 // ── Connection state ───────────────────────────────────────────────
 

@@ -45,7 +45,6 @@ function copyAssetsPlugin() {
         // Recording
         { from: 'src/assets/recording/inject/recorder-rrweb.js', to: 'js/recording/inject/recorder.js' },
         { from: 'src/assets/recording/inject/recording-widget.js', to: 'js/recording/inject/recording-widget.js' },
-        { from: 'src/assets/recording/viewer/record-viewer.html', to: 'record-viewer.html' },
         // Vendored libs
         { from: 'src/assets/lib/rrweb.js', to: 'js/lib/rrweb.js' },
         { from: 'src/assets/lib/rrweb-player.js', to: 'js/lib/rrweb-player.js' },
@@ -86,14 +85,14 @@ function buildContentScriptPlugin() {
             await viteBuild({
                 configFile: false,
                 build: {
-                    outDir: `dist/${browser}/js/content/record-recorder`,
+                    outDir: `dist/${browser}/js/content/workflow-recorder`,
                     emptyOutDir: false,
                     minify: false,
                     sourcemap: browser === 'firefox' ? 'inline' : false,
                     lib: {
-                        entry: path.resolve(__dirname, 'src/assets/recording/content/record-recorder.js'),
+                        entry: path.resolve(__dirname, 'src/assets/recording/content/workflow-recorder.js'),
                         formats: ['iife'],
-                        name: 'RecordRecorder',
+                        name: 'WorkflowRecorder',
                         fileName: () => 'index.js',
                     },
                     rollupOptions: {

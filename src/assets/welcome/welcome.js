@@ -90,7 +90,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Add proper connecting lines for non-Firefox browsers
             const stepAppInstall = document.getElementById('step-app-install');
-            const stepConnection = document.getElementById('step-connection');
 
             if (stepAppInstall) {
                 const stepLine = stepAppInstall.querySelector('.step-line');

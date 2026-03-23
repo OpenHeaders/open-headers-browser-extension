@@ -16,8 +16,6 @@ export const NewMessageTypes = {
   RECORDING_DATA: 'RECORDING_DATA'
 } as const;
 
-export type NewMessageType = typeof NewMessageTypes[keyof typeof NewMessageTypes];
-
 interface UIMessage {
   type: string;
   tabId?: number;

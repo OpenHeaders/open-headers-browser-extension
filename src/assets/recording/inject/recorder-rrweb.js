@@ -15,7 +15,6 @@
   
   let isRecording = false;
   let stopRrweb = null;
-  let hasInitialStorage = false;
   
   // Console monitoring
   const originalConsole = {

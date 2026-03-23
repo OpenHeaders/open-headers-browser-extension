@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { normalizeHeaderName, generateUniqueId } from '../../src/utils/utils';
+import { normalizeHeaderName } from '../../src/utils/utils';
 import { generateSourcesHash, generateSavedDataHash, debounce } from '../../src/background/modules/utils';
 import { formatUrlPattern } from '../../src/background/header-manager';
 import type { SavedDataMap } from '../../src/types/header';
@@ -86,23 +86,6 @@ describe('normalizeHeaderName', () => {
         expect(normalizeHeaderName('x-b3-traceid')).toBe('X-B3-Traceid');
         expect(normalizeHeaderName('x-amz-security-token')).toBe('X-Amz-Security-Token');
         expect(normalizeHeaderName('x-correlation-id')).toBe('X-Correlation-Id');
-    });
-});
-
-// ---------------------------------------------------------------------------
-//  generateUniqueId
-// ---------------------------------------------------------------------------
-
-describe('generateUniqueId', () => {
-    it('returns a non-empty string', () => {
-        const id = generateUniqueId();
-        expect(id).toBeTruthy();
-        expect(typeof id).toBe('string');
-    });
-
-    it('generates unique values across 100 calls', () => {
-        const ids = new Set(Array.from({ length: 100 }, () => generateUniqueId()));
-        expect(ids.size).toBe(100);
     });
 });
 

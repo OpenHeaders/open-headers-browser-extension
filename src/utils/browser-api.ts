@@ -268,8 +268,6 @@ export const windows = browserAPI.windows ? {
 } : null;
 
 type WebNavigationListener = (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => void;
-type WebNavigationReplacedListener = (details: { replacedTabId: number; tabId: number; timeStamp: number }) => void;
-
 // Cross-browser webNavigation API
 export const webNavigation = browserAPI.webNavigation ? {
   onCommitted: browserAPI.webNavigation.onCommitted ? {

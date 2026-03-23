@@ -72,17 +72,8 @@ export async function startRecording(useWidget = false): Promise<StartRecordingR
 
   const recordId = `record-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  try {
-    await browserAPI.scripting.executeScript({
-      target: { tabId: tab.id! },
-      files: ['js/content/record-recorder/index.js']
-    });
-  } catch (e) {
-    throw new Error('Cannot inject workflow script on this page');
-  }
-
-  await new Promise(resolve => setTimeout(resolve, 100));
-
+  // Single authority: background owns all start transitions.
+  // It will inject the content script and notify it as part of its start flow.
   try {
     await browserAPI.runtime.sendMessage({
       type: MESSAGE_TYPES.START_RECORDING,
@@ -94,38 +85,19 @@ export async function startRecording(useWidget = false): Promise<StartRecordingR
     throw new Error('Failed to start workflow in background');
   }
 
-  try {
-    await browserAPI.tabs.sendMessage(tab.id!, {
-      type: MESSAGE_TYPES.START_RECORDING,
-      recordId: recordId,
-      useWidget: useWidget
-    });
-    return { success: true, recordId };
-  } catch (e) {
-    throw e as Error;
-  }
+  return { success: true, recordId };
 }
 
 export async function stopRecording(): Promise<{ success: boolean }> {
   const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
   if (!tab) throw new Error('No active tab found');
 
-  try {
-    await browserAPI.runtime.sendMessage({
-      type: 'STOP_RECORDING',
-      tabId: tab.id
-    });
-  } catch (e) {
-    // Ignore
-  }
-
-  try {
-    await browserAPI.tabs.sendMessage(tab.id!, {
-      type: MESSAGE_TYPES.STOP_RECORDING
-    });
-  } catch (e) {
-    // Content script might not be loaded, that's ok
-  }
+  // Single authority: background owns all stop transitions.
+  // It will notify the content script as part of its stop flow.
+  await browserAPI.runtime.sendMessage({
+    type: 'STOP_RECORDING',
+    tabId: tab.id
+  });
 
   return { success: true };
 }

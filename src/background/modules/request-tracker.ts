@@ -32,12 +32,6 @@ function ensureCache(callback: (data: SavedDataMap) => void): void {
     });
 }
 
-/** Invalidate the cache — next access will re-read from storage */
-export function invalidateSavedDataCache(): void {
-    cacheInitialized = false;
-    cachedSavedData = null;
-}
-
 /** Force-refresh the cache from storage right now and pre-compile URL patterns */
 export function refreshSavedDataCache(callback?: () => void): void {
     getChunkedData('savedData', (data: SavedDataMap | null) => {
@@ -111,9 +105,6 @@ export async function getActiveRulesForTab(tabId: number | undefined, tabUrl: st
         return [];
     }
 
-    const urlObj = new URL(tabUrl);
-    const _tabDomain = urlObj.hostname;
-
     // Get tracked domains for this tab (indirect matches)
     const trackedDomains: string[] = [];
     if (tabId && tabsWithActiveRules.has(tabId)) {
@@ -182,24 +173,6 @@ export async function getActiveRulesForTab(tabId: number | undefined, tabUrl: st
             resolve(activeRules);
         });
     });
-}
-
-/**
- * Check if any rules apply to the current tab
- */
-export async function checkRulesForTab(tabUrl: string): Promise<boolean> {
-    // Get current tab
-    const currentTab = await new Promise<chrome.tabs.Tab | undefined>((resolve) => {
-        tabs.query({ active: true, currentWindow: true }, (tabsList: chrome.tabs.Tab[]) => {
-            resolve(tabsList[0]);
-        });
-    });
-
-    if (!currentTab) return false;
-
-    // Use the centralized function
-    const activeRules = await getActiveRulesForTab(currentTab.id, tabUrl);
-    return activeRules.length > 0;
 }
 
 /**
@@ -323,13 +296,6 @@ export function addTrackedUrl(tabId: number, url: string): void {
     }
 
     trackedUrls.add(url);
-}
-
-/**
- * Clear tracking for a tab
- */
-export function clearTabTracking(tabId: number): void {
-    tabsWithActiveRules.delete(tabId);
 }
 
 /**

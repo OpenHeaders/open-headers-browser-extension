@@ -216,9 +216,6 @@ export function handleGeneralMessage(
                         // Clear all request tracking
                         clearAllTracking();
 
-                        // Get current sources (existing ones will be preserved)
-                        const currentSources = getCurrentSources();
-
                         // Update network rules with existing sources
                         scheduleUpdate('import', { immediate: true });
 

@@ -1,6 +1,9 @@
 /**
- * Recording State Machine
- * Adapted from .recording-extension for compatibility with existing UI
+ * Recording State Machine — pure state container.
+ *
+ * Owns ONLY state transitions and validity checks.
+ * Has NO side effects (no tab messaging, no I/O).
+ * The RecordingService is responsible for acting on state changes.
  */
 
 import { logger } from '../../../utils/logger';
@@ -17,7 +20,7 @@ export const RecordingStates = {
 
 export type RecordingStateValue = typeof RecordingStates[keyof typeof RecordingStates];
 
-type TransitionEvent = 'START_RECORDING' | 'RECORDING_READY' | 'START_PRE_NAV' |
+export type TransitionEvent = 'START_RECORDING' | 'RECORDING_READY' | 'START_PRE_NAV' |
   'NAVIGATION_COMMITTED' | 'STOP_RECORDING' | 'RECORDING_STOPPED' | 'ERROR' | 'RESET';
 
 interface Transition {
@@ -66,27 +69,25 @@ export class RecordingStateMachine {
     return this.tabStates.get(tabId)!;
   }
 
-  canTransition(tabId: number, event: TransitionEvent): boolean {
-    const currentState = this.getTabState(tabId).state;
-    return this.transitions.some(t =>
-      t.event === event && t.from.includes(currentState)
-    );
-  }
-
-  transition(tabId: number, event: TransitionEvent, data?: { error?: string } | null): boolean {
+  /**
+   * Atomic transition: checks validity and transitions in one call.
+   * Returns the new state value on success, or null if the transition is invalid.
+   */
+  tryTransition(tabId: number, event: TransitionEvent, data?: { error?: string } | null): RecordingStateValue | null {
     const currentState = this.getTabState(tabId);
     const transition = this.transitions.find(t =>
       t.event === event && t.from.includes(currentState.state)
     );
 
     if (!transition) {
-      logger.warn('StateMachine', `Invalid transition: ${currentState.state} -> ${event}`);
-      return false;
+      logger.warn('StateMachine', `Invalid transition: ${currentState.state} -> ${event} (tab ${tabId})`);
+      return null;
     }
 
-    logger.debug('StateMachine', `Tab ${tabId}: ${currentState.state} -> ${transition.to} (${event})`);
-
+    const previousState = currentState.state;
     currentState.state = transition.to;
+
+    logger.debug('StateMachine', `Tab ${tabId}: ${previousState} -> ${transition.to} (${event})`);
 
     switch (transition.to) {
       case RecordingStates.STARTING:
@@ -105,9 +106,7 @@ export class RecordingStateMachine {
         break;
     }
 
-    this.notifyTab(tabId, currentState);
-
-    return true;
+    return transition.to;
   }
 
   setRecording(tabId: number, recording: RecordingState): void {
@@ -116,36 +115,7 @@ export class RecordingStateMachine {
   }
 
   private generateToken(): string {
-    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private async notifyTab(tabId: number, state: TabState): Promise<void> {
-    const currentState: RecordingStateValue = state.state;
-    if (currentState === RecordingStates.PRE_NAVIGATION) {
-      return;
-    }
-
-    try {
-      await chrome.tabs.sendMessage(tabId, {
-        type: 'RECORDING_STATE_CHANGED',
-        action: 'recordingStateChanged',
-        data: {
-          state: currentState,
-          isRecording: currentState === RecordingStates.RECORDING || currentState === (RecordingStates.PRE_NAVIGATION as string),
-          isPreNav: currentState === (RecordingStates.PRE_NAVIGATION as string),
-          recordingId: state.recording?.recordId,
-          startTime: state.recording?.actualStartTime || state.recording?.startTime
-        }
-      });
-    } catch (error) {
-      const err = error as Error;
-      if (!err.message?.includes('tab') &&
-          !err.message?.includes('context') &&
-          !err.message?.includes('receiving end does not exist') &&
-          !err.message?.includes('Could not establish connection')) {
-        logger.info('StateMachine', `Could not notify tab ${tabId}:`, err.message);
-      }
-    }
+    return `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
 
   isRecording(tabId: number): boolean {
