@@ -124,7 +124,9 @@ alarms!.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
         logger.debug('Background', 'Keep alive ping');
 
         if (!isWebSocketConnected() && !isWebSocketConnecting()) {
-            logger.info('Background', 'WebSocket disconnected, reconnecting via keepAlive...');
+            const attempts = getReconnectAttempts();
+            const log = attempts <= 1 ? logger.info : logger.debug;
+            log.call(logger, 'Background', 'WebSocket disconnected, reconnecting via keepAlive...');
             try {
                 await connectWebSocket();
             } catch (error) {

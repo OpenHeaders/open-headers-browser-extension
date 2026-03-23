@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let connectionSuccessful = false;
     let appRunning = false;
     let appCheckInterval = null;
+    let appCheckAttempts = 0;
     let currentBrowser = 'unknown';
 
     /**
@@ -229,7 +230,10 @@ document.addEventListener('DOMContentLoaded', function() {
      * Check if the local app is running by asking the background script
      */
     function checkAppRunning() {
-        console.log(new Date().toISOString(), 'INFO ', '[WelcomePage]', 'Checking if local app is running via background script...');
+        appCheckAttempts++;
+        if (appCheckAttempts <= 1) {
+            console.log(new Date().toISOString(), 'INFO ', '[WelcomePage]', 'Checking if local app is running via background script...');
+        }
 
         // Use browser messaging to check connection status
         const messageAPI = typeof browser !== 'undefined' ? browser : chrome;

@@ -413,7 +413,8 @@ function sendBrowserInfoAndRequestRules(): void {
  * Standard WebSocket connection implementation
  */
 function connectStandardWebSocket(url: string, onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    logger.info('WebSocket', 'Starting WebSocket connection using URL:', url);
+    const log = reconnectAttempts === 0 ? logger.info : logger.debug;
+    log.call(logger, 'WebSocket', 'Starting WebSocket connection using URL:', url);
 
     checkServerReachable(url).then(isReachable => {
         if (!isReachable) {
@@ -531,7 +532,8 @@ function connectWebSocketFirefox(onSourcesReceived: OnSourcesReceivedCallback | 
  * Connect to WSS endpoint for Firefox
  */
 function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    logger.info('WebSocket', 'Starting Firefox WebSocket connection using WSS');
+    const log = reconnectAttempts === 0 ? logger.info : logger.debug;
+    log.call(logger, 'WebSocket', 'Starting Firefox WebSocket connection using WSS');
 
     checkServerReachable(WSS_SERVER_URL).then(isReachable => {
         if (!isReachable) {
@@ -610,7 +612,8 @@ function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefi
  * Connect to WS endpoint for Firefox (fallback)
  */
 function connectFirefoxWs(onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    logger.info('WebSocket', 'Starting Firefox WebSocket connection using WS (fallback)');
+    const log = reconnectAttempts === 0 ? logger.info : logger.debug;
+    log.call(logger, 'WebSocket', 'Starting Firefox WebSocket connection using WS (fallback)');
 
     checkServerReachable(WS_SERVER_URL).then(isReachable => {
         if (!isReachable) {
