@@ -3,8 +3,7 @@ import {
   Table, Tag, Space, Button, Switch, Tooltip, Input, Typography, Empty, App, Dropdown
 } from 'antd';
 import {
-  EditOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined,
-  DisconnectOutlined, WarningOutlined, ExclamationCircleOutlined,
+  EditOutlined, DeleteOutlined, FileTextOutlined, ExclamationCircleOutlined,
   PlusOutlined, DownOutlined, SwapOutlined, ApiOutlined, LinkOutlined,
   StopOutlined, MoreOutlined, SendOutlined, CodeOutlined
 } from '@ant-design/icons';
@@ -31,22 +30,16 @@ interface TableRecord {
   suffix: string;
   isResponse: boolean | undefined;
   isEnabled: boolean;
-  dynamicValue: string;
   sourceInfo: string;
   sourceTag: string;
-  sourceAvailable: boolean;
-  sourceConnected: boolean;
   placeholderType: PlaceholderType;
   actualValue: string;
   tag: string;
 }
 
 interface DynamicValueInfo {
-  value: string;
   sourceInfo: string;
   sourceTag: string;
-  available: boolean;
-  connected: boolean;
   placeholderType: PlaceholderType;
   actualValue: string;
 }
@@ -56,7 +49,7 @@ const HeaderTable: React.FC = () => {
   const appLauncher = getAppLauncher();
 
   const {
-    headerEntries, dynamicSources, isConnected, rulesFromApp, uiState, updateUiState
+    headerEntries, dynamicSources, isConnected, uiState, updateUiState
   } = useHeader();
 
   const [searchText, setSearchText] = useState(uiState?.tableState?.searchText || '');
@@ -78,9 +71,9 @@ const HeaderTable: React.FC = () => {
   function getDynamicValueInfo(entry: HeaderEntry, sources: DynamicSource[], connected: boolean): DynamicValueInfo {
     if (!entry.isDynamic || !entry.sourceId) {
       if (!entry.headerValue || !entry.headerValue.trim()) {
-        return { value: '', sourceInfo: '', sourceTag: '', available: true, connected: true, placeholderType: 'empty_value', actualValue: '' };
+        return { sourceInfo: '', sourceTag: '', placeholderType: 'empty_value', actualValue: '' };
       }
-      return { value: entry.headerValue, sourceInfo: '', sourceTag: '', available: true, connected: true, placeholderType: null, actualValue: entry.headerValue };
+      return { sourceInfo: '', sourceTag: '', placeholderType: null, actualValue: entry.headerValue };
     }
 
     const source = sources.find(s =>
@@ -98,18 +91,18 @@ const HeaderTable: React.FC = () => {
     const actualValue = content ? `${entry.prefix || ''}${content}${entry.suffix || ''}` : '';
 
     if (!connected) {
-      return { value: actualValue, sourceInfo, sourceTag, available: false, connected: false, placeholderType: 'app_disconnected', actualValue };
+      return { sourceInfo, sourceTag, placeholderType: 'app_disconnected', actualValue };
     }
 
     if (!source) {
-      return { value: '', sourceInfo, sourceTag, available: false, connected: true, placeholderType: 'source_not_found', actualValue: '' };
+      return { sourceInfo, sourceTag, placeholderType: 'source_not_found', actualValue: '' };
     }
 
     if (!content) {
-      return { value: '', sourceInfo, sourceTag, available: true, connected: true, placeholderType: 'empty_source', actualValue: '' };
+      return { sourceInfo, sourceTag, placeholderType: 'empty_source', actualValue: '' };
     }
 
-    return { value: actualValue, sourceInfo, sourceTag, available: true, connected: true, placeholderType: null, actualValue };
+    return { sourceInfo, sourceTag, placeholderType: null, actualValue };
   }
 
   const dataSource: TableRecord[] = Object.entries(headerEntries).map(([id, entry]) => {
@@ -118,9 +111,8 @@ const HeaderTable: React.FC = () => {
       key: id, id, headerName: entry.headerName, headerValue: entry.headerValue,
       domains: entry.domains || [], isDynamic: entry.isDynamic, sourceId: entry.sourceId,
       prefix: entry.prefix || '', suffix: entry.suffix || '', isResponse: entry.isResponse,
-      isEnabled: entry.isEnabled !== false, dynamicValue: dynamicInfo.value,
+      isEnabled: entry.isEnabled !== false,
       sourceInfo: dynamicInfo.sourceInfo, sourceTag: dynamicInfo.sourceTag,
-      sourceAvailable: dynamicInfo.available, sourceConnected: dynamicInfo.connected,
       placeholderType: dynamicInfo.placeholderType, actualValue: dynamicInfo.actualValue,
       tag: entry.tag || ''
     };
@@ -134,6 +126,7 @@ const HeaderTable: React.FC = () => {
   );
 
   const enabledCount = dataSource.filter(item => item.isEnabled).length;
+  const injectingCount = dataSource.filter(item => item.isEnabled && !item.placeholderType).length;
   const totalCount = dataSource.length;
 
   const handleChange = (_pagination: unknown, filters: Record<string, FilterValue | null>, sorter: SorterResult<TableRecord> | SorterResult<TableRecord>[]) => {
@@ -160,6 +153,16 @@ const HeaderTable: React.FC = () => {
       updateUiState({ tableState: { searchText: '', filteredInfo: {}, sortedInfo: {} as unknown as Record<string, unknown> } });
     }
   };
+
+  const TAG_COLORS = ['blue', 'volcano', 'green', 'purple', 'orange', 'cyan', 'magenta', 'gold', 'geekblue', 'red'] as const;
+
+  function getTagColor(tag: string): string {
+    let hash = 5381;
+    for (let i = 0; i < tag.length; i++) {
+      hash = ((hash * 33) ^ tag.charCodeAt(i)) >>> 0;
+    }
+    return TAG_COLORS[hash % TAG_COLORS.length];
+  }
 
   function getPlaceholderTooltip(type: PlaceholderType, sourceId?: string | number | null): string {
     switch (type) {
@@ -267,10 +270,10 @@ const HeaderTable: React.FC = () => {
       render: (_: unknown, record: TableRecord) => {
         const tagStyle = { margin: '0 0 2px 0', fontSize: '11px' };
         const tags: React.ReactNode[] = [];
-        tags.push(<Tag key="type" color={record.isResponse ? 'blue' : 'green'} style={tagStyle}>{record.isResponse ? 'Res' : 'Req'}</Tag>);
         if (record.tag) {
-          tags.push(<Tag key="custom-tag" color="purple" style={tagStyle}>{record.tag}</Tag>);
+          tags.push(<Tag key="custom-tag" color={getTagColor(record.tag)} style={tagStyle}>{record.tag}</Tag>);
         }
+        tags.push(<Tooltip key="type" title={record.isResponse ? 'Response' : 'Request'}><Tag style={tagStyle}>{record.isResponse ? 'Res' : 'Req'}</Tag></Tooltip>);
         if (record.placeholderType) {
           const tip = getPlaceholderTooltip(record.placeholderType, record.sourceId);
           const placeholderLabel = record.placeholderType === 'app_disconnected' ? 'Offline'
@@ -354,7 +357,7 @@ const HeaderTable: React.FC = () => {
         <div className="header-rules-title">
           <Space align="center" size={8}>
             <Text style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Header Rules</Text>
-            {totalCount > 0 && <Text type="secondary" style={{ fontSize: '12px' }}>{enabledCount} of {totalCount} active</Text>}
+            {totalCount > 0 && <Text type="secondary" style={{ fontSize: '12px' }}>{injectingCount} of {totalCount} active{injectingCount < enabledCount ? `, ${enabledCount - injectingCount} unresolved` : ''}</Text>}
           </Space>
           <Space>
             <Dropdown menu={{ items: addRuleMenuItems }} placement="bottomRight" trigger={['click']}>
@@ -362,10 +365,14 @@ const HeaderTable: React.FC = () => {
                 <Space><PlusOutlined />Add Rule<DownOutlined style={{ fontSize: '10px' }} /></Space>
               </Button>
             </Dropdown>
-            {(searchText || Object.keys(filteredInfo).length > 0 || sortedInfo.columnKey) && (
-                <Button onClick={clearAll} size="small">Clear filters and sorting</Button>
-            )}
-            <Search placeholder="Search headers, values, domains, or tags..." allowClear size="small" style={{ width: 300 }} value={searchText} onChange={(e) => handleSearchChange(e.target.value)} />
+            <div>
+              <Search placeholder="Search anything..." allowClear size="small" style={{ width: 300 }} value={searchText} onChange={(e) => handleSearchChange(e.target.value)} />
+              {(searchText || Object.keys(filteredInfo).length > 0 || sortedInfo.columnKey) && (
+                  <div style={{ textAlign: 'right', marginTop: 2 }}>
+                    <Button onClick={clearAll} type="link" size="small" style={{ fontSize: '11px', padding: 0, height: 'auto' }}>Clear filters and sorting</Button>
+                  </div>
+              )}
+            </div>
           </Space>
         </div>
 
