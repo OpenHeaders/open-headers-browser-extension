@@ -27,7 +27,7 @@ const RulesList: React.FC = () => {
           }
         }
       } catch (error) {
-        console.error('Error getting current tab:', error);
+        console.error(new Date().toISOString(), 'ERROR', '[RulesList]', 'Error getting current tab:', error);
       }
     };
 

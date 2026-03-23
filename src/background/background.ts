@@ -11,7 +11,7 @@ declare const browser: typeof chrome | undefined;
 import { connectWebSocket, getCurrentSources, isWebSocketConnected, isWebSocketConnecting, getReconnectAttempts, sendViaWebSocket, sendRecordingViaWebSocket } from './websocket';
 import { initPauseState, setRulesPaused } from './header-manager';
 import { getChunkedData } from '../utils/storage-chunking.js';
-import { alarms, runtime, storage, tabs, isFirefox } from '../utils/browser-api.js';
+import { alarms, runtime, storage, tabs, isFirefox, isChrome, isEdge, isSafari } from '../utils/browser-api.js';
 import { RecordingService } from '../assets/recording/background/recording-service.js';
 import { logger } from '../utils/logger';
 
@@ -264,7 +264,7 @@ runtime.onStartup.addListener(() => {
 
 runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails) => {
     logger.info('Background', 'Extension installed or updated:', details.reason);
-    logger.info('Background', 'Browser detected:', isFirefox ? 'Firefox' : 'Other');
+    logger.info('Background', 'Browser detected:', isFirefox ? 'Firefox' : isChrome ? 'Chrome' : isEdge ? 'Edge' : isSafari ? 'Safari' : 'Unknown');
 
     if (details.reason === 'install') {
         logger.info('Background', 'Fresh install detected, opening welcome page');

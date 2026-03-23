@@ -59,7 +59,7 @@ const TagManager: React.FC = () => {
     const { runtime } = await import('../../utils/browser-api');
     for (const ruleId of ruleIds) {
       runtime.sendMessage({ type: 'toggleRule', ruleId, enabled }, (response: unknown) => {
-        if (!(response as { success?: boolean })?.success) console.error(`Failed to toggle rule ${ruleId}`);
+        if (!(response as { success?: boolean })?.success) console.error(new Date().toISOString(), `ERROR`, `[TagManager]`, `Failed to toggle rule ${ruleId}`);
       });
     }
     message.success(`${enabled ? 'Enabled' : 'Disabled'} ${ruleIds.length} rules in "${groupData.name}"`);

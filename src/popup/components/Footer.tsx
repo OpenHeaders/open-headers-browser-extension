@@ -33,7 +33,7 @@ const Footer: React.FC = () => {
   useEffect(() => {
     const browserAPI = getBrowserAPI();
     browserAPI.storage.sync.get(['useRecordingWidget', 'isRulesExecutionPaused'], (result: Record<string, unknown>) => {
-      if (browserAPI.runtime.lastError) { console.error('Error loading preferences:', browserAPI.runtime.lastError); return; }
+      if (browserAPI.runtime.lastError) { console.error(new Date().toISOString(), 'ERROR', '[Footer]', 'Error loading preferences:', browserAPI.runtime.lastError); return; }
       if (result.useRecordingWidget !== undefined) setUseWidget(result.useRecordingWidget as boolean);
       if (result.isRulesExecutionPaused !== undefined) setIsRulesExecutionPaused(result.isRulesExecutionPaused as boolean);
     });
@@ -61,7 +61,7 @@ const Footer: React.FC = () => {
     try {
       const response = await sendMessage({ type: 'getVideoRecordingState' });
       if (response && response.enabled !== undefined) setEnableVideoRecording(response.enabled);
-    } catch (error) { console.log('Could not get video recording state:', error); }
+    } catch (error) { console.log(new Date().toISOString(), 'INFO ', '[Footer]', 'Could not get video recording state:', error); }
   };
 
   const checkRecordingHotkey = async () => {
@@ -71,14 +71,14 @@ const Footer: React.FC = () => {
         if (response.hotkey) setRecordingHotkey(formatHotkeyForDisplay(response.hotkey));
         if (response.enabled !== undefined) setRecordingHotkeyEnabled(response.enabled);
       }
-    } catch (error) { console.log('Could not get recording hotkey:', error); }
+    } catch (error) { console.log(new Date().toISOString(), 'INFO ', '[Footer]', 'Could not get recording hotkey:', error); }
   };
 
   const handleWidgetToggle = (checked: boolean) => {
     setUseWidget(checked);
     const browserAPI = getBrowserAPI();
     browserAPI.storage.sync.set({ useRecordingWidget: checked }, () => {
-      if (browserAPI.runtime.lastError) console.error('Error saving widget preference:', browserAPI.runtime.lastError);
+      if (browserAPI.runtime.lastError) console.error(new Date().toISOString(), 'ERROR', '[Footer]', 'Error saving widget preference:', browserAPI.runtime.lastError);
     });
   };
 
@@ -114,7 +114,7 @@ const Footer: React.FC = () => {
   const handleGlobalRulesToggle = async (checked: boolean) => {
     const browserAPI = getBrowserAPI();
     browserAPI.storage.sync.set({ isRulesExecutionPaused: !checked }, () => {
-      if (browserAPI.runtime.lastError) { console.error('Error saving pause state:', browserAPI.runtime.lastError); message.error('Failed to update rules state'); return; }
+      if (browserAPI.runtime.lastError) { console.error(new Date().toISOString(), 'ERROR', '[Footer]', 'Error saving pause state:', browserAPI.runtime.lastError); message.error('Failed to update rules state'); return; }
       setIsRulesExecutionPaused(!checked);
       sendMessage({ type: 'setRulesExecutionPaused', paused: !checked });
       message.success(checked ? 'Rules execution resumed' : 'Rules execution paused');

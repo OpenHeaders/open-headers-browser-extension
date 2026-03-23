@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializePage() {
         // Detect browser
         currentBrowser = detectBrowser();
-        console.log('Detected browser:', currentBrowser);
+        console.log(new Date().toISOString(), 'INFO ', '[WelcomePage]', 'Detected browser:', currentBrowser);
 
         // Show browser-specific elements
         showBrowserSpecificElements();
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
      * Check if the local app is running by asking the background script
      */
     function checkAppRunning() {
-        console.log('Checking if local app is running via background script...');
+        console.log(new Date().toISOString(), 'INFO ', '[WelcomePage]', 'Checking if local app is running via background script...');
 
         // Use browser messaging to check connection status
         const messageAPI = typeof browser !== 'undefined' ? browser : chrome;

@@ -101,7 +101,7 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
 
   const loadHeaderEntries = useCallback((forceRefresh = false) => {
     if (isLoadingRef.current && !forceRefresh) {
-      console.log('HeaderContext: Load already in progress, skipping');
+      console.log(new Date().toISOString(), 'INFO ', '[HeaderContext]', 'HeaderContext: Load already in progress, skipping');
       return;
     }
 
@@ -154,7 +154,7 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
                              Object.keys(changes).some(key => key.startsWith('savedData_chunk_'));
 
         if (hasDataChange) {
-          console.log('HeaderContext: Storage changed, updating entries');
+          console.log(new Date().toISOString(), 'INFO ', '[HeaderContext]', 'HeaderContext: Storage changed, updating entries');
           getChunkedData('savedData', (data) => {
             setHeaderEntries((data || {}) as Record<string, HeaderEntry>);
           });
@@ -166,10 +166,10 @@ export const HeaderProvider: React.FC<HeaderProviderProps> = ({ children }) => {
 
     const messageListener = (message: { type?: string; entries?: Record<string, HeaderEntry> }) => {
       if (message.type === 'dynamicSourcesUpdated') {
-        console.log('HeaderContext: Dynamic sources updated notification received');
+        console.log(new Date().toISOString(), 'INFO ', '[HeaderContext]', 'HeaderContext: Dynamic sources updated notification received');
         loadDynamicSources();
       } else if (message.type === 'headerEntriesUpdated' && message.entries) {
-        console.log('HeaderContext: Header entries updated from app');
+        console.log(new Date().toISOString(), 'INFO ', '[HeaderContext]', 'HeaderContext: Header entries updated from app');
         setHeaderEntries(message.entries);
         setRulesFromApp(true);
       }

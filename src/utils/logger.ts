@@ -1,7 +1,7 @@
 /**
  * Centralized logger with configurable log levels.
  *
- * Output format: [HH:MM:SS.mmm] [LEVEL] [Module          ] message
+ * Output format: 2026-03-23T13:35:17.674Z INFO  [Module] message
  *
  * Log levels (each includes all levels above it):
  * - error: Operation failures and exceptions
@@ -30,8 +30,6 @@ const LEVEL_LABELS: Record<LogLevel, string> = {
     debug: 'DEBUG',
 };
 
-const MODULE_PAD = 16; // Longest module name: RecordingService
-
 let currentLevel: LogLevel = 'info';
 let initialized = false;
 
@@ -39,17 +37,8 @@ function shouldLog(level: LogLevel): boolean {
     return LOG_LEVELS[level] <= LOG_LEVELS[currentLevel];
 }
 
-function timestamp(): string {
-    const now = new Date();
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    const s = String(now.getSeconds()).padStart(2, '0');
-    const ms = String(now.getMilliseconds()).padStart(3, '0');
-    return `${h}:${m}:${s}.${ms}`;
-}
-
 function formatPrefix(level: LogLevel, module: string): string {
-    return `[${timestamp()}] [${LEVEL_LABELS[level]}] [${module.padEnd(MODULE_PAD)}]`;
+    return `${new Date().toISOString()} ${LEVEL_LABELS[level]} [${module}]`;
 }
 
 export const logger = {

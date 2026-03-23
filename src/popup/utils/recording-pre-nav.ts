@@ -43,7 +43,7 @@ export async function startRecordingNewTab(url: string): Promise<PreNavRecording
   await new Promise(resolve => setTimeout(resolve, 100));
 
   // Navigate to the target URL
-  console.log('[RecordingPreNav] Navigating to URL:', url);
+  console.log(new Date().toISOString(), 'INFO ', '[RecordingPreNav]', '[RecordingPreNav] Navigating to URL:', url);
   await browserAPI.tabs.update(tab.id!, { url: url });
 
   return {

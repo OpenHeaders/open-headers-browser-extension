@@ -17,7 +17,7 @@ const AppContent: React.FC = () => {
   const { isDarkMode } = useTheme();
 
   useEffect(() => {
-    console.log('Popup: Establishing connection to background script');
+    console.log(new Date().toISOString(), 'INFO ', '[Popup]', 'Popup: Establishing connection to background script');
 
     let port: chrome.runtime.Port | null = null;
 
@@ -27,23 +27,23 @@ const AppContent: React.FC = () => {
 
       port.onDisconnect.addListener(() => {
         if (browserAPI.runtime.lastError) {
-          console.log('Popup: Port disconnected:', browserAPI.runtime.lastError.message);
+          console.log(new Date().toISOString(), 'INFO ', '[Popup]', 'Popup: Port disconnected:', browserAPI.runtime.lastError.message);
         }
       });
 
       runtime.sendMessage({ type: 'popupOpen' }, (response: unknown) => {
         if (browserAPI.runtime.lastError) {
-          console.log('Popup: Background script not ready yet:', browserAPI.runtime.lastError.message);
+          console.log(new Date().toISOString(), 'INFO ', '[Popup]', 'Popup: Background script not ready yet:', browserAPI.runtime.lastError.message);
         } else if (response) {
-          console.log('Popup: Received response from background');
+          console.log(new Date().toISOString(), 'INFO ', '[Popup]', 'Popup: Received response from background');
         }
       });
     } catch (error) {
-      console.log('Popup: Error connecting to background:', (error as Error).message);
+      console.log(new Date().toISOString(), 'INFO ', '[Popup]', 'Popup: Error connecting to background:', (error as Error).message);
     }
 
     return () => {
-      console.log('Popup: Closing, disconnecting from background');
+      console.log(new Date().toISOString(), 'INFO ', '[Popup]', 'Popup: Closing, disconnecting from background');
       if (port) {
         try {
           port.disconnect();

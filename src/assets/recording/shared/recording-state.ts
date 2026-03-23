@@ -199,7 +199,7 @@ export class RecordingState {
 
       if (!this.firstPageNavigationTime) {
         this.firstPageNavigationTime = timestamp;
-        console.log('[RecordingState] Set firstPageNavigationTime:', timestamp, 'for URL:', url);
+        console.log(new Date().toISOString(), 'INFO ', '[RecordingState]', 'Set firstPageNavigationTime:', timestamp, 'for URL:', url);
       }
     }
 
@@ -273,7 +273,7 @@ export class RecordingState {
       const recentNonSnapshots = nonSnapshots.slice(-this.performance.maxEventsPerPage);
 
       this.accumulated.events = [...snapshots, ...recentNonSnapshots];
-      console.log('[RecordingState] Cleaned up events:', this.accumulated.events.length);
+      console.log(new Date().toISOString(), 'INFO ', '[RecordingState]', 'Cleaned up events:', this.accumulated.events.length);
     }
 
     if (this.accumulated.console.length > 1000) {
@@ -361,7 +361,7 @@ export class RecordingState {
 
     compressed.sort((a, b) => a.timestamp - b.timestamp);
 
-    console.log(`[RecordingState] Compressed ${events.length} events to ${compressed.length} (kept all ${fullSnapshots.length} snapshots)`);
+    console.log(new Date().toISOString(), 'INFO ', '[RecordingState]', `Compressed ${events.length} events to ${compressed.length} (kept all ${fullSnapshots.length} snapshots)`);
     return compressed;
   }
 

@@ -27,7 +27,7 @@ class RecordRecorder {
   setupMessageListeners() {
     // Listen for messages from background
     browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log('[RecordRecorder] Received message:', message.type || message.action);
+      console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Received message:', message.type || message.action);
       
       // Handle both old and new message formats
       const messageType = message.type || message.action;
@@ -70,7 +70,7 @@ class RecordRecorder {
       
       // Handle widget stop button click
       if (event.data?.type === 'OPEN_HEADERS_RECORDING_WIDGET_STOP') {
-        console.log('[RecordRecorder] Widget stop button clicked');
+        console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Widget stop button clicked');
         // Send stop recording message to background
         browserAPI.runtime.sendMessage({
           type: 'STOP_RECORDING_FROM_WIDGET'
@@ -78,7 +78,7 @@ class RecordRecorder {
           // Only log if it's not a context error
           if (!error.message?.includes('context invalidated') && 
               !error.message?.includes('message port closed')) {
-            console.error('[RecordRecorder] Failed to send stop message:', error);
+            console.error(new Date().toISOString(), 'ERROR', '[RecordRecorder]', 'Failed to send stop message:', error);
           }
         });
         return;
@@ -91,7 +91,7 @@ class RecordRecorder {
       
       if (type === 'ready') {
         this.recorderReady = true;
-        console.log('[RecordRecorder] Recorder ready');
+        console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Recorder ready');
         
         // If we're already recording, start the recorder
         if (this.isRecording) {
@@ -113,7 +113,7 @@ class RecordRecorder {
           if (!error.message?.includes('context invalidated') && 
               !error.message?.includes('message port closed') &&
               !error.message?.includes('extension context invalidated')) {
-            console.error('[RecordRecorder] Failed to forward event:', error);
+            console.error(new Date().toISOString(), 'ERROR', '[RecordRecorder]', 'Failed to forward event:', error);
           }
         });
       }
@@ -145,12 +145,12 @@ class RecordRecorder {
         });
       }
     } catch (error) {
-      console.log('[RecordRecorder] Could not notify background:', error);
+      console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Could not notify background:', error);
     }
   }
   
   async handleStartRecording(data) {
-    console.log('[RecordRecorder] Starting recording:', data);
+    console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Starting recording:', data);
     
     this.isRecording = true;
     this.recordId = data.recordId;
@@ -171,7 +171,7 @@ class RecordRecorder {
   }
   
   handleStopRecording() {
-    console.log('[RecordRecorder] Stopping recording');
+    console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Stopping recording');
     
     this.isRecording = false;
     this.recordId = null;
@@ -195,7 +195,7 @@ class RecordRecorder {
   }
   
   handleStateChange(data) {
-    console.log('[RecordRecorder] State changed:', data);
+    console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'State changed:', data);
     
     // Update recording state
     this.isRecording = data.isRecording || false;
@@ -230,7 +230,7 @@ class RecordRecorder {
     const existingRecorder = document.querySelector('script[data-recorder="main"]');
     
     if (existingRrweb && existingRecorder) {
-      console.log('[RecordRecorder] Scripts already injected, triggering re-initialization');
+      console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Scripts already injected, triggering re-initialization');
       // Scripts exist, but we need to re-initialize the recorder
       // Send a re-init message to the existing recorder
       window.postMessage({
@@ -248,7 +248,7 @@ class RecordRecorder {
     
     const target = document.head || document.documentElement;
     if (!target) {
-      console.error('[RecordRecorder] Cannot inject scripts - no injection target');
+      console.error(new Date().toISOString(), 'ERROR', '[RecordRecorder]', 'Cannot inject scripts - no injection target');
       return;
     }
     
@@ -263,7 +263,7 @@ class RecordRecorder {
       await new Promise((resolve) => {
         rrwebScript.onload = resolve;
         rrwebScript.onerror = () => {
-          console.error('[RecordRecorder] Failed to load rrweb');
+          console.error(new Date().toISOString(), 'ERROR', '[RecordRecorder]', 'Failed to load rrweb');
           resolve();
         };
       });
@@ -274,12 +274,12 @@ class RecordRecorder {
       recorderScript.dataset.recorder = 'main';
       target.appendChild(recorderScript);
       
-      console.log('[RecordRecorder] Scripts injected successfully');
+      console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Scripts injected successfully');
       
       // Give scripts time to initialize
       await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
-      console.error('[RecordRecorder] Failed to inject scripts:', error);
+      console.error(new Date().toISOString(), 'ERROR', '[RecordRecorder]', 'Failed to inject scripts:', error);
     }
   }
   
@@ -324,13 +324,13 @@ class RecordRecorder {
   startRecorder() {
     // Avoid double-starting
     if (this.recorderStarted) {
-      console.log('[RecordRecorder] Recorder already started');
+      console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Recorder already started');
       return;
     }
     
     // Check if recorder is ready
     if (!this.recorderReady) {
-      console.log('[RecordRecorder] Recorder not ready yet, will retry...');
+      console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Recorder not ready yet, will retry...');
       setTimeout(() => {
         if (this.isRecording && !this.recorderStarted) {
           this.startRecorder();
@@ -364,7 +364,7 @@ class RecordRecorder {
   }
   
   cleanup() {
-    console.log('[RecordRecorder] Cleaning up...');
+    console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Cleaning up...');
     
     try {
       if (this.isRecording) {
@@ -390,7 +390,7 @@ if (!window.__recordRecorderInitialized) {
   window.__recordRecorderInstance = new RecordRecorder();
 } else {
   // Re-injection detected - cleanup old instance and create new one
-  console.log('[RecordRecorder] Re-injection detected, resetting instance');
+  console.log(new Date().toISOString(), 'INFO ', '[RecordRecorder]', 'Re-injection detected, resetting instance');
   if (window.__recordRecorderInstance) {
     window.__recordRecorderInstance.cleanup();
   }

@@ -8,7 +8,7 @@
   
   // Check if already initialized
   if (window.__openHeadersRecorderRrweb) {
-    console.log('[Recorder-RRWeb] Already initialized');
+    console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'Already initialized');
     return;
   }
   window.__openHeadersRecorderRrweb = true;
@@ -335,7 +335,7 @@
         }
       }
     } catch (e) {
-      console.warn('[Recorder] Failed to capture localStorage:', e);
+      console.warn(new Date().toISOString(), 'WARN ', '[RecorderRRWeb]', 'Failed to capture localStorage:', e);
     }
     
     try {
@@ -346,7 +346,7 @@
         }
       }
     } catch (e) {
-      console.warn('[Recorder] Failed to capture sessionStorage:', e);
+      console.warn(new Date().toISOString(), 'WARN ', '[RecorderRRWeb]', 'Failed to capture sessionStorage:', e);
     }
     
     sendEvent('storage-initial', storageState);
@@ -355,11 +355,11 @@
   // Start rrweb recording
   function startRrwebRecording() {
     if (stopRrweb || !window.rrweb) {
-      console.log('[Recorder] rrweb already recording or not available');
+      console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'rrweb already recording or not available');
       return;
     }
     
-    console.log('[Recorder] Starting rrweb recording...');
+    console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'Starting rrweb recording...');
     
     try {
       stopRrweb = window.rrweb.record({
@@ -374,9 +374,9 @@
         collectFonts: true
       });
       
-      console.log('[Recorder] rrweb recording started');
+      console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'rrweb recording started');
     } catch (error) {
-      console.error('[Recorder] Failed to start rrweb recording:', error);
+      console.error(new Date().toISOString(), 'ERROR', '[RecorderRRWeb]', 'Failed to start rrweb recording:', error);
     }
   }
   
@@ -385,7 +385,7 @@
     if (stopRrweb) {
       stopRrweb();
       stopRrweb = null;
-      console.log('[Recorder] rrweb recording stopped');
+      console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'rrweb recording stopped');
     }
   }
   
@@ -402,11 +402,11 @@
       isRecording = true;
       captureInitialStorageState();
       startRrwebRecording();
-      console.log('[Recorder] Recording started');
+      console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'Recording started');
     } else if (event.data.action === 'stopRecording') {
       isRecording = false;
       stopRrwebRecording();
-      console.log('[Recorder] Recording stopped');
+      console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'Recording stopped');
     } else if (event.data.action === 'ping') {
       // Respond to ping
       window.postMessage({
@@ -415,7 +415,7 @@
       }, '*');
     } else if (event.data.action === 'reinitRecorder') {
       // Re-initialization requested (for re-injection scenarios)
-      console.log('[Recorder] Re-initializing recorder');
+      console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'Re-initializing recorder');
       // Stop any existing recording
       if (isRecording) {
         isRecording = false;
@@ -429,7 +429,7 @@
     }
   });
   
-  console.log('[Recorder-RRWeb] Initialized and ready');
+  console.log(new Date().toISOString(), 'INFO ', '[RecorderRRWeb]', 'Initialized and ready');
   
   // Notify content script that we're ready
   window.postMessage({

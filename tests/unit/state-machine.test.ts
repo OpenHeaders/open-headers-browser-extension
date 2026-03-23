@@ -3,6 +3,15 @@ import { RecordingStateMachine, RecordingStates } from '../../src/assets/recordi
 import type { RecordingStateValue } from '../../src/assets/recording/shared/state-machine';
 import { RecordingState } from '../../src/assets/recording/shared/recording-state';
 
+vi.mock('../../src/utils/logger', () => ({
+    logger: {
+        info: vi.fn(),
+        debug: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+    },
+}));
+
 const TAB_ID_PRIMARY = 101;
 const TAB_ID_SECONDARY = 202;
 const TAB_ID_TERTIARY = 303;
@@ -27,9 +36,6 @@ describe('RecordingStateMachine', () => {
   beforeEach(() => {
     sm = makeStateMachine();
     vi.clearAllMocks();
-    // Suppress console.warn and console.log from state machine
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   describe('constructor', () => {

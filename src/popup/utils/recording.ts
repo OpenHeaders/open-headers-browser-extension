@@ -141,27 +141,27 @@ export async function getRecordingState(): Promise<RecordingStateResult> {
         tabId: tab.id
       });
 
-      console.log('[Recording] Background state response:', response);
+      console.log(new Date().toISOString(), 'INFO ', '[Recording]', '[Recording] Background state response:', response);
 
       if (response && (response as RecordingStateResult).isRecording) {
         return response as RecordingStateResult;
       }
     } catch (e) {
-      console.log('[Recording] Background state check failed:', e);
+      console.log(new Date().toISOString(), 'INFO ', '[Recording]', '[Recording] Background state check failed:', e);
     }
 
     try {
       const response = await browserAPI.tabs.sendMessage(tab.id!, {
         type: MESSAGE_TYPES.GET_RECORDING_STATE
       });
-      console.log('[Recording] Content script state response:', response);
+      console.log(new Date().toISOString(), 'INFO ', '[Recording]', '[Recording] Content script state response:', response);
       return (response as RecordingStateResult) || { isRecording: false };
     } catch (e) {
-      console.log('[Recording] Content script state check failed:', e);
+      console.log(new Date().toISOString(), 'INFO ', '[Recording]', '[Recording] Content script state check failed:', e);
       return { isRecording: false };
     }
   } catch (error) {
-    console.log('[Recording] getRecordingState error:', error);
+    console.log(new Date().toISOString(), 'INFO ', '[Recording]', '[Recording] getRecordingState error:', error);
     return { isRecording: false };
   }
 }

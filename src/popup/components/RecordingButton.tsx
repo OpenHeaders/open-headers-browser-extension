@@ -63,7 +63,7 @@ const RecordingButton: React.FC<RecordingButtonProps> = ({ useWidget = false }) 
                 }
             }
         } catch (error) {
-            console.error('Recording error:', error);
+            console.error(new Date().toISOString(), 'ERROR', '[RecordingButton]', 'Recording error:', error);
             message.error((error as Error).message || 'Failed to start workflow');
         } finally {
             setIsLoading(false);

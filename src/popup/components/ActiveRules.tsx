@@ -51,7 +51,7 @@ const ActiveRules: React.FC = () => {
           setCurrentTab({ id: tab.id!, url: tab.url!, domain: url.hostname, title: tab.title || '' });
           setActiveRules(response.activeRules || []);
         }
-      } catch (error) { console.error('Error getting active rules:', error); setActiveRules([]); }
+      } catch (error) { console.error(new Date().toISOString(), 'ERROR', '[ActiveRules]', 'Error getting active rules:', error); setActiveRules([]); }
       finally { setLoading(false); }
     };
 
