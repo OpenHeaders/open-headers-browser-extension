@@ -78,13 +78,9 @@ const HeaderTable: React.FC = () => {
   function getDynamicValueInfo(entry: HeaderEntry, sources: DynamicSource[], connected: boolean): DynamicValueInfo {
     if (!entry.isDynamic || !entry.sourceId) {
       if (!entry.headerValue || !entry.headerValue.trim()) {
-        return { value: entry.headerValue, sourceInfo: '', sourceTag: '', available: true, connected: true, placeholderType: 'empty_value', actualValue: '[EMPTY_VALUE]' };
+        return { value: '', sourceInfo: '', sourceTag: '', available: true, connected: true, placeholderType: 'empty_value', actualValue: '' };
       }
       return { value: entry.headerValue, sourceInfo: '', sourceTag: '', available: true, connected: true, placeholderType: null, actualValue: entry.headerValue };
-    }
-
-    if (!connected) {
-      return { value: '[APP_DISCONNECTED]', sourceInfo: 'App disconnected', sourceTag: '', available: false, connected: false, placeholderType: 'app_disconnected', actualValue: '[APP_DISCONNECTED]' };
     }
 
     const source = sources.find(s =>
@@ -92,28 +88,28 @@ const HeaderTable: React.FC = () => {
         (s.locationId?.toString() === entry.sourceId?.toString())
     );
 
-    if (!source) {
-      return { value: `[SOURCE_NOT_FOUND:${entry.sourceId}]`, sourceInfo: `Source #${entry.sourceId} (removed)`, sourceTag: '', available: false, connected: true, placeholderType: 'source_not_found', actualValue: `[SOURCE_NOT_FOUND:${entry.sourceId}]` };
-    }
-
-    const content = source.sourceContent || source.locationContent || '';
-    let actualValue: string;
-    let placeholderType: PlaceholderType = null;
-
-    if (!content) {
-      actualValue = `[EMPTY_SOURCE:${entry.sourceId}]`;
-      placeholderType = 'empty_source';
-    } else {
-      actualValue = `${entry.prefix || ''}${content}${entry.suffix || ''}`;
-    }
-
-    const sourceTag = source.sourceTag || source.locationTag || '';
-    const sourcePath = source.sourcePath || source.locationPath || source.sourceUrl || source.locationUrl || '';
-    const sourceType = source.sourceType || source.locationType || '';
+    const sourceTag = source ? (source.sourceTag || source.locationTag || '') : '';
+    const sourcePath = source ? (source.sourcePath || source.locationPath || source.sourceUrl || source.locationUrl || '') : '';
+    const sourceType = source ? (source.sourceType || source.locationType || '') : '';
     const displayPath = sourceType.toLowerCase().includes('env') && sourcePath && !sourcePath.startsWith('$')
         ? `$${sourcePath}` : sourcePath;
+    const sourceInfo = displayPath || `Source #${entry.sourceId}`;
+    const content = source ? (source.sourceContent || source.locationContent || '') : '';
+    const actualValue = content ? `${entry.prefix || ''}${content}${entry.suffix || ''}` : '';
 
-    return { value: actualValue, sourceInfo: displayPath, sourceTag, available: true, connected: true, placeholderType, actualValue };
+    if (!connected) {
+      return { value: actualValue, sourceInfo, sourceTag, available: false, connected: false, placeholderType: 'app_disconnected', actualValue };
+    }
+
+    if (!source) {
+      return { value: '', sourceInfo, sourceTag, available: false, connected: true, placeholderType: 'source_not_found', actualValue: '' };
+    }
+
+    if (!content) {
+      return { value: '', sourceInfo, sourceTag, available: true, connected: true, placeholderType: 'empty_source', actualValue: '' };
+    }
+
+    return { value: actualValue, sourceInfo, sourceTag, available: true, connected: true, placeholderType: null, actualValue };
   }
 
   const dataSource: TableRecord[] = Object.entries(headerEntries).map(([id, entry]) => {
@@ -165,6 +161,16 @@ const HeaderTable: React.FC = () => {
     }
   };
 
+  function getPlaceholderTooltip(type: PlaceholderType, sourceId?: string | number | null): string {
+    switch (type) {
+      case 'app_disconnected': return 'Not injecting — app disconnected. Will resume when reconnected.';
+      case 'source_not_found': return `Not injecting — source #${sourceId} was deleted. Recreate to resume.`;
+      case 'empty_source': return `Not injecting — source #${sourceId} is empty. Will resume when it has content.`;
+      case 'empty_value': return 'Not injecting — header value is empty. Set a value to activate.';
+      default: return '';
+    }
+  }
+
   const columns: ColumnsType<TableRecord> = [
     {
       title: 'Header Name', dataIndex: 'headerName', key: 'headerName', width: 160, fixed: 'left',
@@ -176,11 +182,12 @@ const HeaderTable: React.FC = () => {
       sortOrder: sortedInfo.columnKey === 'headerName' ? sortedInfo.order : null,
       render: (text: string, record: TableRecord) => {
         const hasPlaceholder = record.placeholderType && record.isEnabled;
+        const tooltipMessage = hasPlaceholder ? getPlaceholderTooltip(record.placeholderType, record.sourceId) : '';
         return (
             <Space align="center">
               <Text strong style={{ fontSize: '13px' }}>{text}</Text>
               {hasPlaceholder && (
-                  <Tooltip title="This header is being sent with a diagnostic placeholder value">
+                  <Tooltip title={tooltipMessage}>
                     <ExclamationCircleOutlined style={{ color: '#ff4d4f', fontSize: '12px' }} />
                   </Tooltip>
               )}
@@ -189,45 +196,20 @@ const HeaderTable: React.FC = () => {
       },
     },
     {
-      title: 'Value', dataIndex: 'actualValue', key: 'actualValue', width: 200,
+      title: 'Value', dataIndex: 'actualValue', key: 'actualValue', width: 150,
       sorter: (a, b) => (a.actualValue || '').localeCompare(b.actualValue || ''),
       sortOrder: sortedInfo.columnKey === 'actualValue' ? sortedInfo.order : null,
       render: (text: string, record: TableRecord) => {
-        const hasPlaceholder = record.placeholderType;
-        let tooltipMessage: string | null = null;
-        let textColor: "warning" | "danger" | "secondary" | undefined = undefined;
-        let icon: React.ReactNode = null;
-
-        if (hasPlaceholder) {
-          switch (record.placeholderType) {
-            case 'app_disconnected':
-              tooltipMessage = "Sending '[APP_DISCONNECTED]' because the local app is not connected";
-              textColor = "warning"; icon = <DisconnectOutlined style={{ marginRight: 4 }} />; break;
-            case 'source_not_found':
-              tooltipMessage = `Sending '[SOURCE_NOT_FOUND:${record.sourceId}]' because the source was deleted`;
-              textColor = "danger"; icon = <WarningOutlined style={{ marginRight: 4 }} />; break;
-            case 'empty_source':
-              tooltipMessage = `Sending '[EMPTY_SOURCE:${record.sourceId}]' because the source value is empty`;
-              textColor = "secondary"; icon = <ExclamationCircleOutlined style={{ marginRight: 4 }} />; break;
-            case 'empty_value':
-              tooltipMessage = "Sending '[EMPTY_VALUE]' because the header value is empty";
-              textColor = "secondary"; icon = <ExclamationCircleOutlined style={{ marginRight: 4 }} />; break;
-          }
-        }
-
         let displayValue = text || '';
-        const shouldTrim = !hasPlaceholder && displayValue.length > 20;
-        if (shouldTrim) {
+        if (displayValue.length > 20) {
           displayValue = `${displayValue.substring(0, 10)}...${displayValue.substring(displayValue.length - 5)}`;
         }
 
-        const content = (
-          <Text type={textColor} style={{ display: 'block', fontSize: '13px', fontFamily: hasPlaceholder ? 'monospace' : 'inherit', opacity: record.isEnabled ? 1 : 0.5, cursor: hasPlaceholder ? 'help' : 'default' }}>
-            {icon}{displayValue}
+        return (
+          <Text style={{ display: 'block', fontSize: '13px', opacity: record.isEnabled ? 1 : 0.5 }}>
+            {displayValue}
           </Text>
         );
-
-        return tooltipMessage ? <Tooltip title={tooltipMessage}>{content}</Tooltip> : content;
       },
     },
     {
@@ -237,19 +219,19 @@ const HeaderTable: React.FC = () => {
       filteredValue: filteredInfo.domains || null, filterSearch: true,
       onFilter: (value, record) => record.domains.includes(value as string),
       sortOrder: sortedInfo.columnKey === 'domains' ? sortedInfo.order : null,
-      render: (domains: string[]) => (
-          <Space direction="vertical" size={1}>
-            {domains.slice(0, 1).map(domain => (
-                <Tag key={domain} style={{ fontSize: '12px' }}>{domain.length > 18 ? `${domain.substring(0, 18)}...` : domain}</Tag>
-            ))}
-            {domains.length > 1 && (
-                <Tooltip title={domains.slice(1).join(', ')}><Tag style={{ fontSize: '11px' }}>+{domains.length - 1} more</Tag></Tooltip>
-            )}
-          </Space>
-      ),
+      render: (domains: string[]) => {
+        if (domains.length === 0) return null;
+        const first = domains[0].length > 18 ? `${domains[0].substring(0, 18)}...` : domains[0];
+        const label = domains.length === 1 ? first : `${first} +${domains.length - 1}`;
+        return (
+          <Tooltip title={domains.map((d, i) => <div key={i}>{d}</div>)}>
+            <Tag style={{ fontSize: '12px', cursor: 'default' }}>{label}</Tag>
+          </Tooltip>
+        );
+      },
     },
     {
-      title: 'Tags', key: 'tags', width: 100, align: 'center',
+      title: 'Tags', key: 'tags', width: 150, align: 'center',
       sorter: (a, b) => {
         const tagA = `${a.isResponse ? 'Response' : 'Request'}${a.tag ? `-${a.tag}` : ''}`;
         const tagB = `${b.isResponse ? 'Response' : 'Request'}${b.tag ? `-${b.tag}` : ''}`;
@@ -283,24 +265,20 @@ const HeaderTable: React.FC = () => {
       },
       sortOrder: sortedInfo.columnKey === 'tags' ? sortedInfo.order : null,
       render: (_: unknown, record: TableRecord) => {
+        const tagStyle = { margin: '0 0 2px 0', fontSize: '11px' };
         const tags: React.ReactNode[] = [];
-        tags.push(<Tag key="type" color={record.isResponse ? 'blue' : 'green'} style={{ margin: '0 0 2px 0', fontSize: '11px' }}>{record.isResponse ? 'Response' : 'Request'}</Tag>);
+        tags.push(<Tag key="type" color={record.isResponse ? 'blue' : 'green'} style={tagStyle}>{record.isResponse ? 'Res' : 'Req'}</Tag>);
         if (record.tag) {
-          tags.push(<Tag key="custom-tag" color="purple" style={{ margin: '0 0 2px 0', fontSize: '11px' }}>{record.tag}</Tag>);
+          tags.push(<Tag key="custom-tag" color="purple" style={tagStyle}>{record.tag}</Tag>);
         }
         if (record.placeholderType) {
-          switch (record.placeholderType) {
-            case 'app_disconnected':
-              tags.push(<Tooltip key="offline" title="Local app is disconnected. Reconnect to use dynamic values."><Tag color="error" icon={<DisconnectOutlined />} style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}>Offline</Tag></Tooltip>); break;
-            case 'source_not_found':
-              tags.push(<Tooltip key="missing" title={`Source #${record.sourceId} was removed from the companion app`}><Tag color="error" icon={<WarningOutlined />} style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}>Missing</Tag></Tooltip>); break;
-            case 'empty_source':
-              tags.push(<Tooltip key="empty-source" title={`Source #${record.sourceId} exists but has no content`}><Tag color="warning" icon={<ExclamationCircleOutlined />} style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}>Empty</Tag></Tooltip>); break;
-            case 'empty_value':
-              tags.push(<Tooltip key="empty-value" title="This header has an empty value"><Tag color="warning" icon={<ExclamationCircleOutlined />} style={{ cursor: 'help', margin: '0 0 2px 0', fontSize: '11px' }}>Empty</Tag></Tooltip>); break;
-          }
+          const tip = getPlaceholderTooltip(record.placeholderType, record.sourceId);
+          const placeholderLabel = record.placeholderType === 'app_disconnected' ? 'Offline'
+              : record.placeholderType === 'source_not_found' ? 'Missing' : 'Empty';
+          const placeholderColor = (record.placeholderType === 'app_disconnected' || record.placeholderType === 'source_not_found') ? 'error' : 'warning';
+          tags.push(<Tooltip key="placeholder" title={tip}><Tag color={placeholderColor} style={{ ...tagStyle, cursor: 'help' }}>{placeholderLabel}</Tag></Tooltip>);
         }
-        return <div style={{ textAlign: 'center' }}>{tags}</div>;
+        return <Space size={2} wrap>{tags}</Space>;
       },
     },
     {
@@ -311,21 +289,9 @@ const HeaderTable: React.FC = () => {
         if (!record.isDynamic) {
           return <Text style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Static value</Text>;
         }
-        const hasPlaceholder = record.placeholderType;
-        let tooltipContent = sourceInfo;
-        if (hasPlaceholder) {
-          switch (record.placeholderType) {
-            case 'app_disconnected': tooltipContent = "Local app is disconnected. Reconnect to use dynamic values."; break;
-            case 'source_not_found': tooltipContent = `Source #${record.sourceId} was removed from the companion app`; break;
-            case 'empty_source': tooltipContent = `Source #${record.sourceId} exists but has no content`; break;
-          }
-        }
         return (
-            <Tooltip title={tooltipContent}>
-              <Text ellipsis type={hasPlaceholder ? "secondary" : undefined} style={{ display: 'block', fontSize: '12px', fontStyle: hasPlaceholder ? 'italic' : 'normal', opacity: hasPlaceholder ? 0.7 : 1, cursor: hasPlaceholder ? 'help' : 'default' }}>
-                {hasPlaceholder && <ExclamationCircleOutlined style={{ marginRight: 4, color: '#ff7875' }} />}
-                {sourceInfo}
-              </Text>
+            <Tooltip title={sourceInfo}>
+              <Text ellipsis style={{ display: 'block', fontSize: '12px' }}>{sourceInfo}</Text>
             </Tooltip>
         );
       },
@@ -335,13 +301,13 @@ const HeaderTable: React.FC = () => {
       sorter: (a, b) => Number(b.isEnabled) - Number(a.isEnabled),
       sortOrder: sortedInfo.columnKey === 'isEnabled' ? sortedInfo.order : null,
       render: (enabled: boolean, record: TableRecord) => (
-          <Tooltip title="Enable/disable rule">
-            <Switch checked={enabled} onChange={async () => {
+          <Tooltip title={isConnected ? "Enable/disable rule" : "App not connected"}>
+            <Switch checked={enabled} disabled={!isConnected} onChange={async () => {
               const { runtime } = await import('../../utils/browser-api');
               runtime.sendMessage({ type: 'toggleRule', ruleId: record.id, enabled: !enabled }, (response: unknown) => {
                 const resp = response as { success?: boolean } | undefined;
                 if (resp && resp.success) { message.success('Rule toggled'); }
-                else { message.error('Failed to toggle rule - app not connected'); }
+                else { message.error('Failed to toggle rule'); }
               });
             }} size="small" />
           </Tooltip>
@@ -408,6 +374,7 @@ const HeaderTable: React.FC = () => {
               dataSource={filteredData} columns={columns}
               pagination={{ pageSize: 10, size: 'small', showSizeChanger: false, showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`, style: { marginBottom: 0, marginTop: 4 } }}
               size="small" scroll={{ x: 1000, y: 290 }} onChange={handleChange}
+              rowClassName={(record: TableRecord) => record.isEnabled && record.placeholderType ? 'row-not-injecting' : ''}
               locale={{ emptyText: (
                 <Empty image={<FileTextOutlined style={{ fontSize: 28, color: 'var(--text-tertiary)' }} />}
                   description={searchText ? <Text type="secondary">No matching headers found</Text> : (

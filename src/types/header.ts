@@ -26,15 +26,18 @@ export interface HeaderEntry {
     sourceMissing?: boolean;
 }
 
-/** A header entry after processing (validation, placeholder resolution, etc.) */
-export interface ProcessedEntry {
+/** A fully resolved entry — safe to create a DNR rule */
+export interface ResolvedEntry {
     headerName: string;
     headerValue: string;
     domains: string[];
     isResponse: boolean;
-    usingPlaceholder: boolean;
-    placeholderReason: PlaceholderReason | null;
 }
+
+/** Result of processing a single HeaderEntry */
+export type EntryResult =
+    | { resolved: true; entry: ResolvedEntry }
+    | { resolved: false; placeholder: PlaceholderInfo };
 
 /** Reasons a header may use a placeholder value */
 export type PlaceholderReason =

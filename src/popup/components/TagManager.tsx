@@ -83,7 +83,7 @@ const TagManager: React.FC = () => {
           {stats.enabled > 0 && <Tag color="success" style={{ margin: 0, fontSize: '11px' }}>{stats.enabled} active</Tag>}
         </Space>
         <Space onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-          <Tooltip title={`${stats.allEnabled ? 'Disable' : 'Enable'} all rules in this group`}>
+          <Tooltip title={isConnected ? `${stats.allEnabled ? 'Disable' : 'Enable'} all rules in this group` : 'App not connected'}>
             <Switch size="small" checked={stats.allEnabled} disabled={!isConnected} onChange={(checked) => handleEnvironmentToggle(groupKey, checked)} />
           </Tooltip>
         </Space>
@@ -108,7 +108,7 @@ const TagManager: React.FC = () => {
               </div>
             </div>
           </Space>
-          <Tooltip title={isEnabled ? 'Disable rule' : 'Enable rule'}>
+          <Tooltip title={isConnected ? (isEnabled ? 'Disable rule' : 'Enable rule') : 'App not connected'}>
             <Switch size="small" checked={isEnabled} disabled={!isConnected} onChange={async (checked) => {
               if (!isConnected) { message.warning('Please connect to the desktop app to toggle rules'); return; }
               const { runtime } = await import('../../utils/browser-api');

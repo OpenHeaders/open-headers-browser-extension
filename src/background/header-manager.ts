@@ -17,11 +17,8 @@ import { getChunkedData } from '../utils/storage-chunking.js';
 import { sendMessageWithCallback } from '../utils/messaging';
 import { logger } from '../utils/logger';
 
-import type { HeaderEntry, ProcessedEntry, PlaceholderInfo, PlaceholderReason, HeaderRule, SavedDataMap } from '../types/header';
+import type { HeaderEntry, ResolvedEntry, EntryResult, PlaceholderInfo, HeaderRule, SavedDataMap } from '../types/header';
 import type { Source } from '../types/websocket';
-
-// Track headers using placeholders for badge notification
-let headersWithPlaceholders: PlaceholderInfo[] = [];
 
 // Track the highest rule ID from the last update for efficient removal
 let lastMaxRuleId = 0;
@@ -50,8 +47,6 @@ export function initPauseState(): void {
  * Updates the network request rules based on saved data and dynamic sources.
  */
 export function updateNetworkRules(dynamicSources: Source[]): void {
-    headersWithPlaceholders = [];
-
     if (isPaused) {
         logger.info('HeaderManager', 'Rules execution is paused, clearing all active rules');
         const removeIds = lastMaxRuleId > 0
@@ -76,8 +71,9 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
         const rules: HeaderRule[] = [];
         let ruleId = 1;
 
-        const requestEntries: ProcessedEntry[] = [];
-        const responseEntries: ProcessedEntry[] = [];
+        const requestEntries: ResolvedEntry[] = [];
+        const responseEntries: ResolvedEntry[] = [];
+        const placeholders: PlaceholderInfo[] = [];
 
         for (const id in savedData) {
             const entry: HeaderEntry = savedData[id];
@@ -87,13 +83,17 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
                 continue;
             }
 
-            const processedEntry = processEntry(entry, effectiveSources, isConnected);
-            if (processedEntry) {
-                if (processedEntry.isResponse) {
-                    responseEntries.push(processedEntry);
+            const result = processEntry(entry, effectiveSources, isConnected);
+            if (!result) continue;
+
+            if (result.resolved) {
+                if (result.entry.isResponse) {
+                    responseEntries.push(result.entry);
                 } else {
-                    requestEntries.push(processedEntry);
+                    requestEntries.push(result.entry);
                 }
+            } else {
+                placeholders.push(result.placeholder);
             }
         }
 
@@ -109,19 +109,14 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
             ruleId += responseRules.length;
         });
 
-        if (headersWithPlaceholders.length > 0) {
-            logger.warn('HeaderManager', `${headersWithPlaceholders.length} headers using diagnostic placeholders:`, headersWithPlaceholders);
-
-            sendMessageWithCallback({
-                type: 'headersUsingPlaceholders',
-                headers: headersWithPlaceholders
-            }, (_response, _error) => {});
-        } else {
-            sendMessageWithCallback({
-                type: 'headersUsingPlaceholders',
-                headers: []
-            }, (_response, _error) => {});
+        if (placeholders.length > 0) {
+            logger.warn('HeaderManager', `${placeholders.length} headers not injected (unresolved):`, placeholders);
         }
+
+        sendMessageWithCallback({
+            type: 'headersUsingPlaceholders',
+            headers: placeholders
+        }, (_response, _error) => {});
 
         const removeCount = Math.max(lastMaxRuleId, ruleId - 1);
         const removeRuleIds = removeCount > 0
@@ -144,70 +139,11 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
     });
 }
 
-function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected: boolean): ProcessedEntry | null {
+function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected: boolean): EntryResult | null {
     const headerNameValidation = validateHeaderName(entry.headerName, entry.isResponse);
     if (!headerNameValidation.valid) {
         logger.debug('HeaderManager', `Skipping rule for ${entry.headerName} - ${headerNameValidation.message}`);
         return null;
-    }
-
-    let headerValue: string = entry.headerValue;
-    let usingPlaceholder = false;
-    let placeholderReason: PlaceholderReason | null = null;
-
-    if (entry.isDynamic && entry.sourceId) {
-        if (!isConnected) {
-            headerValue = '[APP_DISCONNECTED]';
-            usingPlaceholder = true;
-            placeholderReason = 'app_disconnected';
-            logger.warn('HeaderManager', `Header "${entry.headerName}" using placeholder - app disconnected`);
-        } else {
-            const source = dynamicSources.find(s =>
-                s.sourceId?.toString() === entry.sourceId?.toString()
-            );
-
-            if (!source) {
-                headerValue = `[SOURCE_NOT_FOUND:${entry.sourceId}]`;
-                usingPlaceholder = true;
-                placeholderReason = 'source_not_found';
-                logger.warn('HeaderManager', `Header "${entry.headerName}" using placeholder - source #${entry.sourceId} not found`);
-            } else {
-                const dynamicContent = source.sourceContent || '';
-
-                if (!dynamicContent) {
-                    headerValue = `[EMPTY_SOURCE:${entry.sourceId}]`;
-                    usingPlaceholder = true;
-                    placeholderReason = 'empty_source';
-                    logger.warn('HeaderManager', `Header "${entry.headerName}" using placeholder - source #${entry.sourceId} is empty`);
-                } else {
-                    headerValue = `${entry.prefix || ''}${dynamicContent}${entry.suffix || ''}`;
-                }
-            }
-        }
-
-        if (usingPlaceholder) {
-            headersWithPlaceholders.push({
-                headerName: entry.headerName,
-                sourceId: entry.sourceId,
-                reason: placeholderReason!,
-                domains: Array.isArray(entry.domains) ? entry.domains : (entry.domain ? [entry.domain] : [])
-            });
-        }
-    }
-
-    if (!entry.isDynamic && (!headerValue || !headerValue.trim())) {
-        headerValue = '[EMPTY_VALUE]';
-        usingPlaceholder = true;
-        placeholderReason = 'empty_value';
-    }
-
-    const isPlaceholder = headerValue.startsWith('[') && headerValue.endsWith(']');
-    if (!isPlaceholder && !isValidHeaderValue(headerValue, entry.headerName)) {
-        headerValue = sanitizeHeaderValue(headerValue);
-        if (!isValidHeaderValue(headerValue, entry.headerName)) {
-            logger.debug('HeaderManager', `Skipping invalid header value for ${entry.headerName}`);
-            return null;
-        }
     }
 
     const domains: string[] = Array.isArray(entry.domains) ? entry.domains :
@@ -218,17 +154,60 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
         return null;
     }
 
-    return {
-        headerName: headerNameValidation.sanitized || normalizeHeaderName(entry.headerName),
-        headerValue: headerValue,
-        domains: domains,
-        isResponse: entry.isResponse === true,
-        usingPlaceholder: usingPlaceholder,
-        placeholderReason: placeholderReason
-    };
+    const headerName = headerNameValidation.sanitized || normalizeHeaderName(entry.headerName);
+
+    if (entry.isDynamic && entry.sourceId) {
+        if (!isConnected) {
+            logger.warn('HeaderManager', `Header "${entry.headerName}" not injected — app disconnected`);
+            return { resolved: false, placeholder: { headerName, sourceId: entry.sourceId, reason: 'app_disconnected', domains } };
+        }
+
+        const source = dynamicSources.find(s =>
+            s.sourceId?.toString() === entry.sourceId?.toString()
+        );
+
+        if (!source) {
+            logger.warn('HeaderManager', `Header "${entry.headerName}" not injected — source #${entry.sourceId} not found`);
+            return { resolved: false, placeholder: { headerName, sourceId: entry.sourceId, reason: 'source_not_found', domains } };
+        }
+
+        const dynamicContent = source.sourceContent || '';
+
+        if (!dynamicContent) {
+            logger.warn('HeaderManager', `Header "${entry.headerName}" not injected — source #${entry.sourceId} is empty`);
+            return { resolved: false, placeholder: { headerName, sourceId: entry.sourceId, reason: 'empty_source', domains } };
+        }
+
+        const headerValue = `${entry.prefix || ''}${dynamicContent}${entry.suffix || ''}`;
+        if (!isValidHeaderValue(headerValue, entry.headerName)) {
+            const sanitized = sanitizeHeaderValue(headerValue);
+            if (!isValidHeaderValue(sanitized, entry.headerName)) {
+                logger.debug('HeaderManager', `Skipping invalid header value for ${entry.headerName}`);
+                return null;
+            }
+            return { resolved: true, entry: { headerName, headerValue: sanitized, domains, isResponse: entry.isResponse === true } };
+        }
+        return { resolved: true, entry: { headerName, headerValue, domains, isResponse: entry.isResponse === true } };
+    }
+
+    if (!entry.headerValue || !entry.headerValue.trim()) {
+        logger.warn('HeaderManager', `Header "${entry.headerName}" not injected — value is empty`);
+        return { resolved: false, placeholder: { headerName, reason: 'empty_value', domains } };
+    }
+
+    let headerValue = entry.headerValue;
+    if (!isValidHeaderValue(headerValue, entry.headerName)) {
+        headerValue = sanitizeHeaderValue(headerValue);
+        if (!isValidHeaderValue(headerValue, entry.headerName)) {
+            logger.debug('HeaderManager', `Skipping invalid header value for ${entry.headerName}`);
+            return null;
+        }
+    }
+
+    return { resolved: true, entry: { headerName, headerValue, domains, isResponse: entry.isResponse === true } };
 }
 
-function createRequestHeaderRules(entry: ProcessedEntry, startId: number): HeaderRule[] {
+function createRequestHeaderRules(entry: ResolvedEntry, startId: number): HeaderRule[] {
     const rules: HeaderRule[] = [];
     let ruleId = startId;
 
@@ -263,7 +242,7 @@ function createRequestHeaderRules(entry: ProcessedEntry, startId: number): Heade
     return rules;
 }
 
-function createResponseHeaderRules(entry: ProcessedEntry, startId: number): HeaderRule[] {
+function createResponseHeaderRules(entry: ResolvedEntry, startId: number): HeaderRule[] {
     const rules: HeaderRule[] = [];
     let ruleId = startId;
 
