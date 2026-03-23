@@ -23,7 +23,6 @@ const ConnectionInfo: React.FC = () => {
       setDismissed(false);
       storage.local.remove(['connectionAlertDismissed']);
     }
-
     setLastConnectionState(isConnected);
   }, [isConnected, lastConnectionState]);
 
@@ -44,45 +43,31 @@ const ConnectionInfo: React.FC = () => {
   }
 
   return (
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 470,
-        right: 16,
-        zIndex: 100,
-      }}>
-        <Alert
-            message={<span style={{ fontSize: '12px', fontWeight: 600 }}>Desktop App Not Connected</span>}
-            description={
-              <Space size={6} style={{ marginTop: 2 }}>
-                <Button
-                    type="primary"
-                    size="small"
-                    icon={<DownloadOutlined />}
-                    onClick={() => window.open('https://openheaders.io', '_blank')}
-                >
-                  Download App
-                </Button>
-                <Button
-                    size="small"
-                    onClick={handleOpenWelcomePage}
-                >
-                  Setup Guide
-                </Button>
-              </Space>
-            }
-            type="info"
-            showIcon
-            closable
-            onClose={handleDismiss}
-            style={{
-              fontSize: '12px',
-              padding: '6px 12px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
-              borderRadius: '8px',
-            }}
-        />
-      </div>
+    <div style={{ position: 'fixed', top: 8, right: 8, zIndex: 1000 }}>
+      <Alert
+        message="Desktop App Not Connected"
+        description={
+          <Space size={6} style={{ marginTop: 4 }}>
+            <Button
+              type="primary"
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={() => window.open('https://openheaders.io', '_blank')}
+            >
+              Download App
+            </Button>
+            <Button size="small" onClick={handleOpenWelcomePage}>
+              Setup Guide
+            </Button>
+          </Space>
+        }
+        type="info"
+        showIcon
+        closable
+        onClose={handleDismiss}
+        style={{ boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)', borderRadius: 8 }}
+      />
+    </div>
   );
 };
 
