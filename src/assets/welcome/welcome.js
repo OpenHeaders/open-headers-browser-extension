@@ -5,8 +5,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Setup step elements
     const stepAppInstall = document.getElementById('step-app-install');
-    const stepCertificate = document.getElementById('step-certificate');
-    const stepCertVerify = document.getElementById('step-cert-verify');
     const stepConnection = document.getElementById('step-connection');
 
     // Button elements
@@ -20,13 +18,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const downloadAppButton = document.getElementById('download-app-button');
     const appStatus = document.getElementById('app-status');
     const appStatusText = document.getElementById('app-status-text');
-    const certButton = document.getElementById('cert-button');
     const connectionStatus = document.getElementById('connection-status');
     const connectionStatusText = document.getElementById('connection-status-text');
-    const connectionStepNumber = document.getElementById('connection-step-number');
 
     // State variables
-    let certWindowReference = null;
     let connectionCheckInterval = null;
     let connectionCheckCount = 0;
     const MAX_CONNECTION_CHECKS = 10;
@@ -36,90 +31,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let appRunning = false;
     let appCheckInterval = null;
     let appCheckAttempts = 0;
-    let currentBrowser = 'unknown';
-
-    /**
-     * Detects the current browser
-     * @returns {string} - The detected browser ('firefox', 'chrome', 'edge', 'safari', or 'unknown')
-     */
-    function detectBrowser() {
-        const userAgent = navigator.userAgent.toLowerCase();
-
-        if (userAgent.indexOf('firefox') !== -1) {
-            return 'firefox';
-        } else if (userAgent.indexOf('edg') !== -1) {
-            return 'edge';
-        } else if (userAgent.indexOf('chrome') !== -1) {
-            return 'chrome';
-        } else if (userAgent.indexOf('safari') !== -1) {
-            return 'safari';
-        }
-
-        return 'unknown';
-    }
-
-    /**
-     * Shows elements specific to the detected browser
-     */
-    function showBrowserSpecificElements() {
-        // For Firefox, show Firefox-specific elements and update step numbers
-        if (currentBrowser === 'firefox') {
-            // Force Firefox steps to be visible
-            document.querySelectorAll('.firefox-only').forEach(el => {
-                el.style.display = el.classList.contains('setup-step') ? 'flex' : 'block';
-            });
-
-            // Set the connection step number for Firefox
-            if (connectionStepNumber) {
-                connectionStepNumber.textContent = '4';
-            }
-        } else {
-            // For non-Firefox browsers, show non-Firefox elements
-            document.querySelectorAll('.non-firefox').forEach(el => {
-                el.style.display = el.classList.contains('setup-step') ? 'flex' : 'block';
-            });
-
-            // Set the connection step number for non-Firefox
-            if (connectionStepNumber) {
-                connectionStepNumber.textContent = '2';
-            }
-
-            // Make sure Firefox steps are hidden for other browsers
-            document.querySelectorAll('.firefox-only').forEach(el => {
-                el.style.display = 'none';
-            });
-
-            // Add proper connecting lines for non-Firefox browsers
-            const stepAppInstall = document.getElementById('step-app-install');
-
-            if (stepAppInstall) {
-                const stepLine = stepAppInstall.querySelector('.step-line');
-                if (stepLine) {
-                    stepLine.style.height = '40px'; // Adjust line height to connect to step 4
-                }
-            }
-        }
-
-        // Show browser-specific info boxes
-        if (currentBrowser && document.querySelector(`.${currentBrowser}-only`)) {
-            document.querySelectorAll(`.${currentBrowser}-only`).forEach(el => {
-                if (!el.classList.contains('setup-step')) {
-                    el.style.display = 'block';
-                }
-            });
-        }
-    }
 
     /**
      * Initialize the welcome page
      */
     function initializePage() {
-        // Detect browser
-        currentBrowser = detectBrowser();
-        console.log(new Date().toISOString(), 'INFO ', '[WelcomePage]', 'Detected browser:', currentBrowser);
-
-        // Show browser-specific elements
-        showBrowserSpecificElements();
+        console.log(new Date().toISOString(), 'INFO ', '[WelcomePage]', 'Initializing welcome page');
 
         // Set up event listeners
         setupEventListeners();
@@ -192,8 +109,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
                     browser.storage.local.set({
                         setupCompleted: true,
-                        setupCompletedTime: Date.now(),
-                        certificateAccepted: currentBrowser === 'firefox' ? connectionSuccessful : undefined
+                        setupCompletedTime: Date.now()
                     });
                 } else if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                     chrome.storage.local.set({
@@ -204,24 +120,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Close page
                 window.close();
-            });
-        }
-
-        // For Firefox - certificate button
-        if (currentBrowser === 'firefox' && certButton) {
-            certButton.addEventListener('click', function() {
-                // Open certificate page
-                certWindowReference = window.open('https://127.0.0.1:59211/accept-cert', '_blank');
-
-                // Mark step as completed and proceed
-                if (stepCertificate) {
-                    const marker = stepCertificate.querySelector('.step-marker');
-                    if (marker) marker.classList.add('completed');
-                }
-                if (stepCertVerify) stepCertVerify.classList.add('active');
-
-                // Start connection check after delay
-                setTimeout(startConnectionCheck, 5000);
             });
         }
     }
@@ -263,55 +161,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     appCheckInterval = null;
                 }
 
-                // For Firefox, handle certificate steps intelligently
-                if (currentBrowser === 'firefox') {
-                    // If already connected, the certificate must be accepted
-                    if (stepCertificate) {
-                        const marker = stepCertificate.querySelector('.step-marker');
-                        if (marker) marker.classList.add('completed');
-                        stepCertificate.classList.add('active');
-                    }
+                // Go directly to connection verification
+                if (stepConnection) stepConnection.classList.add('active');
 
-                    if (stepCertVerify) {
-                        const marker = stepCertVerify.querySelector('.step-marker');
-                        if (marker) marker.classList.add('completed');
-                        stepCertVerify.classList.add('active');
-                    }
+                // Mark connection as successful immediately
+                connectionSuccessful = true;
+                if (connectionStatus) connectionStatus.className = 'connection-status status-connected';
+                if (connectionStatusText) connectionStatusText.textContent = '✓ Connection successful!';
 
-                    // Since we're already connected, go directly to connection verification
-                    if (stepConnection) stepConnection.classList.add('active');
-
-                    // Mark connection as successful immediately
-                    connectionSuccessful = true;
-                    if (connectionStatus) connectionStatus.className = 'connection-status status-connected';
-                    if (connectionStatusText) connectionStatusText.textContent = '✓ Connection successful!';
-
-                    // Mark the connection step as completed
-                    if (stepConnection) {
-                        const marker = stepConnection.querySelector('.step-marker');
-                        if (marker) marker.classList.add('completed');
-                    }
-
-                    // Update navigation buttons
-                    updateNavigationButtons();
-                } else {
-                    // For non-Firefox browsers
-                    if (stepConnection) stepConnection.classList.add('active');
-
-                    // Mark connection as successful immediately
-                    connectionSuccessful = true;
-                    if (connectionStatus) connectionStatus.className = 'connection-status status-connected';
-                    if (connectionStatusText) connectionStatusText.textContent = '✓ Connection successful!';
-
-                    // Mark the connection step as completed
-                    if (stepConnection) {
-                        const marker = stepConnection.querySelector('.step-marker');
-                        if (marker) marker.classList.add('completed');
-                    }
-
-                    // Update navigation buttons
-                    updateNavigationButtons();
+                // Mark the connection step as completed
+                if (stepConnection) {
+                    const marker = stepConnection.querySelector('.step-marker');
+                    if (marker) marker.classList.add('completed');
                 }
+
+                // Update navigation buttons
+                updateNavigationButtons();
             } else {
                 // App not running
                 appRunning = false;
@@ -399,33 +264,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (marker) marker.classList.add('completed');
                 }
 
-                // Complete Firefox-specific steps if needed
-                if (currentBrowser === 'firefox') {
-                    if (stepCertVerify) {
-                        const marker = stepCertVerify.querySelector('.step-marker');
-                        if (marker) marker.classList.add('completed');
-                    }
-
-                    // Store certificate acceptance
-                    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
-                        browser.storage.local.set({
-                            certificateAccepted: true,
-                            certificateAcceptedTime: Date.now()
-                        });
-                    }
-                } else {
-                    // Store connection verification for non-Firefox browsers too
-                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                        chrome.storage.local.set({
-                            connectionVerified: true,
-                            connectionVerifiedTime: Date.now()
-                        });
-                    }
-                }
-
-                // Close certificate window if still open
-                if (certWindowReference && !certWindowReference.closed) {
-                    certWindowReference.close();
+                // Store connection verification
+                if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+                    browser.storage.local.set({
+                        connectionVerified: true,
+                        connectionVerifiedTime: Date.now()
+                    });
+                } else if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    chrome.storage.local.set({
+                        connectionVerified: true,
+                        connectionVerifiedTime: Date.now()
+                    });
                 }
             } else {
                 handleConnectionProgress();
@@ -449,9 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update UI
             if (connectionStatus) connectionStatus.className = 'connection-status status-error';
             if (connectionStatusText) {
-                connectionStatusText.textContent = currentBrowser === 'firefox'
-                    ? 'Connection failed. Please make sure you accepted the certificate.'
-                    : 'Connection failed. Please make sure the app is running.';
+                connectionStatusText.textContent = 'Connection failed. Please make sure the app is running.';
             }
 
             // Update navigation buttons

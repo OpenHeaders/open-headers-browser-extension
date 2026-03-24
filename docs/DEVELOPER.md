@@ -273,7 +273,7 @@ The `src/utils/browser-api.ts` module wraps Chrome/Firefox/Safari API difference
 
 | Feature | Chrome/Edge | Firefox | Safari |
 |---------|------------|---------|--------|
-| WebSocket | `ws://` port 59210 | `wss://` port 59211 (cert required) | `ws://` port 59210 |
+| WebSocket | `ws://` port 59210 | `ws://` port 59210 | `ws://` port 59210 |
 | Background | Service worker | Background scripts | Background scripts |
 | Manifest | MV3 | MV3 (gecko settings) | MV3 (limited perms) |
 | Storage sync | Native | Native | Local fallback |
@@ -300,8 +300,7 @@ The `src/utils/browser-api.ts` module wraps Chrome/Firefox/Safari API difference
   dynamicSources: Source[],
   popupState: { uiState: UiState },
   themeMode: 'light' | 'dark' | 'auto',
-  connectionAlertDismissed: boolean,
-  lastSuccessfulConnection: LastSuccessfulConnection
+  connectionAlertDismissed: boolean
 }
 ```
 

@@ -167,9 +167,3 @@ export interface RulesData {
     [key: string]: unknown;
 }
 
-// ── Connection state ───────────────────────────────────────────────
-
-export interface LastSuccessfulConnection {
-    timestamp: number;
-    type: 'wss' | 'ws-fallback';
-}

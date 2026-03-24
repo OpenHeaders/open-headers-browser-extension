@@ -6,7 +6,7 @@ import { storage } from '../../utils/browser-api';
 import { sendMessage } from '../../utils/messaging';
 
 const ConnectionInfo: React.FC = () => {
-  const { isConnected, isStatusLoaded } = useHeader();
+  const { isConnected, isStatusLoaded, headerEntries } = useHeader();
   const [dismissed, setDismissed] = useState(false);
   const [lastConnectionState, setLastConnectionState] = useState(isConnected);
 
@@ -47,8 +47,12 @@ const ConnectionInfo: React.FC = () => {
       <Alert
         message="Desktop App Not Connected"
         description={
-          <Space size={6} style={{ marginTop: 4 }}>
-            <Button
+          <div>
+            {Object.keys(headerEntries).length > 0 && (
+              <div style={{ fontSize: 12, marginBottom: 6 }}>Your rules are still active using cached data.<br/>Reconnect to sync latest changes.</div>
+            )}
+            <Space size={6}>
+              <Button
               type="primary"
               size="small"
               icon={<DownloadOutlined />}
@@ -59,7 +63,8 @@ const ConnectionInfo: React.FC = () => {
             <Button size="small" onClick={handleOpenWelcomePage}>
               Setup Guide
             </Button>
-          </Space>
+            </Space>
+          </div>
         }
         type="info"
         showIcon

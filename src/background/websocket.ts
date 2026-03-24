@@ -1,8 +1,6 @@
 /**
  * WebSocket connection management
  */
-declare const browser: typeof chrome | undefined;
-
 import { runtime, storage, isSafari, isFirefox, isChrome, isEdge } from '../utils/browser-api.js';
 import { adaptWebSocketUrl, safariPreCheck } from './safari-websocket-adapter';
 import { getChunkedData, setChunkedData } from '../utils/storage-chunking.js';
@@ -11,12 +9,11 @@ import { logger } from '../utils/logger';
 import { generateSourcesHash } from './modules/utils';
 import { scheduleUpdate } from './modules/rule-engine';
 
-import type { Source, OnSourcesReceivedCallback, RulesData, HeaderRuleFromApp, LastSuccessfulConnection } from '../types/websocket';
+import type { Source, OnSourcesReceivedCallback, RulesData, HeaderRuleFromApp } from '../types/websocket';
 import type { SavedDataMap } from '../types/header';
 
 // Configuration
 const WS_SERVER_URL = 'ws://127.0.0.1:59210';
-const WSS_SERVER_URL = 'wss://127.0.0.1:59211'; // Secure endpoint for Firefox
 const RECONNECT_DELAY_MS = 1000;
 
 // State variables
@@ -26,7 +23,6 @@ let isConnecting = false;
 let isConnected = false;
 let allSources: Source[] = [];
 let rules: RulesData = {};
-let welcomePageOpenedBySocket = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_DELAY = 6000;
 
@@ -122,9 +118,7 @@ export function connectWebSocket(onSourcesReceived?: OnSourcesReceivedCallback):
         };
 
         // Handle browser-specific connection logic
-        if (isFirefox) {
-            connectWebSocketFirefox(wrappedCallback);
-        } else if (isSafari) {
+        if (isSafari) {
             // Safari needs pre-check
             safariPreCheck(WS_SERVER_URL).then(canConnect => {
                 if (canConnect) {
@@ -136,7 +130,7 @@ export function connectWebSocket(onSourcesReceived?: OnSourcesReceivedCallback):
                 }
             });
         } else {
-            // Chrome/Edge - standard connection
+            // Standard connection (Chrome/Edge/Firefox)
             connectStandardWebSocket(WS_SERVER_URL, wrappedCallback);
         }
     });
@@ -173,7 +167,7 @@ function handleConnectionFailure(): void {
 async function checkServerReachable(wsUrl: string): Promise<boolean> {
     try {
         // Convert ws:// to http:// for the check
-        const httpUrl = wsUrl.replace('ws://', 'http://').replace('wss://', 'https://');
+        const httpUrl = wsUrl.replace('ws://', 'http://');
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 500); // Quick timeout
 
@@ -462,237 +456,6 @@ function connectStandardWebSocket(url: string, onSourcesReceived: OnSourcesRecei
     });
 }
 
-/**
- * Firefox-specific implementation for WebSocket connection
- */
-function connectWebSocketFirefox(onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    storage.local.get(['lastSuccessfulConnection', 'certificateAccepted', 'setupCompleted'], (result: Record<string, unknown>) => {
-        const lastConnection = result.lastSuccessfulConnection as LastSuccessfulConnection | undefined;
-        const certificateAccepted = result.certificateAccepted as boolean | undefined;
-        const setupCompleted = result.setupCompleted as boolean | undefined;
-
-        if (certificateAccepted || setupCompleted) {
-            logger.debug('WebSocket', 'Certificate already accepted or setup completed, skipping welcome page');
-
-            if (lastConnection && lastConnection.type === 'ws-fallback' &&
-                Date.now() - lastConnection.timestamp < 86400000) {
-                logger.debug('WebSocket', 'Using previous successful WS connection');
-                connectFirefoxWs(onSourcesReceived);
-            } else {
-                connectFirefoxWss(onSourcesReceived);
-            }
-        } else if (!certificateAccepted && !welcomePageOpenedBySocket) {
-            welcomePageOpenedBySocket = true;
-            logger.info('WebSocket', 'First time user detected, showing welcome page');
-
-            if (typeof browser !== 'undefined' && browser!.tabs) {
-                const welcomePageUrl = browser!.runtime.getURL('welcome.html');
-
-                (browser!.tabs.query({}) as unknown as Promise<chrome.tabs.Tab[]>).then((tabsList: chrome.tabs.Tab[]) => {
-                    const welcomeTabs = tabsList.filter((tab: chrome.tabs.Tab) =>
-                        tab.url === welcomePageUrl ||
-                        (tab.url && tab.url.startsWith(welcomePageUrl))
-                    );
-
-                    if (welcomeTabs.length > 0) {
-                        logger.info('WebSocket', 'Welcome page already exists, focusing it');
-                        (browser!.tabs.update(welcomeTabs[0].id!, { active: true }) as unknown as Promise<chrome.tabs.Tab>).catch((err: Error) => {
-                            logger.info('WebSocket', 'Error focusing existing welcome tab:', err.message);
-                        });
-                    } else {
-                        logger.info('WebSocket', 'Opening Firefox welcome page');
-                        (browser!.tabs.create({
-                            url: welcomePageUrl,
-                            active: true
-                        }) as unknown as Promise<chrome.tabs.Tab>).then((tab: chrome.tabs.Tab) => {
-                            logger.info('WebSocket', 'Opened Firefox welcome tab:', tab.id);
-                        }).catch((err: Error) => {
-                            logger.info('WebSocket', 'Failed to open welcome page:', err.message);
-                        });
-                    }
-                }).catch((err: Error) => {
-                    logger.info('WebSocket', 'Error checking for existing welcome tabs:', err.message);
-                });
-            }
-
-            connectFirefoxWss(onSourcesReceived);
-        } else {
-            if (lastConnection && lastConnection.type === 'ws-fallback' &&
-                Date.now() - lastConnection.timestamp < 86400000) {
-                logger.debug('WebSocket', 'Using previous successful WS connection');
-                connectFirefoxWs(onSourcesReceived);
-            } else {
-                connectFirefoxWss(onSourcesReceived);
-            }
-        }
-    });
-}
-
-/**
- * Connect to WSS endpoint for Firefox
- */
-function connectFirefoxWss(onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    const log = reconnectAttempts === 0 ? logger.info : logger.debug;
-    log.call(logger, 'WebSocket', 'Starting Firefox WebSocket connection using WSS');
-
-    checkServerReachable(WSS_SERVER_URL).then(isReachable => {
-        if (!isReachable) {
-            logger.debug('WebSocket', 'Firefox WSS server not reachable, trying WS fallback');
-            connectFirefoxWs(onSourcesReceived);
-            return;
-        }
-
-        let connectionTimeout: ReturnType<typeof setTimeout> | undefined;
-        try {
-            connectionTimeout = setTimeout(() => {
-                logger.info('WebSocket', 'Firefox WebSocket connection timed out');
-                handleConnectionFailure();
-            }, 3000);
-
-            logger.info('WebSocket', 'Connecting to secure endpoint:', WSS_SERVER_URL);
-            socket = new WebSocket(WSS_SERVER_URL);
-
-            socket.onerror = (_error: Event) => {
-                clearTimeout(connectionTimeout);
-                logger.debug('WebSocket', 'Firefox WebSocket error');
-            };
-
-            logger.debug('WebSocket', 'Firefox WSS connection created, readyState:', socket.readyState);
-
-            socket.onopen = () => {
-                clearTimeout(connectionTimeout);
-                logger.info('WebSocket', 'Firefox secure WebSocket connection opened successfully!');
-                isConnecting = false;
-                isConnected = true;
-                reconnectAttempts = 0;
-                broadcastConnectionStatus();
-                sendBrowserInfoAndRequestRules();
-
-                storage.local.set({
-                    lastSuccessfulConnection: {
-                        timestamp: Date.now(),
-                        type: 'wss'
-                    },
-                    certificateAccepted: true
-                });
-            };
-
-            socket.onmessage = createMessageHandler(onSourcesReceived);
-
-            socket.onclose = (event: CloseEvent) => {
-                clearTimeout(connectionTimeout);
-                logger.info('WebSocket', 'Firefox WSS WebSocket closed with code:', event.code);
-
-                if (event.code === 1015) {
-                    logger.info('WebSocket', 'Firefox TLS handshake failure detected');
-
-                    storage.local.get(['certificateAccepted'], (certResult: Record<string, unknown>) => {
-                        if (!certResult.certificateAccepted) {
-                            logger.info('WebSocket', 'Firefox certificate not accepted, prompting user');
-                            storage.local.set({ certificateAccepted: false });
-                        }
-                    });
-
-                    logger.info('WebSocket', 'Firefox attempting fallback to regular WebSocket');
-                    connectFirefoxWs(onSourcesReceived);
-                } else {
-                    handleConnectionFailure();
-                }
-            };
-        } catch (e) {
-            clearTimeout(connectionTimeout);
-            logger.info('WebSocket', 'Firefox WSS connection failed:', (e as Error).message);
-            logger.info('WebSocket', 'Firefox falling back to regular WebSocket');
-            connectFirefoxWs(onSourcesReceived);
-        }
-    });
-}
-
-/**
- * Connect to WS endpoint for Firefox (fallback)
- */
-function connectFirefoxWs(onSourcesReceived: OnSourcesReceivedCallback | undefined): void {
-    const log = reconnectAttempts === 0 ? logger.info : logger.debug;
-    log.call(logger, 'WebSocket', 'Starting Firefox WebSocket connection using WS (fallback)');
-
-    checkServerReachable(WS_SERVER_URL).then(isReachable => {
-        if (!isReachable) {
-            logger.debug('WebSocket', 'Firefox WS server not reachable, will retry later');
-            handleConnectionFailure();
-            return;
-        }
-
-        let connectionTimeout: ReturnType<typeof setTimeout> | undefined;
-        try {
-            connectionTimeout = setTimeout(() => {
-                logger.debug('WebSocket', 'Firefox WS connection timed out');
-                handleConnectionFailure();
-            }, 3000);
-
-            socket = new WebSocket(WS_SERVER_URL);
-
-            socket.onerror = (_error: Event) => {
-                clearTimeout(connectionTimeout);
-                logger.debug('WebSocket', 'Firefox WS WebSocket error');
-            };
-
-            socket.onopen = () => {
-                clearTimeout(connectionTimeout);
-                logger.info('WebSocket', 'Firefox WebSocket connection opened (WS fallback)!');
-                isConnecting = false;
-                isConnected = true;
-                reconnectAttempts = 0;
-                broadcastConnectionStatus();
-                sendBrowserInfoAndRequestRules();
-
-                storage.local.set({
-                    lastSuccessfulConnection: {
-                        timestamp: Date.now(),
-                        type: 'ws-fallback'
-                    }
-                });
-            };
-
-            // Create message handler with extra handling for certificateTrustChanged
-            socket.onmessage = (event: MessageEvent) => {
-                try {
-                    const parsed = JSON.parse(event.data as string);
-
-                    if ((parsed.type === 'sourcesInitial' || parsed.type === 'sourcesUpdated') && Array.isArray(parsed.sources)) {
-                        handleSourcesMessage(parsed, onSourcesReceived);
-                    } else if (parsed.type === 'rules-update' && parsed.data) {
-                        handleRulesUpdateMessage(parsed);
-                    } else if (parsed.type === 'certificateTrustChanged' && parsed.trusted) {
-                        checkServerReachable(WSS_SERVER_URL).then(reachable => {
-                            if (reachable) {
-                                logger.info('WebSocket', 'Certificate trusted and WSS reachable, upgrading to WSS');
-                                storage.local.remove(['lastSuccessfulConnection'], () => {
-                                    if (socket) { socket.close(); }
-                                });
-                            } else {
-                                logger.info('WebSocket', 'Certificate trusted in OS but WSS not reachable in Firefox, staying on WS');
-                            }
-                        });
-                    } else {
-                        handleOtherMessages(parsed);
-                    }
-                } catch (err) {
-                    logger.info('WebSocket', 'Firefox WS error parsing message:', err);
-                }
-            };
-
-            socket.onclose = (_event: CloseEvent) => {
-                clearTimeout(connectionTimeout);
-                logger.debug('WebSocket', 'Firefox WS closed');
-                handleConnectionFailure();
-            };
-        } catch (e) {
-            clearTimeout(connectionTimeout);
-            logger.info('WebSocket', 'Firefox WS connection failed:', (e as Error).message);
-            handleConnectionFailure();
-        }
-    });
-}
 
 /**
  * Check if WebSocket is connected

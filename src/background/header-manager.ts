@@ -11,7 +11,6 @@ declare const browser: typeof chrome | undefined;
 import { isValidHeaderValue, sanitizeHeaderValue } from './rule-validator';
 import { normalizeHeaderName } from '../utils/utils.js';
 import { declarativeNetRequest } from '../utils/browser-api.js';
-import { isWebSocketConnected } from './websocket';
 import { validateHeaderName } from '../utils/header-validator.js';
 import { getChunkedData } from '../utils/storage-chunking.js';
 import { sendMessageWithCallback } from '../utils/messaging';
@@ -62,9 +61,6 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
         return;
     }
 
-    const isConnected = isWebSocketConnected();
-    const effectiveSources: Source[] = isConnected ? dynamicSources : [];
-
     getChunkedData('savedData', (savedData: SavedDataMap | null) => {
         savedData = savedData || {};
 
@@ -83,7 +79,7 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
                 continue;
             }
 
-            const result = processEntry(entry, effectiveSources, isConnected);
+            const result = processEntry(entry, dynamicSources);
             if (!result) continue;
 
             if (result.resolved) {
@@ -134,7 +130,7 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
     });
 }
 
-function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected: boolean): EntryResult | null {
+function processEntry(entry: HeaderEntry, dynamicSources: Source[]): EntryResult | null {
     const headerNameValidation = validateHeaderName(entry.headerName, entry.isResponse);
     if (!headerNameValidation.valid) {
         logger.debug('HeaderManager', `Skipping rule for ${entry.headerName} - ${headerNameValidation.message}`);
@@ -152,11 +148,6 @@ function processEntry(entry: HeaderEntry, dynamicSources: Source[], isConnected:
     const headerName = headerNameValidation.sanitized || normalizeHeaderName(entry.headerName);
 
     if (entry.isDynamic && entry.sourceId) {
-        if (!isConnected) {
-            logger.warn('HeaderManager', `Header "${entry.headerName}" not injected — app disconnected`);
-            return { resolved: false, placeholder: { headerName, sourceId: entry.sourceId, reason: 'app_disconnected', domains } };
-        }
-
         const source = dynamicSources.find(s =>
             s.sourceId?.toString() === entry.sourceId?.toString()
         );

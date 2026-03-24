@@ -38,7 +38,6 @@ function copyAssetsPlugin() {
         { from: 'src/assets/images/icon48.png', to: 'images/icon48.png' },
         { from: 'src/assets/images/icon128.png', to: 'images/icon128.png' },
         { from: 'src/assets/images/companion-app.png', to: 'images/companion-app.png' },
-        { from: 'src/assets/images/firefox-certificate.png', to: 'images/firefox-certificate.png' },
         // Welcome page
         { from: 'src/assets/welcome/welcome.html', to: 'welcome.html' },
         { from: 'src/assets/welcome/welcome.js', to: 'js/welcome.js' },

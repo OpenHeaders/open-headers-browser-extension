@@ -774,10 +774,6 @@
             <p class="page-subtitle">Connect to the companion app</p>
 
             <div class="setup-container">
-                <div class="info-box firefox-only">
-                    Firefox requires a quick one-time setup to enable secure connections between the browser extension and companion app.
-                </div>
-
                 <!-- Step 1: Install App -->
                 <div class="setup-step" id="step-app-install">
                     <div class="step-marker">
@@ -797,46 +793,14 @@
                     </div>
                 </div>
 
-                <!-- Step 2: Certificate Setup (Firefox only) -->
-                <div class="setup-step firefox-only" id="step-certificate">
+                <!-- Step 2: Connection Verification -->
+                <div class="setup-step" id="step-connection">
                     <div class="step-marker">
                         <span class="step-number">2</span>
                     </div>
-                    <div class="step-line"></div>
-                    <div class="step-content">
-                        <h3 class="step-title">Accept the Certificate</h3>
-                        <p class="step-description">
-                            Click the button below to open the certificate page, then click "Advanced" and "Accept the Risk and Continue"
-                        </p>
-                        <a href="https://127.0.0.1:59211/accept-cert" target="_blank" class="button" id="cert-button">Open Certificate Page</a>
-                    </div>
-                </div>
-
-                <!-- Step 3: Certificate Verification (Firefox only) -->
-                <div class="setup-step firefox-only" id="step-cert-verify">
-                    <div class="step-marker">
-                        <span class="step-number">3</span>
-                    </div>
-                    <div class="step-line"></div>
-                    <div class="step-content">
-                        <h3 class="step-title">Certificate Acceptance</h3>
-                        <p class="step-description">
-                            After accepting the certificate, close the certificate page. We'll proceed automatically.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Step 4: Connection Verification -->
-                <div class="setup-step" id="step-connection">
-                    <div class="step-marker">
-                        <span class="step-number" id="connection-step-number">2</span>
-                    </div>
                     <div class="step-content">
                         <h3 class="step-title">Verify Connection</h3>
-                        <p class="step-description firefox-only">
-                            We'll check the connection to ensure everything is working properly.
-                        </p>
-                        <p class="step-description non-firefox">
+                        <p class="step-description">
                             We'll verify the connection to the companion app.
                         </p>
                         <div class="connection-status status-connecting" id="connection-status">

@@ -90,16 +90,12 @@ const HeaderTable: React.FC = () => {
     const content = source ? (source.sourceContent || source.locationContent || '') : '';
     const actualValue = content ? `${entry.prefix || ''}${content}${entry.suffix || ''}` : '';
 
-    if (!connected) {
-      return { sourceInfo, sourceTag, placeholderType: 'app_disconnected', actualValue };
-    }
-
     if (!source) {
-      return { sourceInfo, sourceTag, placeholderType: 'source_not_found', actualValue: '' };
+      return { sourceInfo, sourceTag, placeholderType: connected ? 'source_not_found' : 'app_disconnected', actualValue: '' };
     }
 
     if (!content) {
-      return { sourceInfo, sourceTag, placeholderType: 'empty_source', actualValue: '' };
+      return { sourceInfo, sourceTag, placeholderType: connected ? 'empty_source' : 'app_disconnected', actualValue: '' };
     }
 
     return { sourceInfo, sourceTag, placeholderType: null, actualValue };
@@ -166,7 +162,7 @@ const HeaderTable: React.FC = () => {
 
   function getPlaceholderTooltip(type: PlaceholderType, sourceId?: string | number | null): string {
     switch (type) {
-      case 'app_disconnected': return 'Not injecting — app disconnected. Will resume when reconnected.';
+      case 'app_disconnected': return 'Not injecting — app disconnected and no cached value available.';
       case 'source_not_found': return `Not injecting — source #${sourceId} was deleted. Recreate to resume.`;
       case 'empty_source': return `Not injecting — source #${sourceId} is empty. Will resume when it has content.`;
       case 'empty_value': return 'Not injecting — header value is empty. Set a value to activate.';
