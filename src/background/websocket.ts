@@ -157,7 +157,7 @@ function handleConnectionFailure(): void {
     logger.debug('WebSocket', `Scheduling reconnection attempt ${reconnectAttempts} in ${delay}ms`);
     reconnectTimer = setTimeout(() => {
         logger.debug('WebSocket', 'Attempting WebSocket reconnection');
-        connectWebSocket();
+        void connectWebSocket();
     }, delay);
 }
 
@@ -385,21 +385,17 @@ function createMessageHandler(onSourcesReceived: OnSourcesReceivedCallback | und
 }
 
 /**
- * Send browser info and request rules after connection
+ * Send browser identification info after connection
  */
-function sendBrowserInfoAndRequestRules(): void {
+function sendBrowserInfo(): void {
     if (socket && socket.readyState === WebSocket.OPEN) {
-        const browserInfo = {
+        socket.send(JSON.stringify({
             type: 'browserInfo',
             browser: getBrowserName(),
             version: getBrowserVersion(),
             extensionVersion: runtime.getManifest().version
-        };
-        socket.send(JSON.stringify(browserInfo));
+        }));
         logger.info('WebSocket', 'Sent browser info to Electron app');
-
-        socket.send(JSON.stringify({ type: 'requestRules' }));
-        logger.info('WebSocket', 'Requested rules from Electron app');
     }
 }
 
@@ -438,7 +434,7 @@ function connectStandardWebSocket(url: string, onSourcesReceived: OnSourcesRecei
                 isConnected = true;
                 reconnectAttempts = 0;
                 broadcastConnectionStatus();
-                sendBrowserInfoAndRequestRules();
+                sendBrowserInfo();
             };
 
             socket.onmessage = createMessageHandler(onSourcesReceived);
