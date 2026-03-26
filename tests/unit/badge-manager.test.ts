@@ -64,7 +64,7 @@ describe('updateExtensionBadge', () => {
                 expect.any(Function)
             );
             expect(action.setTitle).toHaveBeenCalledWith({
-                title: 'Open Headers - Disconnected\nDynamic header rules may not work',
+                title: 'Open Headers - Disconnected\nUsing cached data',
             });
         });
 
@@ -78,7 +78,7 @@ describe('updateExtensionBadge', () => {
                 expect.any(Function)
             );
             expect(action.setTitle).toHaveBeenCalledWith({
-                title: 'Open Headers - Disconnected\nDynamic header rules may not work',
+                title: 'Open Headers - Disconnected\nUsing cached data',
             });
         });
 

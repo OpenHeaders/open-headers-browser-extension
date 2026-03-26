@@ -89,7 +89,7 @@ export async function updateExtensionBadge(
         // Update the tooltip
         if (actionAPI.setTitle) {
             actionAPI.setTitle({
-                title: 'Open Headers - Disconnected\nDynamic header rules may not work'
+                title: 'Open Headers - Disconnected\nUsing cached data'
             });
         }
     } else if (badgeState === 'paused') {
