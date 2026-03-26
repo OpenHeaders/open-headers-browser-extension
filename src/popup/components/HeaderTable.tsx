@@ -223,7 +223,11 @@ const HeaderTable: React.FC = () => {
         const first = domains[0].length > 18 ? `${domains[0].substring(0, 18)}...` : domains[0];
         const label = domains.length === 1 ? first : `${first} +${domains.length - 1}`;
         return (
-          <Tooltip title={domains.map((d, i) => <div key={i}>{d}</div>)}>
+          <Tooltip title={
+            <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+              {domains.map((d, i) => <div key={i}>{domains.length > 1 && <span style={{ opacity: 0.6 }}>{i + 1}. </span>}{d}</div>)}
+            </div>
+          } overlayStyle={{ maxWidth: 500 }}>
             <Tag style={{ fontSize: '12px', cursor: 'default' }}>{label}</Tag>
           </Tooltip>
         );
