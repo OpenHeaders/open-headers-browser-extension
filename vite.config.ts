@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 
 const browser = process.env.BROWSER || 'chrome';
+const isDev = process.argv.includes('--watch');
 
 /**
  * Vite plugin to ensure Chrome Web Store compliance.
@@ -86,7 +87,7 @@ function buildContentScriptPlugin() {
                 build: {
                     outDir: `dist/${browser}/js/content/workflow-recorder`,
                     emptyOutDir: false,
-                    minify: false,
+                    minify: isDev ? false : 'terser',
                     sourcemap: browser === 'firefox' ? 'inline' : false,
                     lib: {
                         entry: path.resolve(__dirname, 'src/assets/recording/content/workflow-recorder.js'),
@@ -94,11 +95,7 @@ function buildContentScriptPlugin() {
                         name: 'WorkflowRecorder',
                         fileName: () => 'index.js',
                     },
-                    rollupOptions: {
-                        output: {
-                            inlineDynamicImports: true,
-                        },
-                    },
+                    rollupOptions: {},
                 },
                 define: {
                     'globalThis': 'globalThis',
@@ -119,12 +116,10 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': path.resolve(__dirname, 'src'),
-            '@shared': path.resolve(__dirname, 'src/shared'),
             '@components': path.resolve(__dirname, 'src/components'),
             '@assets': path.resolve(__dirname, 'src/assets'),
             '@styles': path.resolve(__dirname, 'src/assets/styles'),
             '@utils': path.resolve(__dirname, 'src/utils'),
-            '@services': path.resolve(__dirname, 'src/services'),
             '@context': path.resolve(__dirname, 'src/context'),
             '@hooks': path.resolve(__dirname, 'src/hooks'),
         },
@@ -133,8 +128,30 @@ export default defineConfig({
     build: {
         outDir: `dist/${browser}`,
         emptyOutDir: true,
-        // Chrome Web Store requires human-readable code
-        minify: false,
+        // All MV3 browsers (Chrome 109+, Firefox 109+, Edge 109+, Safari 16.4+) support ES2022
+        target: 'es2022',
+        // Vendor chunk is large (React + Ant Design) — this is expected for a popup-only bundle
+        chunkSizeWarningLimit: 1200,
+        // Dev: skip minification for fast rebuilds
+        // Production: Terser with preserved class/function names for Chrome Web Store compliance
+        minify: isDev ? false : 'terser',
+        ...(!isDev && {
+            terserOptions: {
+                compress: {
+                    passes: 1,
+                    drop_console: false,
+                    drop_debugger: false,
+                },
+                mangle: {
+                    keep_classnames: true,
+                    keep_fnames: true,
+                },
+                format: {
+                    beautify: false,
+                    comments: false,
+                },
+            },
+        }),
         sourcemap: browser === 'firefox' ? 'inline' : false,
         // Disable module preload polyfill — it references `document` which
         // crashes the background service worker.

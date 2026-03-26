@@ -19,6 +19,7 @@
     "declarativeNetRequestWithHostAccess",
     "tabs",
     "webRequest",
+    "webNavigation",
     "activeTab",
     "scripting",
     "downloads",

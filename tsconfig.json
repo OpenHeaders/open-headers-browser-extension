@@ -19,16 +19,14 @@
     /* React JSX support */
     "jsx": "react-jsx",
 
-    /* Paths — match webpack aliases */
+    /* Paths — match Vite aliases in vite.config.ts */
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@shared/*": ["src/shared/*"],
       "@components/*": ["src/components/*"],
       "@assets/*": ["src/assets/*"],
       "@styles/*": ["src/assets/styles/*"],
       "@utils/*": ["src/utils/*"],
-      "@services/*": ["src/services/*"],
       "@context/*": ["src/context/*"],
       "@hooks/*": ["src/hooks/*"]
     },

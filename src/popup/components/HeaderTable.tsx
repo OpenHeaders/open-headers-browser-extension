@@ -225,7 +225,7 @@ const HeaderTable: React.FC = () => {
         return (
           <Tooltip title={
             <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-              {domains.map((d, i) => <div key={i}>{domains.length > 1 && <span style={{ opacity: 0.6 }}>{i + 1}. </span>}{d}</div>)}
+              {domains.map((d, i) => <div key={i}><span style={{ opacity: 0.6 }}>{i + 1}. </span>{d}</div>)}
             </div>
           } overlayStyle={{ maxWidth: 500 }}>
             <Tag style={{ fontSize: '12px', cursor: 'default' }}>{label}</Tag>

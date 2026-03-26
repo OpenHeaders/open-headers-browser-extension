@@ -91,7 +91,20 @@ const ActiveRules: React.FC = () => {
       render: (domains: string[], record: TableRecord) => {
         if (!domains || domains.length === 0) return <Tag color="default">All domains</Tag>;
         const matchIcon = record.matchType === 'indirect' ? <Tooltip title="Applied to resources loaded by this page"><LinkOutlined style={{ fontSize: '10px', marginRight: '4px', color: '#1890ff' }} /></Tooltip> : null;
-        return <Space size={1} wrap>{matchIcon}{domains.slice(0, 2).map(domain => <Tag key={domain}>{domain.length > 15 ? `${domain.substring(0, 15)}...` : domain}</Tag>)}{domains.length > 2 && <Tooltip title={domains.slice(2).join(', ')}><Tag>+{domains.length - 2}</Tag></Tooltip>}</Space>;
+        const first = domains[0].length > 18 ? `${domains[0].substring(0, 18)}...` : domains[0];
+        const label = domains.length === 1 ? first : `${first} +${domains.length - 1}`;
+        return (
+          <Space size={1}>
+            {matchIcon}
+            <Tooltip title={
+              <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                {domains.map((d, i) => <div key={i}><span style={{ opacity: 0.6 }}>{i + 1}. </span>{d}</div>)}
+              </div>
+            } overlayStyle={{ maxWidth: 500 }}>
+              <Tag style={{ fontSize: '12px', cursor: 'default' }}>{label}</Tag>
+            </Tooltip>
+          </Space>
+        );
       },
     },
     { title: 'Status', key: 'status', width: 80, align: 'center',
