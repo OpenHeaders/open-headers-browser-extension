@@ -48,12 +48,12 @@ export function initPauseState(): void {
 export function updateNetworkRules(dynamicSources: Source[]): void {
     if (isPaused) {
         logger.info('HeaderManager', 'Rules execution is paused, clearing all active rules');
-        const removeIds = lastMaxRuleId > 0
-            ? Array.from({ length: lastMaxRuleId }, (_, i) => i + 1)
-            : [];
-        declarativeNetRequest!.updateDynamicRules({
-            removeRuleIds: removeIds,
-            addRules: []
+        declarativeNetRequest!.getDynamicRules().then((existingRules) => {
+            const removeIds = existingRules.map(r => r.id);
+            return declarativeNetRequest!.updateDynamicRules({
+                removeRuleIds: removeIds,
+                addRules: []
+            });
         }).then(() => {
             lastMaxRuleId = 0;
             logger.debug('HeaderManager', 'All rules cleared while paused');
@@ -109,14 +109,15 @@ export function updateNetworkRules(dynamicSources: Source[]): void {
             logger.warn('HeaderManager', `${placeholders.length} headers not injected (unresolved):`, placeholders);
         }
 
-        const removeCount = Math.max(lastMaxRuleId, ruleId - 1);
-        const removeRuleIds = removeCount > 0
-            ? Array.from({ length: removeCount }, (_, i) => i + 1)
-            : [];
+        // Get ALL existing dynamic rule IDs so we remove everything —
+        // including stale rules from previous sessions or versions
+        declarativeNetRequest!.getDynamicRules().then((existingRules) => {
+            const removeRuleIds = existingRules.map(r => r.id);
 
-        declarativeNetRequest!.updateDynamicRules({
-            removeRuleIds,
-            addRules: rules
+            return declarativeNetRequest!.updateDynamicRules({
+                removeRuleIds,
+                addRules: rules
+            });
         }).then(() => {
             lastMaxRuleId = ruleId - 1;
             logger.info('HeaderManager', `Successfully updated ${rules.length} network rules`);
