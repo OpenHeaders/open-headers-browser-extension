@@ -51,13 +51,45 @@ jobs:
       - name: List release files
         run: ls -la releases/
 
+      # Determine release type based on tag pattern
+      # RC/beta/alpha tags create published prereleases, stable tags create published releases
+      - name: Determine release type
+        id: release_type
+        run: |
+          TAG_NAME=${GITHUB_REF_NAME}
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+          # Check if this is a prerelease (rc, beta, alpha)
+          if [[ "$TAG_NAME" =~ -(rc|beta|alpha)[.0-9]*$ ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "::notice::Detected RC/Beta/Alpha release: $TAG_NAME - Creating published prerelease"
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "::notice::Detected stable release: $TAG_NAME - Creating published release"
+          fi
+
       - name: Generate Release Body
         id: generate_body
         run: |
           VERSION=${GITHUB_REF_NAME/v/}
+          IS_PRERELEASE="${{ steps.release_type.outputs.is_prerelease }}"
 
-          cat > release_body.md << EOF
+          # Add prerelease warning if applicable
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            cat > release_body.md << EOF
+          > ⚠️ **This is a pre-release build for testing purposes.**
+          > It may contain bugs and is not recommended for production use.
+          > Please report any issues you encounter.
+
           ## Downloads
+          EOF
+          else
+            cat > release_body.md << EOF
+          ## Downloads
+          EOF
+          fi
+
+          cat >> release_body.md << EOF
 
           ### Chrome / Chromium
           - [open-headers-chrome-v${VERSION}.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/open-headers-chrome-v${VERSION}.zip)
@@ -92,12 +124,14 @@ jobs:
           3. Build and run from Xcode
           EOF
 
+      # Create release using softprops/action-gh-release
+      # RC/beta/alpha tags create published prereleases, stable tags create published releases
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
-          prerelease: false
-          name: "Release ${{ github.ref_name }}"
+          prerelease: ${{ steps.release_type.outputs.is_prerelease == 'true' }}
+          name: "${{ github.ref_name }}"
           files: releases/*.zip
           body_path: release_body.md
           generate_release_notes: true
