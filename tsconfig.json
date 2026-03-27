@@ -1,0 +1,49 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+
+    /* Strict mode enabled — all new code must be type-safe */
+    "strict": true,
+
+    /* Output */
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+
+    /* Emit is handled by Vite — TS is for type-checking only */
+    "noEmit": true,
+
+    /* React JSX support */
+    "jsx": "react-jsx",
+
+    /* Paths — match Vite aliases in vite.config.ts */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@assets/*": ["src/assets/*"],
+      "@styles/*": ["src/assets/styles/*"],
+      "@utils/*": ["src/utils/*"],
+      "@context/*": ["src/context/*"],
+      "@hooks/*": ["src/hooks/*"]
+    },
+
+    /* Quality */
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/assets/lib/**",
+    "src/assets/welcome/**",
+    "src/assets/recording/inject/**"
+  ]
+}

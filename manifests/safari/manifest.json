@@ -1,7 +1,7 @@
 {
   "name": "Open Headers",
   "description": "Record your browser tab. Modify HTTP Traffic. Team Workspaces. Everything local.",
-  "version": "3.2.0",
+  "version": "4.0.0",
   "manifest_version": 3,
   "author": "Open Headers",
   "action": {
@@ -19,6 +19,7 @@
     "declarativeNetRequestWithHostAccess",
     "tabs",
     "webRequest",
+    "webNavigation",
     "activeTab",
     "scripting",
     "downloads",
@@ -44,6 +45,6 @@
     "128": "images/icon128.png"
   },
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; connect-src 'self' ws://127.0.0.1:59210 http://127.0.0.1:59210 wss://127.0.0.1:59211 https://127.0.0.1:59211; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com"
+    "extension_pages": "default-src 'self'; connect-src 'self' ws://127.0.0.1:59210 http://127.0.0.1:59210; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self'; font-src 'self' https://cdnjs.cloudflare.com"
   }
 }

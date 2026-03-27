@@ -170,7 +170,6 @@
 
         // Store drag handlers for cleanup
         dragHandlers = {
-            dragStart: dragStart,
             drag: drag,
             dragEnd: dragEnd
         };
@@ -258,7 +257,7 @@
         // Check if widget already exists in DOM
         const existingWidget = document.getElementById('open-headers-recording-widget');
         if (existingWidget || widget) {
-            console.log('[Recording Widget] Widget already exists, skipping creation');
+            console.log(new Date().toISOString(), 'INFO ', '[RecordingWidget]', 'Widget already exists, skipping creation');
             return; // Already running
         }
 
@@ -323,7 +322,7 @@
                     const data = event.data.data;
                     if (data.isPreNav) {
                         // Show pre-navigation state
-                        console.log('[Widget] Pre-navigation mode');
+                        console.log(new Date().toISOString(), 'INFO ', '[RecordingWidget]', 'Pre-navigation mode');
                     }
                     startWidget(data.startTime);
                     break;

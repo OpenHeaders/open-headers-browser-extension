@@ -1,4 +1,4 @@
-@import '~antd/dist/reset.css';
+@import 'antd/dist/reset.css';
 
 /* Global styles */
 html {
@@ -10,7 +10,7 @@ body {
   margin: 0;
   padding: 0;
   width: 800px;
-  height: 540px;
+  height: 600px;
   overflow: hidden !important;
   box-sizing: border-box;
   background-color: transparent;
@@ -71,11 +71,9 @@ body {
 
 .content {
   flex: 1 1 auto;
-  padding: 16px 16px 30px 16px; /* Bottom padding for footer (48px) + minimal spacing */
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 16px 16px 30px 16px;
+  overflow: hidden;
   min-height: 0;
-  max-height: calc(100vh - 74px);
   position: relative;
 }
 
@@ -121,6 +119,21 @@ body {
       border-radius: 0;
     }
 
+    .ant-table-cell-fix-left,
+    .ant-table-cell-fix-right,
+    .ant-table-cell-fix-left-last,
+    .ant-table-cell-fix-right-first {
+      transition: none !important;
+      * {
+        transition: none !important;
+      }
+    }
+
+    .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+    .ant-table-ping-left .ant-table-cell-fix-left-last::after {
+      transition: none !important;
+    }
+
     .ant-table-thead > tr > th {
       font-weight: 500;
     }
@@ -129,6 +142,10 @@ body {
       overflow: hidden;
       padding: 8px;
       vertical-align: middle;
+    }
+
+    .ant-table-tbody > tr.row-not-injecting > td:first-child {
+      box-shadow: inset 3px 0 0 0 #faad14;
     }
 
     /* Ensure the column headers don't wrap unnecessarily */
@@ -211,37 +228,7 @@ body {
 }
 
 
-/* Webkit scrollbar for better visibility */
-.content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.content::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
-}
-
-.content::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-}
-
-.content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-/* Dark mode scrollbar */
-.app-container[data-theme="dark"] .content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.app-container[data-theme="dark"] .content::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.3);
-}
-
-.app-container[data-theme="dark"] .content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.5);
-}
+/* No outer scrollbar — only the table scrolls internally */
 
 /* Form item spacing adjustments */
 .ant-form-item {
