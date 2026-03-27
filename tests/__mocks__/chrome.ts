@@ -32,7 +32,7 @@ const runtimeMock = {
         addListener: vi.fn(),
     },
     getURL: vi.fn((path: string) => `chrome-extension://test-id/${path}`),
-    getManifest: vi.fn(() => ({ version: '3.5.0' })),
+    getManifest: vi.fn(() => ({ version: '4.0.0' })),
     lastError: null as chrome.runtime.LastError | null,
 };
 
