@@ -5,6 +5,7 @@ import fs from 'fs';
 
 const browser = process.env.BROWSER || 'chrome';
 const isDev = process.argv.includes('--watch');
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as { version: string };
 
 /**
  * Vite plugin to ensure Chrome Web Store compliance.
@@ -185,8 +186,11 @@ export default defineConfig({
         },
     },
 
-    // Prevent Vite from using globalThis detection that violates CSP
+    // Build-time constants.
+    // __APP_VERSION__ is read from package.json (which CI aligns with the git tag).
+    // globalThis override prevents Vite from using detection code that violates CSP.
     define: {
+        '__APP_VERSION__': JSON.stringify(pkg.version),
         'globalThis': 'globalThis',
     },
 

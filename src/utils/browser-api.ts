@@ -231,6 +231,25 @@ export const declarativeNetRequest = browserAPI.declarativeNetRequest ? {
         }
       });
     }
+  },
+  getDynamicRules: (): Promise<chrome.declarativeNetRequest.Rule[]> => {
+    if (isFirefox) {
+      return browserAPI.declarativeNetRequest.getDynamicRules();
+    } else {
+      return new Promise<chrome.declarativeNetRequest.Rule[]>((resolve, reject) => {
+        try {
+          browserAPI.declarativeNetRequest.getDynamicRules((rules) => {
+            if (browserAPI.runtime.lastError) {
+              reject(browserAPI.runtime.lastError);
+            } else {
+              resolve(rules);
+            }
+          });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }
   }
 } : null;
 

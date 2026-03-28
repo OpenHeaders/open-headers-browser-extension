@@ -8,7 +8,7 @@
 
 declare const browser: typeof chrome | undefined;
 
-import { connectWebSocket, getCurrentSources, isWebSocketConnected, isWebSocketConnecting, getReconnectAttempts, sendViaWebSocket, sendRecordingViaWebSocket } from './websocket';
+import { connectWebSocket, isWebSocketConnected, isWebSocketConnecting, getReconnectAttempts, sendViaWebSocket, sendRecordingViaWebSocket } from './websocket';
 import { initPauseState, setRulesPaused } from './header-manager';
 import { getChunkedData } from '../utils/storage-chunking.js';
 import { alarms, runtime, storage, tabs, isFirefox, isChrome, isEdge, isSafari } from '../utils/browser-api.js';
@@ -23,6 +23,7 @@ import { openWelcomePageOnInstall, checkFirefoxFirstRun } from './modules/welcom
 import { generateSourcesHash, generateSavedDataHash } from './modules/utils';
 import { handleRecordingMessage } from './modules/recording-handler';
 import { handleGeneralMessage } from './modules/message-handler';
+import { getCurrentSources, hydrateFromStorage } from './modules/sources-store';
 import {
     scheduleUpdate,
     getLastSourcesHash, setLastSourcesHash,
@@ -30,12 +31,11 @@ import {
     getLastRulesUpdateTime, setLastRulesUpdateTime
 } from './modules/rule-engine';
 
-import type { Source } from '../types/websocket';
 import type { SavedDataMap } from '../types/header';
 import type { IRecordingService } from '../types/recording';
 import type { ActiveRule, HotkeyCommand } from '../types/browser';
 
-logger.initialize();
+void logger.initialize();
 initPauseState();
 
 const recordingService: IRecordingService = new RecordingService();
@@ -66,7 +66,7 @@ const debouncedUpdateBadge = (() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     return () => {
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { timer = null; updateBadgeForCurrentTab(); }, 100);
+        timer = setTimeout(() => { timer = null; void updateBadgeForCurrentTab(); }, 100);
     };
 })();
 
@@ -85,15 +85,13 @@ async function initializeExtension(): Promise<void> {
 
     setTimeout(() => restoreTrackingState(debouncedUpdateBadge), 1000);
 
-    // Restore sources from storage (offline start before WebSocket connects)
-    storage.local.get(['dynamicSources'], (result: Record<string, unknown>) => {
-        if (result.dynamicSources && Array.isArray(result.dynamicSources) && (result.dynamicSources as Source[]).length > 0) {
-            const sources = result.dynamicSources as Source[];
-            logger.info('Background', 'Restored dynamic sources from storage:', sources.length);
-            setLastSourcesHash(generateSourcesHash(sources));
-            scheduleUpdate('init', { immediate: true, sources });
-        }
-    });
+    // Hydrate sources from storage (offline start before WebSocket connects)
+    const restoredSources = await hydrateFromStorage();
+    if (restoredSources.length > 0) {
+        logger.info('Background', 'Restored dynamic sources from storage:', restoredSources.length);
+        setLastSourcesHash(generateSourcesHash(restoredSources));
+        scheduleUpdate('init', { immediate: true, sources: restoredSources });
+    }
 
     getChunkedData('savedData', (savedData: SavedDataMap | null) => {
         if (savedData) {
@@ -131,7 +129,7 @@ alarms!.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
             }
         }
     } else if (alarm.name === 'updateBadge') {
-        updateBadgeForCurrentTab();
+        void updateBadgeForCurrentTab();
     }
 });
 
@@ -256,7 +254,7 @@ runtime.onMessage.addListener((message: unknown, sender: chrome.runtime.MessageS
 
 runtime.onStartup.addListener(() => {
     logger.info('Background', 'Browser started up, connecting WebSocket...');
-    initializeExtension();
+    void initializeExtension();
 });
 
 runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails) => {
@@ -277,9 +275,9 @@ runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails) => {
         });
     }
 
-    initializeExtension();
+    void initializeExtension();
 });
 
 logger.info('Background', 'Background script started, initializing...');
-initializeExtension();
+void initializeExtension();
 checkFirefoxFirstRun();

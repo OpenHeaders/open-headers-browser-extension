@@ -15,7 +15,7 @@
  */
 
 import { updateNetworkRules } from '../header-manager';
-import { getCurrentSources } from '../websocket';
+import { getCurrentSources } from './sources-store';
 import { generateSourcesHash, generateSavedDataHash } from './utils';
 import { logger } from '../../utils/logger';
 
@@ -28,8 +28,10 @@ interface ScheduleOptions {
 }
 
 const DEBOUNCE_MS = 150;
+const FORCED_REASONS = new Set(['pause', 'import', 'init', 'rules', 'savedData', 'rulesUpdated']);
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let forcedPending = false;
 let lastSourcesHash = '';
 let lastSavedDataHash = '';
 let lastRulesUpdateTime = 0;
@@ -37,11 +39,19 @@ let lastRulesUpdateTime = 0;
 /**
  * Schedule a rule update. Rapid calls within DEBOUNCE_MS are coalesced
  * into a single updateNetworkRules() call.
+ *
+ * If any call during the debounce window has a forced reason, the
+ * coalesced update will always proceed (skip the hash check).
  */
 export function scheduleUpdate(reason: string, options: ScheduleOptions = {}): void {
     if (options.immediate) {
-        flushUpdate(reason, options.sources);
+        forcedPending = false;
+        flushUpdate(reason, options.sources, FORCED_REASONS.has(reason));
         return;
+    }
+
+    if (FORCED_REASONS.has(reason)) {
+        forcedPending = true;
     }
 
     if (debounceTimer) {
@@ -50,17 +60,18 @@ export function scheduleUpdate(reason: string, options: ScheduleOptions = {}): v
 
     debounceTimer = setTimeout(() => {
         debounceTimer = null;
-        flushUpdate(reason, options.sources);
+        const forced = forcedPending;
+        forcedPending = false;
+        flushUpdate(reason, options.sources, forced);
     }, DEBOUNCE_MS);
 }
 
-function flushUpdate(reason: string, explicitSources?: Source[]): void {
+function flushUpdate(reason: string, explicitSources?: Source[], forced?: boolean): void {
     const sources = explicitSources || getCurrentSources();
     const currentHash = generateSourcesHash(sources);
 
-    // Skip if nothing changed (unless it's a forced reason like pause/import/init)
-    const forcedReasons = ['pause', 'import', 'init', 'rules'];
-    if (currentHash === lastSourcesHash && !forcedReasons.includes(reason)) {
+    // Skip if nothing changed — unless forced (a forced reason was seen during the debounce window)
+    if (currentHash === lastSourcesHash && !forced) {
         logger.debug('RuleEngine', `Rule update skipped (${reason}) — hash unchanged`);
         return;
     }

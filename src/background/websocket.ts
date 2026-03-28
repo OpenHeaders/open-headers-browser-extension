@@ -8,6 +8,7 @@ import { sendMessageWithCallback } from '../utils/messaging';
 import { logger } from '../utils/logger';
 import { generateSourcesHash } from './modules/utils';
 import { scheduleUpdate } from './modules/rule-engine';
+import { getCurrentSources, setSourcesFromApp } from './modules/sources-store';
 
 import type { Source, OnSourcesReceivedCallback, RulesData, HeaderRuleFromApp } from '../types/websocket';
 import type { SavedDataMap } from '../types/header';
@@ -21,7 +22,6 @@ let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let isConnecting = false;
 let isConnected = false;
-let allSources: Source[] = [];
 let rules: RulesData = {};
 let reconnectAttempts = 0;
 const MAX_RECONNECT_DELAY = 6000;
@@ -193,10 +193,12 @@ function handleSourcesMessage(
     onSourcesReceived: OnSourcesReceivedCallback | undefined
 ): void {
     const newSourcesHash = generateSourcesHash(parsed.sources);
-    const previousSources = [...allSources];
+    const previousSources = [...getCurrentSources()];
     const isInitialConnection = parsed.type === 'sourcesInitial';
 
-    allSources = parsed.sources;
+    // Authoritative write from desktop app — updates memory + storage
+    setSourcesFromApp(parsed.sources);
+    const allSources = getCurrentSources();
     logger.info('WebSocket', 'Sources received:', allSources.length, 'at', new Date().toISOString());
 
     const previousSourceIds = new Set(previousSources.map(s => s.sourceId));
@@ -240,35 +242,33 @@ function handleSourcesMessage(
         });
     }
 
-    storage.local.set({ dynamicSources: allSources }, () => {
-        logger.debug('WebSocket', 'Sources saved to storage');
+    // Storage persistence already handled by setSourcesFromApp above.
+    // Now schedule rule updates and notify popup.
+    if (isInitialConnection || newSourcesHash !== lastSourcesHash || !lastRulesUpdateTime) {
+        scheduleUpdate('sources', { sources: allSources });
 
-        if (isInitialConnection || newSourcesHash !== lastSourcesHash || !lastRulesUpdateTime) {
-            scheduleUpdate('sources', { sources: allSources });
-
-            if (onSourcesReceived && typeof onSourcesReceived === 'function') {
-                onSourcesReceived(allSources);
-            }
-
-            lastSourcesHash = newSourcesHash;
-            lastRulesUpdateTime = Date.now();
-        } else {
-            const timeSinceLastUpdate = Date.now() - lastRulesUpdateTime;
-            const FORCE_UPDATE_INTERVAL = 60 * 1000;
-            if (timeSinceLastUpdate > FORCE_UPDATE_INTERVAL) {
-                scheduleUpdate('periodic', { sources: allSources });
-                lastRulesUpdateTime = Date.now();
-            }
+        if (onSourcesReceived && typeof onSourcesReceived === 'function') {
+            onSourcesReceived(allSources);
         }
 
-        sendMessageWithCallback({
-            type: 'sourcesUpdated',
-            sources: allSources,
-            timestamp: Date.now(),
-            removedSourceIds: removedSourceIds.length > 0 ? removedSourceIds : undefined
-        }, (_response, _error) => {
-            // Ignore errors
-        });
+        lastSourcesHash = newSourcesHash;
+        lastRulesUpdateTime = Date.now();
+    } else {
+        const timeSinceLastUpdate = Date.now() - lastRulesUpdateTime;
+        const FORCE_UPDATE_INTERVAL = 60 * 1000;
+        if (timeSinceLastUpdate > FORCE_UPDATE_INTERVAL) {
+            scheduleUpdate('periodic', { sources: allSources });
+            lastRulesUpdateTime = Date.now();
+        }
+    }
+
+    sendMessageWithCallback({
+        type: 'sourcesUpdated',
+        sources: allSources,
+        timestamp: Date.now(),
+        removedSourceIds: removedSourceIds.length > 0 ? removedSourceIds : undefined
+    }, (_response, _error) => {
+        // Ignore errors
     });
 }
 
@@ -474,12 +474,7 @@ export function getReconnectAttempts(): number {
     return reconnectAttempts;
 }
 
-/**
- * Get current sources
- */
-export function getCurrentSources(): Source[] {
-    return allSources;
-}
+export { getCurrentSources } from './modules/sources-store';
 
 /**
  * Send data via WebSocket

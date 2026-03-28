@@ -2,11 +2,12 @@
  * Main Message Handler - Handles non-recording messages
  */
 
-import { storage, tabs, runtime as browserRuntime } from '../../utils/browser-api.js';
+import { tabs, runtime as browserRuntime } from '../../utils/browser-api.js';
 import { openWelcomePageDirectly } from './welcome-page';
 import { clearAllTracking, getActiveRulesForTab } from './request-tracker';
 import { generateSourcesHash, generateSavedDataHash } from './utils';
 import { getChunkedData, setChunkedData } from '../../utils/storage-chunking.js';
+import { setSourcesFromApp } from './sources-store';
 
 import type { MessageHandlerContext, SendResponse } from '../../types/browser';
 import type { SavedDataMap } from '../../types/header';
@@ -116,11 +117,10 @@ export function handleGeneralMessage(
             clearAllTracking();
             logger.info('MessageHandler', 'Cleared all request tracking after configuration import');
 
-            // If dynamic sources were provided, update them in storage
+            // If dynamic sources were provided, update the store
             if (message.dynamicSources && Array.isArray(message.dynamicSources)) {
-                storage.local.set({ dynamicSources: message.dynamicSources }, () => {
-                    logger.info('MessageHandler', 'Imported dynamic sources saved to storage:', (message.dynamicSources as Source[]).length);
-                });
+                setSourcesFromApp(message.dynamicSources as Source[]);
+                logger.info('MessageHandler', 'Imported dynamic sources saved:', (message.dynamicSources as Source[]).length);
             }
 
             // Update network rules with the current sources
@@ -171,34 +171,27 @@ export function handleGeneralMessage(
 
                     // Handle dynamic sources - preserve existing ones if import doesn't include any
                     if (dynamicSources && Array.isArray(dynamicSources) && dynamicSources.length > 0) {
-                        // Import has dynamic sources, use them
-                        storage.local.set({ dynamicSources }, () => {
-                            if (browserAPI.runtime.lastError) {
-                                logger.info('MessageHandler', 'Error saving dynamicSources:', (browserAPI.runtime.lastError as chrome.runtime.LastError).message);
-                                safeResponse({ success: false, error: 'Failed to save dynamic sources' });
-                                return;
-                            }
+                        // Import has dynamic sources, write through the store
+                        setSourcesFromApp(dynamicSources);
+                        logger.info('MessageHandler', 'Configuration imported successfully with dynamic sources');
 
-                            logger.info('MessageHandler', 'Configuration imported successfully with dynamic sources');
+                        // Clear all request tracking when importing new config
+                        clearAllTracking();
+                        logger.info('MessageHandler', 'Cleared all request tracking after configuration import');
 
-                            // Clear all request tracking when importing new config
-                            clearAllTracking();
-                            logger.info('MessageHandler', 'Cleared all request tracking after configuration import');
+                        // Update network rules with the imported sources
+                        scheduleUpdate('import', { immediate: true, sources: dynamicSources });
 
-                            // Update network rules with the imported sources
-                            scheduleUpdate('import', { immediate: true, sources: dynamicSources });
+                        // Update tracking variables
+                        setLastSourcesHash(generateSourcesHash(dynamicSources));
+                        setLastRulesUpdateTime(Date.now());
+                        setLastSavedDataHash(generateSavedDataHash(savedData));
 
-                            // Update tracking variables
-                            setLastSourcesHash(generateSourcesHash(dynamicSources));
-                            setLastRulesUpdateTime(Date.now());
-                            setLastSavedDataHash(generateSavedDataHash(savedData));
+                        // Update badge for current tab
+                        updateBadgeCallback();
 
-                            // Update badge for current tab
-                            updateBadgeCallback();
-
-                            // Send success response
-                            safeResponse({ success: true });
-                        });
+                        // Send success response
+                        safeResponse({ success: true });
                     } else {
                         // No dynamic sources in import, preserve existing ones
                         logger.info('MessageHandler', 'Configuration imported successfully (preserving existing dynamic sources)');
