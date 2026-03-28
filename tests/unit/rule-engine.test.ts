@@ -5,7 +5,7 @@ vi.mock('../../src/background/header-manager', () => ({
     updateNetworkRules: vi.fn(),
 }));
 
-vi.mock('../../src/background/websocket', () => ({
+vi.mock('../../src/background/modules/sources-store', () => ({
     getCurrentSources: vi.fn(() => []),
 }));
 
@@ -19,7 +19,7 @@ vi.mock('../../src/utils/logger', () => ({
 }));
 
 import { updateNetworkRules } from '../../src/background/header-manager';
-import { getCurrentSources } from '../../src/background/websocket';
+import { getCurrentSources } from '../../src/background/modules/sources-store';
 import {
     scheduleUpdate,
     getLastSourcesHash, setLastSourcesHash,

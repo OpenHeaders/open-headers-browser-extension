@@ -15,7 +15,7 @@
  */
 
 import { updateNetworkRules } from '../header-manager';
-import { getCurrentSources } from '../websocket';
+import { getCurrentSources } from './sources-store';
 import { generateSourcesHash, generateSavedDataHash } from './utils';
 import { logger } from '../../utils/logger';
 
@@ -28,7 +28,7 @@ interface ScheduleOptions {
 }
 
 const DEBOUNCE_MS = 150;
-const FORCED_REASONS = new Set(['pause', 'import', 'init', 'rules']);
+const FORCED_REASONS = new Set(['pause', 'import', 'init', 'rules', 'savedData', 'rulesUpdated']);
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let forcedPending = false;
