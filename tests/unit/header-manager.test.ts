@@ -110,12 +110,12 @@ describe('header-manager', () => {
             await flushPromises();
 
             expect(mockUpdateDynamicRules).toHaveBeenCalledTimes(1);
-            // No matching source → source_not_found, not app_disconnected
+            // No matching source → source_not_found, no rules produced
             const rules = getRulesFromLastCall();
             expect(rules).toHaveLength(0);
         });
 
-        it('does not produce app_disconnected placeholder — source_not_found instead when source is missing', () => {
+        it('produces source_not_found when source is missing', () => {
             mockSavedData = {
                 'rule-1': makeSavedEntry({ headerName: 'Authorization', sourceId: 'src-missing' }),
             };

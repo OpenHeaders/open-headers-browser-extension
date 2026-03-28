@@ -41,7 +41,6 @@ export type EntryResult =
 
 /** Reasons a header may use a placeholder value */
 export type PlaceholderReason =
-    | 'app_disconnected'
     | 'source_not_found'
     | 'empty_source'
     | 'empty_value';
@@ -76,12 +75,6 @@ export interface HeaderModification {
     value: string;
 }
 
-/** Result of header name validation */
-export interface HeaderNameValidation {
-    valid: boolean;
-    message?: string;
-    sanitized?: string;
-}
 
 /** Result of header value validation */
 export interface HeaderValueValidation {

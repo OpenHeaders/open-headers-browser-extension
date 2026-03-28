@@ -16,7 +16,7 @@ import type { FilterValue, SorterResult } from 'antd/es/table/interface';
 const { Search } = Input;
 const { Text } = Typography;
 
-type PlaceholderType = 'app_disconnected' | 'source_not_found' | 'empty_source' | 'empty_value' | null;
+type PlaceholderType = 'source_not_found' | 'empty_source' | 'empty_value' | null;
 
 interface TableRecord {
   key: string;
@@ -35,6 +35,7 @@ interface TableRecord {
   placeholderType: PlaceholderType;
   actualValue: string;
   tag: string;
+  isCachedValue: boolean;
 }
 
 interface DynamicValueInfo {
@@ -42,6 +43,7 @@ interface DynamicValueInfo {
   sourceTag: string;
   placeholderType: PlaceholderType;
   actualValue: string;
+  isCachedValue: boolean;
 }
 
 const HeaderTable: React.FC = () => {
@@ -71,9 +73,9 @@ const HeaderTable: React.FC = () => {
   function getDynamicValueInfo(entry: HeaderEntry, sources: DynamicSource[], connected: boolean): DynamicValueInfo {
     if (!entry.isDynamic || !entry.sourceId) {
       if (!entry.headerValue || !entry.headerValue.trim()) {
-        return { sourceInfo: '', sourceTag: '', placeholderType: 'empty_value', actualValue: '' };
+        return { sourceInfo: '', sourceTag: '', placeholderType: 'empty_value', actualValue: '', isCachedValue: false };
       }
-      return { sourceInfo: '', sourceTag: '', placeholderType: null, actualValue: entry.headerValue };
+      return { sourceInfo: '', sourceTag: '', placeholderType: null, actualValue: entry.headerValue, isCachedValue: false };
     }
 
     const source = sources.find(s =>
@@ -91,14 +93,14 @@ const HeaderTable: React.FC = () => {
     const actualValue = content ? `${entry.prefix || ''}${content}${entry.suffix || ''}` : '';
 
     if (!source) {
-      return { sourceInfo, sourceTag, placeholderType: connected ? 'source_not_found' : 'app_disconnected', actualValue: '' };
+      return { sourceInfo, sourceTag, placeholderType: 'source_not_found', actualValue: '', isCachedValue: false };
     }
 
     if (!content) {
-      return { sourceInfo, sourceTag, placeholderType: connected ? 'empty_source' : 'app_disconnected', actualValue: '' };
+      return { sourceInfo, sourceTag, placeholderType: 'empty_source', actualValue: '', isCachedValue: false };
     }
 
-    return { sourceInfo, sourceTag, placeholderType: null, actualValue };
+    return { sourceInfo, sourceTag, placeholderType: null, actualValue, isCachedValue: !connected };
   }
 
   const dataSource: TableRecord[] = Object.entries(headerEntries).map(([id, entry]) => {
@@ -110,7 +112,7 @@ const HeaderTable: React.FC = () => {
       isEnabled: entry.isEnabled !== false,
       sourceInfo: dynamicInfo.sourceInfo, sourceTag: dynamicInfo.sourceTag,
       placeholderType: dynamicInfo.placeholderType, actualValue: dynamicInfo.actualValue,
-      tag: entry.tag || ''
+      isCachedValue: dynamicInfo.isCachedValue, tag: entry.tag || ''
     };
   });
 
@@ -162,7 +164,6 @@ const HeaderTable: React.FC = () => {
 
   function getPlaceholderTooltip(type: PlaceholderType, sourceId?: string | number | null): string {
     switch (type) {
-      case 'app_disconnected': return 'Not injecting — app disconnected and no cached value available.';
       case 'source_not_found': return `Not injecting — source #${sourceId} was deleted. Recreate to resume.`;
       case 'empty_source': return `Not injecting — source #${sourceId} is empty. Will resume when it has content.`;
       case 'empty_value': return 'Not injecting — header value is empty. Set a value to activate.';
@@ -227,7 +228,7 @@ const HeaderTable: React.FC = () => {
             <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
               {domains.map((d, i) => <div key={i}><span style={{ opacity: 0.6 }}>{i + 1}. </span>{d}</div>)}
             </div>
-          } overlayStyle={{ maxWidth: 500 }}>
+          } styles={{ root: { maxWidth: 500 } }}>
             <Tag style={{ fontSize: '12px', cursor: 'default' }}>{label}</Tag>
           </Tooltip>
         );
@@ -243,22 +244,22 @@ const HeaderTable: React.FC = () => {
       filters: [...new Set([
         ...dataSource.map(item => item.isResponse ? 'Response' : 'Request'),
         ...dataSource.filter(item => item.tag).map(item => item.tag),
+        ...dataSource.filter(item => item.isCachedValue).map(() => 'Cached'),
         ...dataSource.filter(item => item.placeholderType).map(item => {
           switch (item.placeholderType) {
-            case 'app_disconnected': return 'Offline';
             case 'source_not_found': return 'Missing';
             case 'empty_source': return 'Empty Source';
             case 'empty_value': return 'Empty Value';
-            default: return 'Offline';
+            default: return '';
           }
-        })
+        }).filter(Boolean)
       ])].map(tag => ({ text: tag, value: tag })),
       filteredValue: filteredInfo.tags || null, filterSearch: true,
       onFilter: (value, record) => {
         const tags = [record.isResponse ? 'Response' : 'Request', ...(record.tag ? [record.tag] : [])];
+        if (record.isCachedValue) tags.push('Cached');
         if (record.placeholderType) {
           switch (record.placeholderType) {
-            case 'app_disconnected': tags.push('Offline'); break;
             case 'source_not_found': tags.push('Missing'); break;
             case 'empty_source': tags.push('Empty Source'); break;
             case 'empty_value': tags.push('Empty Value'); break;
@@ -276,10 +277,12 @@ const HeaderTable: React.FC = () => {
         tags.push(<Tooltip key="type" title={record.isResponse ? 'Response' : 'Request'}><Tag style={tagStyle}>{record.isResponse ? 'Res' : 'Req'}</Tag></Tooltip>);
         if (record.placeholderType) {
           const tip = getPlaceholderTooltip(record.placeholderType, record.sourceId);
-          const placeholderLabel = record.placeholderType === 'app_disconnected' ? 'Offline'
-              : record.placeholderType === 'source_not_found' ? 'Missing' : 'Empty';
-          const placeholderColor = (record.placeholderType === 'app_disconnected' || record.placeholderType === 'source_not_found') ? 'error' : 'warning';
-          tags.push(<Tooltip key="placeholder" title={tip}><Tag color={placeholderColor} style={{ ...tagStyle, cursor: 'help' }}>{placeholderLabel}</Tag></Tooltip>);
+          const placeholderLabel = record.placeholderType === 'source_not_found' ? 'Missing' : 'Empty';
+          const placeholderColor = record.placeholderType === 'source_not_found' ? 'error' : 'warning';
+          tags.push(<Tooltip key="placeholder" title={tip} styles={{ root: { maxWidth: 300 } }}><Tag color={placeholderColor} style={{ ...tagStyle, cursor: 'help' }}>{placeholderLabel}</Tag></Tooltip>);
+        }
+        if (!record.placeholderType && record.isCachedValue && record.isEnabled) {
+          tags.push(<Tooltip key="cached" title="Using cached value — app disconnected, source may be outdated" styles={{ root: { maxWidth: 300 } }}><Tag color="warning" style={{ ...tagStyle, cursor: 'help' }}>Cached</Tag></Tooltip>);
         }
         return <Space size={2} wrap>{tags}</Space>;
       },
