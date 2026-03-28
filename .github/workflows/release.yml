@@ -25,6 +25,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Align versions with the git tag. Two things happen:
+      #
+      # 1. package.json gets the full semver (e.g., 4.0.0-beta.1) so that
+      #    __APP_VERSION__ and zip filenames carry the full version string.
+      #
+      # 2. All manifest.json files get a numeric-only version for store
+      #    compatibility. Production tags (v4.0.0) → "4.0.0". Beta tags
+      #    (v4.0.0-beta.N) → "4.0.0.N" (4th component = beta number).
+      #    This makes betas distinguishable from production in the browser's
+      #    extension management page.
+      #
+      # These changes are transient — never committed back to the repo.
+      - name: Align versions with tag
+        run: |
+          TAG="${GITHUB_REF_NAME/v/}"
+
+          # 1. Set package.json to full semver
+          node -e "const fs=require('fs'),p=JSON.parse(fs.readFileSync('package.json'));p.version='$TAG';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+
+          # 2. Compute numeric manifest version
+          if [[ "$TAG" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]]; then
+            MANIFEST_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+          else
+            MANIFEST_VERSION="$TAG"
+          fi
+
+          echo "package.json version: $TAG"
+          echo "manifest version: $MANIFEST_VERSION"
+
+          # Patch all manifest.json files
+          for manifest in manifests/*/manifest.json; do
+            node -e "const fs=require('fs'),m=JSON.parse(fs.readFileSync('$manifest'));m.version='$MANIFEST_VERSION';fs.writeFileSync('$manifest',JSON.stringify(m,null,2)+'\n')"
+          done
+
       - name: Build and package extensions
         run: npm run release
 
@@ -52,20 +86,19 @@ jobs:
         run: ls -la releases/
 
       # Determine release type based on tag pattern
-      # RC/beta/alpha tags create published prereleases, stable tags create published releases
+      # Beta tags create published prereleases, production tags create published releases
       - name: Determine release type
         id: release_type
         run: |
           TAG_NAME=${GITHUB_REF_NAME}
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
-          # Check if this is a prerelease (rc, beta, alpha)
-          if [[ "$TAG_NAME" =~ -(rc|beta|alpha)[.0-9]*$ ]]; then
+          if [[ "$TAG_NAME" =~ -beta[.0-9]*$ ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
-            echo "::notice::Detected RC/Beta/Alpha release: $TAG_NAME - Creating published prerelease"
+            echo "::notice::Detected beta release: $TAG_NAME - Creating published prerelease"
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
-            echo "::notice::Detected stable release: $TAG_NAME - Creating published release"
+            echo "::notice::Detected production release: $TAG_NAME - Creating published release"
           fi
 
       - name: Generate Release Body
@@ -74,12 +107,10 @@ jobs:
           VERSION=${GITHUB_REF_NAME/v/}
           IS_PRERELEASE="${{ steps.release_type.outputs.is_prerelease }}"
 
-          # Add prerelease warning if applicable
           if [ "$IS_PRERELEASE" = "true" ]; then
             cat > release_body.md << EOF
-          > ⚠️ **This is a pre-release build for testing purposes.**
-          > It may contain bugs and is not recommended for production use.
-          > Please report any issues you encounter.
+          > ⚠️ **This is a beta build for early testing.**
+          > It may contain bugs. Please report any issues you encounter.
 
           ## Downloads
           EOF
@@ -125,7 +156,7 @@ jobs:
           EOF
 
       # Create release using softprops/action-gh-release
-      # RC/beta/alpha tags create published prereleases, stable tags create published releases
+      # Beta tags create published prereleases, production tags create published releases
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:

@@ -15,7 +15,7 @@ import { getBrowserAPI } from '../../types/browser';
 const { Text } = Typography;
 
 const Footer: React.FC = () => {
-  const version = '4.0.0';
+  const version = __APP_VERSION__;
   const { token } = theme.useToken();
   const [useWidget, setUseWidget] = useState(true);
   const [enableVideoRecording, setEnableVideoRecording] = useState(false);

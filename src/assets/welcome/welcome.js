@@ -38,6 +38,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializePage() {
         console.log(new Date().toISOString(), 'INFO ', '[WelcomePage]', 'Initializing welcome page');
 
+        // Display version from manifest
+        const versionEl = document.getElementById('app-version');
+        if (versionEl) {
+            const messageAPI = typeof browser !== 'undefined' ? browser : chrome;
+            const manifest = messageAPI.runtime.getManifest();
+            versionEl.textContent = 'v' + (manifest.version_name || manifest.version);
+        }
+
         // Set up event listeners
         setupEventListeners();
 
