@@ -46,7 +46,7 @@ let lastRulesUpdateTime = 0;
 export function scheduleUpdate(reason: string, options: ScheduleOptions = {}): void {
     if (options.immediate) {
         forcedPending = false;
-        flushUpdate(reason, options.sources, true);
+        flushUpdate(reason, options.sources, FORCED_REASONS.has(reason));
         return;
     }
 

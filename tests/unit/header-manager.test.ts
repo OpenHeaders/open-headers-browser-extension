@@ -15,6 +15,7 @@ vi.mock('../../src/utils/storage-chunking', () => ({
 
 vi.mock('../../src/utils/browser-api', () => ({
     declarativeNetRequest: {
+        getDynamicRules: vi.fn(() => Promise.resolve([])),
         updateDynamicRules: vi.fn(() => Promise.resolve()),
     },
     storage: { sync: { get: vi.fn((_k: string[], cb: (r: Record<string, unknown>) => void) => cb({})) } },
@@ -36,7 +37,11 @@ vi.mock('../../src/utils/logger', () => ({
 import { updateNetworkRules, setRulesPaused, formatUrlPattern } from '../../src/background/header-manager';
 import { declarativeNetRequest } from '../../src/utils/browser-api';
 
+const mockGetDynamicRules = declarativeNetRequest!.getDynamicRules as ReturnType<typeof vi.fn>;
 const mockUpdateDynamicRules = declarativeNetRequest!.updateDynamicRules as ReturnType<typeof vi.fn>;
+
+/** Flush the getDynamicRules().then(...) promise chain */
+const flushPromises = () => new Promise(resolve => setTimeout(resolve, 0));
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -72,19 +77,21 @@ describe('header-manager', () => {
         vi.clearAllMocks();
         mockSavedData = {};
         setRulesPaused(false);
+        mockGetDynamicRules.mockResolvedValue([]);
         mockUpdateDynamicRules.mockResolvedValue(undefined);
     });
 
     // ── Dynamic headers with cached sources (no connection gate) ──
 
     describe('dynamic headers inject from available sources regardless of connection', () => {
-        it('injects dynamic header when source has content (simulates cached/offline start)', () => {
+        it('injects dynamic header when source has content (simulates cached/offline start)', async () => {
             const source = makeSource({ sourceId: 'src-1', sourceContent: 'token-abc-123' });
             mockSavedData = {
                 'rule-1': makeSavedEntry({ headerName: 'Authorization', sourceId: 'src-1', prefix: 'Bearer ' }),
             };
 
             updateNetworkRules([source]);
+            await flushPromises();
 
             expect(mockUpdateDynamicRules).toHaveBeenCalledTimes(1);
             const rules = getRulesFromLastCall();
@@ -93,13 +100,14 @@ describe('header-manager', () => {
             expect(rule.action.requestHeaders[0].value).toBe('Bearer token-abc-123');
         });
 
-        it('injects dynamic header with empty sources array when source was restored from storage', () => {
+        it('injects dynamic header with empty sources array when source was restored from storage', async () => {
             // No sources passed — simulates init before WebSocket connects
             mockSavedData = {
                 'rule-1': makeSavedEntry({ headerName: 'Authorization', sourceId: 'src-1' }),
             };
 
             updateNetworkRules([]);
+            await flushPromises();
 
             expect(mockUpdateDynamicRules).toHaveBeenCalledTimes(1);
             // No matching source → source_not_found, not app_disconnected
@@ -122,13 +130,14 @@ describe('header-manager', () => {
     // ── Dynamic header resolution ──
 
     describe('dynamic header resolution', () => {
-        it('resolves dynamic header with prefix and suffix', () => {
+        it('resolves dynamic header with prefix and suffix', async () => {
             const source = makeSource({ sourceId: 'src-1', sourceContent: 'my-token' });
             mockSavedData = {
                 'rule-1': makeSavedEntry({ sourceId: 'src-1', prefix: 'Bearer ', suffix: ' ;extra' }),
             };
 
             updateNetworkRules([source]);
+            await flushPromises();
 
             const rules = getRulesFromLastCall();
             expect(rules.length).toBeGreaterThan(0);
@@ -159,13 +168,14 @@ describe('header-manager', () => {
             expect(rules).toHaveLength(0);
         });
 
-        it('matches source by string-coerced sourceId', () => {
+        it('matches source by string-coerced sourceId', async () => {
             const source = makeSource({ sourceId: '42', sourceContent: 'val' });
             mockSavedData = {
                 'rule-1': makeSavedEntry({ sourceId: 42 as unknown as string }),
             };
 
             updateNetworkRules([source]);
+            await flushPromises();
 
             const rules = getRulesFromLastCall();
             expect(rules.length).toBeGreaterThan(0);
@@ -175,7 +185,7 @@ describe('header-manager', () => {
     // ── Static headers ──
 
     describe('static header resolution', () => {
-        it('injects static header with literal value', () => {
+        it('injects static header with literal value', async () => {
             mockSavedData = {
                 'rule-1': makeSavedEntry({
                     isDynamic: false,
@@ -187,6 +197,7 @@ describe('header-manager', () => {
             };
 
             updateNetworkRules([]);
+            await flushPromises();
 
             const rules = getRulesFromLastCall();
             expect(rules.length).toBeGreaterThan(0);
@@ -232,10 +243,11 @@ describe('header-manager', () => {
     // ── Paused state ──
 
     describe('paused state', () => {
-        it('clears all rules when paused', () => {
+        it('clears all rules when paused', async () => {
             setRulesPaused(true);
 
             updateNetworkRules([makeSource()]);
+            await flushPromises();
 
             expect(mockUpdateDynamicRules).toHaveBeenCalledWith(
                 expect.objectContaining({ addRules: [] })
@@ -246,7 +258,7 @@ describe('header-manager', () => {
     // ── Response headers ──
 
     describe('response headers', () => {
-        it('creates response header rules with higher priority', () => {
+        it('creates response header rules with higher priority', async () => {
             mockSavedData = {
                 'rule-1': makeSavedEntry({
                     isDynamic: false,
@@ -259,6 +271,7 @@ describe('header-manager', () => {
             };
 
             updateNetworkRules([]);
+            await flushPromises();
 
             const rules = getRulesFromLastCall();
             expect(rules.length).toBeGreaterThan(0);
@@ -271,7 +284,7 @@ describe('header-manager', () => {
     // ── Multiple domains ──
 
     describe('multiple domains', () => {
-        it('creates one rule per domain', () => {
+        it('creates one rule per domain', async () => {
             mockSavedData = {
                 'rule-1': makeSavedEntry({
                     isDynamic: false,
@@ -283,12 +296,13 @@ describe('header-manager', () => {
             };
 
             updateNetworkRules([]);
+            await flushPromises();
 
             const rules = getRulesFromLastCall();
             expect(rules).toHaveLength(3);
         });
 
-        it('skips empty domain strings', () => {
+        it('skips empty domain strings', async () => {
             mockSavedData = {
                 'rule-1': makeSavedEntry({
                     isDynamic: false,
@@ -300,6 +314,7 @@ describe('header-manager', () => {
             };
 
             updateNetworkRules([]);
+            await flushPromises();
 
             const rules = getRulesFromLastCall();
             expect(rules).toHaveLength(1);
