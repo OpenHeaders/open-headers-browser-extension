@@ -1,53 +1,8 @@
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
+# Disabled — development moved to https://github.com/OpenHeaders/open-headers-app
+name: CI (disabled)
+on: workflow_dispatch
 jobs:
-  typecheck-and-test:
+  noop:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: playwright-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: TypeScript typecheck
-        run: npx tsc --noEmit
-
-      - name: Run unit tests
-        run: npx vitest run
-
-      - name: Build extension (Chrome)
-        run: BROWSER=chrome npx vite build
-
-      - name: Install Playwright browsers and system deps
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright system deps only (browsers cached)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-
-      - name: Run e2e tests
-        run: xvfb-run --auto-servernum npx playwright test
+      - run: echo "This repo is archived. CI runs in OpenHeaders/open-headers-app."
